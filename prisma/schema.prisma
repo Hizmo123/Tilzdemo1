@@ -1,0 +1,485 @@
+// Tillz QR — core tenant schema (M1 + Drop 2 + Drop 3)
+// Identity/auth is handled by Supabase Auth (auth.users). These tables are the
+// application domain, keyed to the Supabase user UUID via Membership.userId.
+// All money is stored as integer cents (spec §65, §106) — never floats.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")      // pooled (pgbouncer) — runtime
+  directUrl = env("DIRECT_URL")        // direct — migrations
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  STAFF
+  KITCHEN
+  VIEW_ONLY
+}
+
+enum BillStatus {
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  VOIDED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
+enum PlanTier {
+  FREE
+  VENUE
+  GROUP
+}
+
+enum OrderStatus {
+  PENDING
+  SUBMITTED
+  PREPARING
+  READY
+  SERVED
+  CANCELLED
+}
+
+enum OrderSource {
+  CUSTOMER
+  STAFF
+}
+
+enum RequestType {
+  WATER
+  CUTLERY
+  ASSISTANCE
+  BILL
+  OTHER
+}
+
+enum RequestStatus {
+  OPEN
+  ACKNOWLEDGED
+  COMPLETED
+}
+
+// A billing/account boundary. One business = one organization.
+model Organization {
+  id          String       @id @default(cuid())
+  name        String
+  plan        PlanTier     @default(FREE)
+  planStatus  String       @default("none")
+  cardLast4   String?
+  subscribedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  restaurants Restaurant[]
+  memberships Membership[]
+  invites     StaffInvite[]
+  auditLogs   AuditLog[]
+}
+
+// A brand/venue within an organization.
+model Restaurant {
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  slug           String          @unique
+  abn            String?
+  venueType      String?
+  // The owner's mobile, set only after SMS verification at signup.
+  ownerPhone     String?
+  currency       String          @default("AUD")
+  timezone       String          @default("Australia/Sydney")
+  logoUrl        String?
+  coverUrl       String?
+  bgImageUrl     String?
+  brandColor     String?
+  theme          String          @default("warm")
+  themeMode      String          @default("light")
+  fontTheme      String          @default("classic")
+  tipEnabled     Boolean         @default(false)
+  tipPresets     Int[]           @default([5, 10, 15])
+  customerOrdering Boolean       @default(true)
+  customerPayment  Boolean       @default(true)
+  // Orders from customers wait for staff to accept before hitting the kitchen.
+  staffApproval    Boolean       @default(false)
+  // When customers pay: "after" = running tab, pay when ready (default);
+  // "before" = prepay, prompt to pay as soon as an order is placed.
+  paymentTiming    String        @default("after")
+  // Monotonic per-venue counter used to allocate human order numbers.
+  orderSeq         Int           @default(0)
+  // Opening hours as JSON: 7 entries [{day:0..6 (0=Sun), closed:bool,
+  // open:"HH:MM", close:"HH:MM"}]. Null = always open.
+  hours            Json?
+  // Whether guests can place pickup/takeaway orders (not tied to a table).
+  takeawayEnabled  Boolean       @default(false)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  locations      Location[]
+  menuCategories MenuCategory[]
+  staffAccounts  StaffAccount[]
+
+  @@index([organizationId])
+}
+
+// A physical site. Tables hang off Location.
+model Location {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  addressLine  String?
+  suburb       String?
+  state        String?
+  postcode     String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  tables       Table[]
+
+  @@index([restaurantId])
+}
+
+// A physical table at a location. Soft-deactivated, not deleted, so historical
+// bills keep their reference.
+model Table {
+  id         String    @id @default(cuid())
+  locationId String
+  location   Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  label      String
+  section    String?
+  active     Boolean   @default(true)
+  // A per-location pseudo-table that holds pickup/takeaway bills. Many open
+  // bills can share it (unlike real tables), one per pickup order.
+  isTakeaway Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  qrTokens   QrToken[]
+  bills      Bill[]
+  requests   CustomerRequest[]
+
+  @@index([locationId])
+}
+
+// An opaque, revocable token mapping a scanned QR to a table (spec §25, §126).
+model QrToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  tableId   String
+  table     Table     @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([tableId])
+  @@index([token])
+}
+
+// Menu is attached at the restaurant level for now (single location). When
+// multi-location menus land, a locationId scope is added here.
+model MenuCategory {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  sortOrder    Int        @default(0)
+  // Availability window (venue-local "HH:MM"). Null/null = always available.
+  availableFrom String?
+  availableTo   String?
+  // Which prep station this category routes to (e.g. "kitchen", "bar",
+  // "coffee"). Null = the default kitchen board.
+  station       String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  items        MenuItem[]
+
+  @@index([restaurantId])
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  categoryId  String
+  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  priceCents  Int
+  imageUrl    String?
+  available   Boolean      @default(true)
+  allergens   String[]     @default([])
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  billItems   BillItem[]
+  modifierGroups ModifierGroup[]
+
+  @@index([categoryId])
+}
+
+// A group of choices attached to a menu item, e.g. "Sauce" or "Extras" (spec
+// §27). required + maxSelect drive validation: required means at least one must
+// be chosen; maxSelect caps how many (1 = single choice, 0 = unlimited).
+model ModifierGroup {
+  id         String           @id @default(cuid())
+  menuItemId String
+  menuItem   MenuItem         @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  name       String
+  required   Boolean          @default(false)
+  maxSelect  Int              @default(1)
+  sortOrder  Int              @default(0)
+  createdAt  DateTime         @default(now())
+  options    ModifierOption[]
+
+  @@index([menuItemId])
+}
+
+model ModifierOption {
+  id             String        @id @default(cuid())
+  groupId        String
+  group          ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name           String
+  priceDeltaCents Int          @default(0)
+  sortOrder      Int           @default(0)
+  createdAt      DateTime      @default(now())
+
+  @@index([groupId])
+}
+
+// A table's running tab. At most one OPEN bill per table at a time (enforced in
+// the bill service). Totals are always recomputed server-side from BillItem
+// rows — the client is never trusted with an amount (spec §15, §145).
+model Bill {
+  id             String     @id @default(cuid())
+  tableId        String
+  table          Table      @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  status         BillStatus @default(OPEN)
+  currency       String     @default("AUD")
+  subtotalCents  Int        @default(0)
+  discountCents  Int        @default(0)
+  totalCents     Int        @default(0)
+  amountPaidCents Int       @default(0)
+  tipCents       Int        @default(0)
+  // Takeaway/pickup orders aren't tied to a physical table sitting.
+  isTakeaway     Boolean    @default(false)
+  customerName   String?
+  // Optional mobile for an "order ready" SMS. E.164 (+61...).
+  customerPhone  String?
+  // Set once the "order ready" SMS has gone out, so it fires only once.
+  readyNotifiedAt DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  paidAt         DateTime?
+  items          BillItem[]
+  payments       Payment[]
+  orders         Order[]
+
+  @@index([tableId])
+  @@index([status])
+}
+
+// A line on a bill. name and unitPriceCents are SNAPSHOTS taken when the item
+// was added, so a later menu price change never rewrites history (spec §105,
+// §107). menuItemId is kept for reporting but is nullable-safe via SetNull.
+model BillItem {
+  id             String    @id @default(cuid())
+  billId         String
+  bill           Bill      @relation(fields: [billId], references: [id], onDelete: Cascade)
+  menuItemId     String?
+  menuItem       MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
+  nameSnapshot   String
+  unitPriceCents Int
+  modifiers      Json?
+  quantity       Int       @default(1)
+  // How many units of this line have been settled via item-split payment. Lets
+  // each person pay for their own items without double-paying the same unit.
+  paidQuantity   Int       @default(0)
+  // Staff bill adjustments: a voided line is removed from the total; a comped
+  // line stays on the ticket but is charged at $0.
+  voided         Boolean   @default(false)
+  comped         Boolean   @default(false)
+  // Prep station snapshot (from the item's category) for kitchen routing.
+  station        String?
+  lineTotalCents Int
+  orderId        String?
+  order          Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([billId])
+  @@index([orderId])
+}
+
+// An order ticket: a batch of items sent to the kitchen at one time. Its items
+// are BillItems (linked via orderId), so the bill total is unaffected — an Order
+// is a grouping + a cook status over those lines (spec §9). restaurantId and
+// tableId are denormalized so the kitchen screen can query without deep joins.
+model Order {
+  id           String      @id @default(cuid())
+  billId       String
+  bill         Bill        @relation(fields: [billId], references: [id], onDelete: Cascade)
+  tableId      String
+  restaurantId String
+  status       OrderStatus @default(SUBMITTED)
+  source       OrderSource @default(CUSTOMER)
+  orderNumber  Int?
+  // Release gates. While either is true the order is PENDING and the kitchen
+  // never sees it. Cleared by staff acceptance / by payment respectively; when
+  // both are false the order is released to the kitchen (SUBMITTED).
+  awaitingApproval Boolean @default(false)
+  awaitingPayment  Boolean @default(false)
+  note         String?
+  // Idempotency: the client sends a stable id per "place order" tap so a
+  // double-tap or a retried request can never create the same order twice.
+  clientRequestId String?  @unique
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  servedAt     DateTime?
+  items        BillItem[]
+
+  @@index([restaurantId, status])
+  @@index([billId])
+}
+
+// A payment attempt against a bill. providerRef ties back to the payment
+// provider; idempotencyKey guards against double submission (spec §15, §146).
+model Payment {
+  id             String        @id @default(cuid())
+  billId         String
+  bill           Bill          @relation(fields: [billId], references: [id], onDelete: Cascade)
+  amountCents    Int
+  tipCents       Int           @default(0)
+  currency       String        @default("AUD")
+  status         PaymentStatus @default(PENDING)
+  provider       String        @default("mock")
+  providerRef    String?
+  idempotencyKey String        @unique
+  test           Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([billId])
+}
+
+// A pending invitation for someone to join an organization with a role. The
+// opaque token is the accept link (/invite/{token}); it expires and can be
+// revoked (spec §85). On acceptance a Membership is created.
+model StaffInvite {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           Role         @default(STAFF)
+  token          String       @unique
+  status         InviteStatus @default(PENDING)
+  invitedByEmail String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([token])
+  @@index([email])
+}
+
+// Immutable record of a significant action (spec §58). Kept per organization so
+// the activity view is naturally tenant-scoped.
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUserId    String
+  actorEmail     String
+  action         String
+  resourceType   String?
+  resourceId     String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+}
+
+// A PIN-based staff login, scoped to one restaurant. Separate from Membership
+// (which is for Supabase email/password accounts). Floor staff pick their name
+// and enter a numeric PIN. pinHash is scrypt-salted; the raw PIN is shown to the
+// owner once at creation/reset and never stored. failedAttempts/lockedUntil
+// implement online brute-force lockout.
+model StaffAccount {
+  id             String     @id @default(cuid())
+  restaurantId   String
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name           String
+  role           Role       @default(STAFF)
+  pinHash        String
+  active         Boolean    @default(true)
+  failedAttempts Int        @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([restaurantId])
+}
+
+// A table-service request raised by a customer from their phone (spec §42):
+// water, cutlery, the bill, general assistance, or a free-text note. Staff
+// acknowledge then complete it. restaurantId is denormalized for staff queries.
+model CustomerRequest {
+  id             String        @id @default(cuid())
+  tableId        String
+  table          Table         @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  restaurantId   String
+  type           RequestType
+  note           String?
+  status         RequestStatus @default(OPEN)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  acknowledgedAt DateTime?
+  completedAt    DateTime?
+
+  @@index([restaurantId, status])
+  @@index([tableId])
+}
+
+// Links a Supabase auth user to an organization with a role. Tenant boundary.
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String       // Supabase auth.users.id (UUID)
+  email          String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           Role         @default(OWNER)
+  createdAt      DateTime     @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([userId])
+  @@index([organizationId])
+}
+
+// A one-time SMS verification code (owner phone verification at signup). The
+// code is stored hashed; attempts and expiry guard against brute force.
+model OtpChallenge {
+  id        String   @id @default(cuid())
+  phone     String
+  codeHash  String
+  purpose   String   @default("owner_verify")
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone])
+}
