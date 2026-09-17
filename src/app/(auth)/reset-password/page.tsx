@@ -50,6 +50,12 @@ export default function ResetPasswordPage() {
 
         <SubmitButton pendingLabel="Saving…">Save new password</SubmitButton>
       </form>
+
+      <p className="text-sm text-muted mt-6 text-center">
+        <Link href="/login" className="text-pine hover:underline">
+          ← Back to sign in
+        </Link>
+      </p>
     </>
   );
 }

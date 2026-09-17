@@ -232,10 +232,19 @@ function ConnectionBanner({
     return () => clearInterval(id);
   }, []);
   const secondsAgo = Math.max(0, Math.round((now - lastUpdatedAt.getTime()) / 1000));
-  const stale = secondsAgo > 15;
-  const offline = status === "disconnected";
+  // Polling refreshes this every few seconds regardless of the realtime
+  // channel's own state — a Supabase Realtime resubscribe (common on flaky
+  // wifi, a phone switching networks, or just the provider's own connection
+  // churn) used to flash a scary red "lost connection" banner the instant
+  // `status` reported disconnected, even though polling never missed a beat
+  // and the screen was never actually stale. What staff actually need to
+  // know is whether the DATA is stale, not whether one particular transport
+  // happens to be up this millisecond — so staleness (no successful refresh
+  // in a while) is what triggers the banner, not the realtime status alone.
+  const stale = secondsAgo > 20;
+  const offline = stale && status === "disconnected";
 
-  if (!offline && !stale) {
+  if (!stale) {
     // All good — a small, quiet corner indicator rather than nothing at all,
     // so "no news" still reads as "confirmed fine" not "untested".
     return (

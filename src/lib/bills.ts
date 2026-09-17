@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
@@ -410,21 +410,42 @@ export async function addItemsForTable(
           },
         });
 
-        let added = 0;
+        // One batched lookup for every distinct item in the cart instead of a
+        // findFirst-then-create round trip per line — a 6-item order used to
+        // be 12+ sequential DB round trips inside this transaction (at this
+        // project's ~150-250ms per round trip, several real seconds), which
+        // is exactly the kind of delay that tripped the client's "couldn't
+        // send, retrying" fallback on a perfectly working connection.
+        const uniqueIds = [...new Set(lines.map((l) => l.menuItemId))];
+        const foundItems = await tx.menuItem.findMany({
+          where: {
+            id: { in: uniqueIds },
+            available: true,
+            category: { restaurantId },
+          },
+          include: {
+            category: { select: { station: true } },
+            modifierGroups: { include: { options: true } },
+          },
+        });
+        const itemById = new Map(foundItems.map((it) => [it.id, it]));
+
+        const billItemRows: {
+          id: string;
+          billId: string;
+          orderId: string;
+          menuItemId: string;
+          nameSnapshot: string;
+          unitPriceCents: number;
+          modifiers: object[] | undefined;
+          quantity: number;
+          lineTotalCents: number;
+          station: string | null;
+          note: string | null;
+        }[] = [];
+
         for (const line of lines) {
-          // Verify the item belongs to THIS restaurant and is available, and
-          // load its modifier groups/options — the server is the price authority.
-          const item = await tx.menuItem.findFirst({
-            where: {
-              id: line.menuItemId,
-              available: true,
-              category: { restaurantId },
-            },
-            include: {
-              category: { select: { station: true } },
-              modifierGroups: { include: { options: true } },
-            },
-          });
+          const item = itemById.get(line.menuItemId);
           if (!item) continue; // silently skip unavailable/foreign items
 
           const resolved = resolveModifiers(item, line.optionIds ?? []);
@@ -432,24 +453,27 @@ export async function addItemsForTable(
 
           const qty = Math.min(line.quantity, 99);
 
-          await tx.billItem.create({
-            data: {
-              billId: bill.id,
-              orderId: order.id,
-              menuItemId: item.id,
-              nameSnapshot: item.name,
-              unitPriceCents: resolved.unitPriceCents,
-              modifiers: resolved.modifiers.length
-                ? (resolved.modifiers as object[])
-                : undefined,
-              quantity: qty,
-              lineTotalCents: resolved.unitPriceCents * qty,
-              station: item.station ?? item.category?.station ?? null,
-              note: line.note?.trim().slice(0, 140) || null,
-            },
+          billItemRows.push({
+            id: randomUUID(),
+            billId: bill.id,
+            orderId: order.id,
+            menuItemId: item.id,
+            nameSnapshot: item.name,
+            unitPriceCents: resolved.unitPriceCents,
+            modifiers: resolved.modifiers.length
+              ? (resolved.modifiers as object[])
+              : undefined,
+            quantity: qty,
+            lineTotalCents: resolved.unitPriceCents * qty,
+            station: item.station ?? item.category?.station ?? null,
+            note: line.note?.trim().slice(0, 140) || null,
           });
-          added++;
         }
+
+        if (billItemRows.length) {
+          await tx.billItem.createMany({ data: billItemRows });
+        }
+        const added = billItemRows.length;
 
         // Nothing landed — throw so the order (and a just-created bill) roll
         // back rather than leaving an empty ticket behind.

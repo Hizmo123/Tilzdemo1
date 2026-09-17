@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { signOut } from "../(auth)/actions";
 import { MfaForm } from "./mfa-form";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,18 @@ export default async function MfaPage() {
         <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
           <MfaForm />
         </div>
+        {/* Without this, a user without their authenticator (lost phone,
+            signed into the wrong account) was completely stuck here — the
+            dashboard layout redirects straight back to /mfa on every load
+            until the challenge is cleared, and this page had no way out
+            except manually clearing cookies. */}
+        <p className="text-center text-sm text-muted mt-4">
+          <form action={signOut} className="inline">
+            <button type="submit" className="text-ink-soft hover:text-danger underline">
+              Sign out and use a different account
+            </button>
+          </form>
+        </p>
       </div>
     </main>
   );
