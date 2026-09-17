@@ -6,7 +6,6 @@ import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   VENUE_TYPES,
-  SERVICE_STYLES,
   SPLIT_METHOD_VALUES,
 } from "@/lib/onboarding-options";
 
@@ -14,9 +13,6 @@ export type VenueSetupState = { error?: string; saved?: boolean };
 
 const schema = z.object({
   venueType: z.enum(VENUE_TYPES.map((v) => v.value) as [string, ...string[]]),
-  serviceStyle: z
-    .enum(SERVICE_STYLES.map((v) => v.value) as [string, ...string[]])
-    .nullable(),
   experienceMode: z.string().min(1).max(40),
   customerOrdering: z.boolean(),
   customerPayment: z.boolean(),
@@ -28,9 +24,9 @@ const schema = z.object({
   squareConnectInterest: z.boolean(),
 });
 
-// Revisits the onboarding-only questions (venue type, service style,
-// experience mode + its toggles, split methods, POS) from Settings, reusing
-// the exact same picker components the wizard uses.
+// Revisits the onboarding-only questions (venue type, experience mode + its
+// toggles, split methods, POS) from Settings, reusing the exact same picker
+// components the wizard uses.
 export async function updateVenueSetup(
   input: z.infer<typeof schema>,
 ): Promise<VenueSetupState> {
@@ -49,7 +45,6 @@ export async function updateVenueSetup(
     where: { id: restaurant.id },
     data: {
       venueType: a.venueType,
-      serviceStyle: a.serviceStyle,
       experienceMode: a.experienceMode,
       customerOrdering: a.customerOrdering,
       customerPayment: a.customerPayment,

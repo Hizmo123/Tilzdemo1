@@ -1044,10 +1044,7 @@ export function SettingsForm({
       </section>
       )}
 
-      {error && <p className="text-sm text-danger">{error}</p>}
-      {msg && <p className="text-sm text-pine-deep">{msg}</p>}
-
-      <div className="sticky bottom-4">
+      <div className="sticky bottom-4 flex items-center gap-3">
         <button
           onClick={save}
           disabled={pending}
@@ -1055,6 +1052,8 @@ export function SettingsForm({
         >
           {pending ? "Saving…" : "Save settings"}
         </button>
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {msg && <p className="text-sm text-pine-deep">{msg}</p>}
       </div>
     </div>
   );

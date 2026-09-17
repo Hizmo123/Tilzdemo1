@@ -22,7 +22,6 @@ import {
 } from "@/lib/supabase/service";
 import {
   VENUE_TYPES,
-  SERVICE_STYLES,
   SPLIT_METHOD_VALUES,
   type OnboardingAnswers,
   type OnboardingDraftPayload,
@@ -43,9 +42,6 @@ const schema = z.object({
   language: z.enum(LANGUAGE_CODES),
   restaurantName: z.string().trim().min(2, "Enter your venue's name.").max(80),
   venueType: z.enum(VENUE_TYPES.map((v) => v.value) as [string, ...string[]]),
-  serviceStyle: z
-    .enum(SERVICE_STYLES.map((v) => v.value) as [string, ...string[]])
-    .nullable(),
   experienceMode: z.string().min(1).max(40),
   customerOrdering: z.boolean(),
   customerPayment: z.boolean(),
@@ -240,7 +236,6 @@ export async function completeOnboarding(
         slug,
         abn: a.abn ? a.abn : null,
         venueType: a.venueType,
-        serviceStyle: a.serviceStyle,
         experienceMode: a.experienceMode,
         theme: a.theme,
         themeMode: a.themeMode,

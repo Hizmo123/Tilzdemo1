@@ -27,7 +27,7 @@ function ItemBadges({ badges }: { badges: string[] }) {
             key={b}
             className={`text-[10px] font-medium rounded-full px-2 py-0.5 ${meta.className}`}
           >
-            {meta.emoji} {meta.label}
+            {meta.label}
           </span>
         );
       })}
@@ -44,13 +44,11 @@ type TypeSize = ReturnType<typeof resolveTypeScale>;
 // mounts this — it has its own text-only row further down.
 function ItemCard({
   item,
-  categoryIcon,
   cs,
   ts,
   currency,
 }: {
   item: Item;
-  categoryIcon: string | null;
   cs: CardStyle;
   ts: TypeSize;
   currency: string;
@@ -75,7 +73,7 @@ function ItemCard({
         />
       ) : cs.imagePosition === "top" ? (
         <div className="w-full h-full flex items-center justify-center text-muted text-xs">
-          {categoryIcon || "No photo"}
+          No photo
         </div>
       ) : null}
       {!item.available && cs.imagePosition === "top" && (
@@ -191,7 +189,6 @@ export function MenuDisplay({
             style={{ fontSize: isMagazine ? `calc(${ts.categoryHeader} + 4px)` : ts.categoryHeader }}
             className={`font-display font-semibold tracking-tight mb-3 flex items-center gap-1.5 ${sectionHeaderClass(sectionHeaderStyle)}`}
           >
-            {cat.icon && <span aria-hidden>{cat.icon}</span>}
             {cat.name}
           </h3>
 
@@ -204,14 +201,14 @@ export function MenuDisplay({
           ) : isGrid ? (
             <div className="grid grid-cols-2 gap-3">
               {cat.items.map((item) => (
-                <ItemCard key={item.id} item={item} categoryIcon={cat.icon} cs={cs} ts={ts} currency={currency} />
+                <ItemCard key={item.id} item={item} cs={cs} ts={ts} currency={currency} />
               ))}
             </div>
           ) : (
             <div className={`space-y-2 ${isMagazine ? "sm:space-y-4" : ""}`}>
               {cat.items.map((item, i) => (
                 <div key={item.id} className={i < cat.items.length - 1 ? dividerClass(cs.divider) : ""}>
-                  <ItemCard item={item} categoryIcon={cat.icon} cs={cs} ts={ts} currency={currency} />
+                  <ItemCard item={item} cs={cs} ts={ts} currency={currency} />
                 </div>
               ))}
             </div>

@@ -74,6 +74,7 @@ export default async function KitchenPage({
           lockedStation={lockedStation}
           stationFilter={stationFilter}
           view={view}
+          definedStations={restaurant.kitchenStations}
         />
       </Suspense>
     </main>

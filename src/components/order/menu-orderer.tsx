@@ -56,7 +56,7 @@ function ItemBadges({ badges }: { badges: string[] }) {
             key={b}
             className={`text-[10px] font-medium rounded-full px-2 py-0.5 ${meta.className}`}
           >
-            {meta.emoji} {meta.label}
+            {meta.label}
           </span>
         );
       })}

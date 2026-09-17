@@ -39,7 +39,6 @@ export default async function ServiceModelPage() {
         <VenueSetupForm
           initial={{
             venueType: restaurant.venueType ?? "cafe",
-            serviceStyle: restaurant.serviceStyle,
             experienceMode: restaurant.experienceMode ?? "custom",
             customerOrdering: restaurant.customerOrdering,
             customerPayment: restaurant.customerPayment,

@@ -20,7 +20,6 @@ import { COUNTRIES, timezonesForCountry, currencyForCountry, hasTaxRules } from 
 import { LANGUAGES } from "@/lib/languages";
 import { compressImage } from "@/lib/compress-image";
 import { VenueTypePicker } from "@/components/venue-setup/venue-type-picker";
-import { ServiceStylePicker } from "@/components/venue-setup/service-style-picker";
 import { ExperienceModePicker } from "@/components/venue-setup/experience-mode-picker";
 import { CompactHoursPicker, type HoursPresetMode } from "@/components/venue-setup/compact-hours-picker";
 import { SplitMethodsPicker } from "@/components/venue-setup/split-methods-picker";
@@ -32,7 +31,6 @@ import { PosPicker } from "@/components/venue-setup/pos-picker";
 type StepId =
   | "location"
   | "venue"
-  | "service_style"
   | "experience"
   | "tables"
   | "hours"
@@ -47,7 +45,6 @@ type StepId =
 const STEP_TITLES: Record<StepId, string> = {
   location: "Location",
   venue: "Venue",
-  service_style: "Service",
   experience: "Setup",
   tables: "Tables",
   hours: "Hours",
@@ -64,7 +61,6 @@ function activeSteps(a: OnboardingAnswers): StepId[] {
   const steps: StepId[] = [
     "location",
     "venue",
-    "service_style",
     "experience",
     "tables",
     "hours",
@@ -258,18 +254,6 @@ export function OnboardingWizard({
               <VenueTypePicker
                 value={answers.venueType}
                 onChange={(venueType) => update({ venueType })}
-              />
-            </Step>
-          )}
-
-          {stepId === "service_style" && (
-            <Step
-              title="How do your customers usually order?"
-              subtitle="This just helps us tailor what comes next — you can mix things later."
-            >
-              <ServiceStylePicker
-                value={answers.serviceStyle}
-                onChange={(serviceStyle) => update({ serviceStyle })}
               />
             </Step>
           )}

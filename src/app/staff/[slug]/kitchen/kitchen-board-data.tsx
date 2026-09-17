@@ -26,6 +26,7 @@ export async function KitchenBoardData({
   lockedStation,
   stationFilter,
   view,
+  definedStations,
 }: {
   slug: string;
   restaurantId: string;
@@ -35,6 +36,7 @@ export async function KitchenBoardData({
   lockedStation: string | null;
   stationFilter?: string;
   view?: string;
+  definedStations: string[];
 }) {
   const prepay = paymentTiming === "before";
   const passView = !lockedStation && view === "pass";
@@ -45,8 +47,11 @@ export async function KitchenBoardData({
   ]);
   const now = Date.now();
 
-  // Distinct stations across active tickets (owner sets these per menu category).
-  const stationSet = new Set<string>();
+  // Distinct stations — seeded with every station the venue has defined (so a
+  // newly created station with no live orders still gets a tab) plus any
+  // station name found on an active ticket's items (owner sets these per
+  // menu category).
+  const stationSet = new Set<string>(definedStations);
   for (const o of orders)
     for (const it of o.items) if (it.station) stationSet.add(it.station);
   const stations = [...stationSet].sort();

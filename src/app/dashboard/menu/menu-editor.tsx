@@ -9,7 +9,6 @@ import {
   deleteItem,
   updateCategoryOptions,
   updateItemAllergens,
-  updateCategoryIcon,
   updateItemBadges,
   updateItemStation,
   updateKitchenStations,
@@ -19,7 +18,7 @@ import { Label, Input, FormMessage } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatCents } from "@/lib/money";
 import { ALLERGEN_OPTIONS } from "@/lib/allergens";
-import { BADGE_VALUES, BADGE_META, CATEGORY_ICON_SUGGESTIONS } from "@/lib/menu-badges";
+import { BADGE_VALUES, BADGE_META } from "@/lib/menu-badges";
 import { ModifierEditor, type ModGroup } from "./modifier-editor";
 import { ImageUploader } from "./image-uploader";
 import { LoadSampleButton } from "../sample/load-sample-button";
@@ -228,11 +227,9 @@ function CategoryBlock({
   return (
     <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
       <h3 className="font-display text-xl font-semibold tracking-tight mb-3 flex items-center gap-2">
-        {category.icon && <span>{category.icon}</span>}
         {category.name}
       </h3>
 
-      <CategoryIconEditor category={category} />
       <CategoryOptions category={category} stations={stations} />
 
       {category.items.length > 0 && (
@@ -350,49 +347,6 @@ function ItemRow({
         groups={item.modifierGroups}
       />
     </li>
-  );
-}
-
-// A one-tap emoji for the category, shown on the customer menu right next to
-// its name — the cheapest way to make a category feel like this venue's own,
-// no image upload required.
-function CategoryIconEditor({ category }: { category: Category }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [icon, setIcon] = useState(category.icon ?? "");
-
-  function set(next: string) {
-    setIcon(next);
-    start(async () => {
-      await updateCategoryIcon(category.id, next);
-      router.refresh();
-    });
-  }
-
-  return (
-    <div className="mb-4">
-      <p className="text-xs text-muted mb-1.5">Category icon (optional)</p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {CATEGORY_ICON_SUGGESTIONS.map((e) => (
-          <button
-            key={e}
-            disabled={pending}
-            onClick={() => set(icon === e ? "" : e)}
-            className={`w-8 h-8 rounded-lg border text-base flex items-center justify-center transition-colors disabled:opacity-60 ${
-              icon === e ? "border-pine bg-pine-soft" : "border-line hover:border-ink/30"
-            }`}
-          >
-            {e}
-          </button>
-        ))}
-        <input
-          value={icon}
-          onChange={(e) => set(e.target.value)}
-          placeholder="or type any emoji"
-          className="w-32 rounded-lg border border-line bg-paper px-2.5 py-1.5 text-sm focus:border-pine focus:outline-none"
-        />
-      </div>
-    </div>
   );
 }
 
@@ -554,7 +508,7 @@ function BadgeEditor({ itemId, badges }: { itemId: string; badges: string[] }) {
                   : "border-line text-muted hover:border-ink/30"
               }`}
             >
-              {meta.emoji} {meta.label}
+              {meta.label}
             </button>
           );
         })}

@@ -41,32 +41,6 @@ export const VENUE_TYPES: { value: string; label: string; icon: IconKey }[] = [
   { value: "other", label: "Something else", icon: "dots" },
 ];
 
-export const SERVICE_STYLES: {
-  value: string;
-  label: string;
-  desc: string;
-  icon: IconKey;
-}[] = [
-  {
-    value: "table_service",
-    label: "Table service",
-    desc: "Staff take orders at the table.",
-    icon: "users",
-  },
-  {
-    value: "counter",
-    label: "Order at counter",
-    desc: "Guests order and pay at the counter.",
-    icon: "storefront",
-  },
-  {
-    value: "mixed",
-    label: "A mix",
-    desc: "Different tables or times use different styles.",
-    icon: "shuffle",
-  },
-];
-
 // Real, coherent toggle combinations. Custom (handled separately by the
 // caller) starts from order_and_pay's values, then the owner adjusts freely.
 export type ExperienceSettings = {
@@ -159,7 +133,6 @@ export type OnboardingAnswers = {
   language: string;
   restaurantName: string;
   venueType: string;
-  serviceStyle: string | null;
   experienceMode: ExperienceModeKey;
   customerOrdering: boolean;
   customerPayment: boolean;
@@ -214,7 +187,6 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     language: "en",
     restaurantName: "",
     venueType: "cafe",
-    serviceStyle: null,
     experienceMode: "order_and_pay",
     ...EXPERIENCE_MODES.order_and_pay.settings,
     tableCount: 10,

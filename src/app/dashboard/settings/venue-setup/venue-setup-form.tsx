@@ -5,14 +5,12 @@ import { useRouter } from "next/navigation";
 import { updateVenueSetup } from "./actions";
 import type { ExperienceModeKey, SplitMethod } from "@/lib/onboarding-options";
 import { VenueTypePicker } from "@/components/venue-setup/venue-type-picker";
-import { ServiceStylePicker } from "@/components/venue-setup/service-style-picker";
 import { ExperienceModePicker } from "@/components/venue-setup/experience-mode-picker";
 import { SplitMethodsPicker } from "@/components/venue-setup/split-methods-picker";
 import { PosPicker } from "@/components/venue-setup/pos-picker";
 
 type Initial = {
   venueType: string;
-  serviceStyle: string | null;
   experienceMode: string;
   customerOrdering: boolean;
   customerPayment: boolean;
@@ -27,7 +25,6 @@ type Initial = {
 export function VenueSetupForm({ initial }: { initial: Initial }) {
   const router = useRouter();
   const [venueType, setVenueType] = useState(initial.venueType);
-  const [serviceStyle, setServiceStyle] = useState<string | null>(initial.serviceStyle);
   const [experienceMode, setExperienceMode] = useState<ExperienceModeKey>(
     initial.experienceMode as ExperienceModeKey,
   );
@@ -57,7 +54,6 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
     start(async () => {
       const res = await updateVenueSetup({
         venueType,
-        serviceStyle,
         experienceMode,
         ...settings,
         splitMethods,
@@ -78,13 +74,6 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
       <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
         <h2 className="font-display text-lg font-semibold tracking-tight">Venue type</h2>
         <VenueTypePicker value={venueType} onChange={setVenueType} />
-      </section>
-
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          How do your customers usually order?
-        </h2>
-        <ServiceStylePicker value={serviceStyle} onChange={setServiceStyle} />
       </section>
 
       <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
@@ -127,10 +116,7 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
         />
       </section>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
-      {msg && <p className="text-sm text-pine-deep">{msg}</p>}
-
-      <div className="sticky bottom-4">
+      <div className="sticky bottom-4 flex items-center gap-3">
         <button
           onClick={save}
           disabled={pending}
@@ -138,6 +124,8 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
         >
           {pending ? "Saving…" : "Save"}
         </button>
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {msg && <p className="text-sm text-pine-deep">{msg}</p>}
       </div>
     </div>
   );
