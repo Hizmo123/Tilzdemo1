@@ -499,8 +499,6 @@ export function OnboardingWizard({
               <NotificationsPicker
                 kitchenChime={answers.kitchenChime}
                 onKitchenChimeChange={(kitchenChime) => update({ kitchenChime })}
-                orderReadySmsEnabled={answers.orderReadySmsEnabled}
-                onOrderReadySmsChange={(orderReadySmsEnabled) => update({ orderReadySmsEnabled })}
               />
             </Step>
           )}

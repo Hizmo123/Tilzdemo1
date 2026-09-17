@@ -15,8 +15,16 @@ export async function submitStaffLogin(
 ): Promise<LoginState> {
   if (!/^\d{4,6}$/.test(pin)) return { error: "Enter your PIN." };
 
-  const restaurant = await prisma.restaurant.findUnique({ where: { slug } });
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { slug },
+    include: { organization: { select: { deactivatedAt: true } } },
+  });
   if (!restaurant) return { error: "Restaurant not found." };
+  // A deactivated org blocks every restaurant under it, same as the owner's
+  // own dashboard login — see lib/account.ts#deactivateAccount.
+  if (restaurant.organization.deactivatedAt) {
+    return { error: "This venue's account is currently deactivated." };
+  }
 
   const result = await staffLogin(staffId, restaurant.id, pin);
   if (!result.ok) return { error: result.error };

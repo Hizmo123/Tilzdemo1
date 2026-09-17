@@ -1,19 +1,18 @@
 "use client";
 
-// Only offers what the product actually does: a kitchen chime toggle, an
-// order-ready SMS toggle (which really does hide the capture on the customer
-// page when off), and an info row for dashboard live refresh, which is
-// unconditional today and has no setting to attach to.
+// Only offers what the product actually does: a kitchen chime toggle, and an
+// info row for dashboard live refresh, which is unconditional today and has
+// no setting to attach to. The "text me when it's ready" capture used to
+// have its own on/off toggle here — removed as a confusing extra setup
+// decision; it's simply always offered to customers now (who opt in or not
+// per-order just by choosing to leave a number, which was always the real
+// privacy control point, not this venue-level setting).
 export function NotificationsPicker({
   kitchenChime,
   onKitchenChimeChange,
-  orderReadySmsEnabled,
-  onOrderReadySmsChange,
 }: {
   kitchenChime: boolean;
   onKitchenChimeChange: (value: boolean) => void;
-  orderReadySmsEnabled: boolean;
-  onOrderReadySmsChange: (value: boolean) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -32,28 +31,13 @@ export function NotificationsPicker({
         </p>
       </div>
 
-      <div>
-        <p className="text-sm font-medium mb-2">
+      <div className="rounded-lg bg-paper px-3.5 py-2.5">
+        <p className="text-sm text-ink-soft">
           &ldquo;Text me when it&apos;s ready&rdquo; for customers
         </p>
-        <div className="grid grid-cols-2 gap-2">
-          <Pill
-            active={orderReadySmsEnabled}
-            onClick={() => onOrderReadySmsChange(true)}
-          >
-            On
-          </Pill>
-          <Pill
-            active={!orderReadySmsEnabled}
-            onClick={() => onOrderReadySmsChange(false)}
-          >
-            Off
-          </Pill>
-        </div>
-        <p className="text-xs text-muted mt-1.5">
-          Lets guests leave a mobile number after ordering. Needs Twilio
-          configured to actually send — otherwise the number is just collected.
-          Turn this off if you&apos;d rather not collect customer mobiles at all.
+        <p className="text-xs text-muted mt-0.5">
+          Always offered to guests after ordering — needs Twilio configured to
+          actually send; otherwise the number is just collected, unused.
         </p>
       </div>
 

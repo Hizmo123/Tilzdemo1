@@ -106,6 +106,17 @@ model Organization {
   // destroying records the venue may still legally need. See lib/account.ts.
   deletionRequestedAt      DateTime?
   deletionRequestedByEmail String?
+  // Self-service "pause everything" — distinct from a deletion request.
+  // While set: the owner/team's dashboard login is blocked (see the check in
+  // dashboard/layout.tsx) and every staff PIN login for every restaurant in
+  // this org is blocked (see staffLogin in lib/staff-auth.ts). Also records
+  // it as the moment the subscription was cancelled — see planStatus below.
+  // Cleared only by following the emailed reactivation link, never from
+  // inside the (now-inaccessible) dashboard.
+  deactivatedAt               DateTime?
+  deactivatedByEmail           String?
+  reactivationToken            String?   @unique
+  reactivationTokenExpiresAt   DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   restaurants Restaurant[]

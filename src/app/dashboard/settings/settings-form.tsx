@@ -1064,8 +1064,6 @@ export function SettingsForm({
         <NotificationsPicker
           kitchenChime={kitchenChime}
           onKitchenChimeChange={setKitchenChime}
-          orderReadySmsEnabled={orderReadySmsEnabled}
-          onOrderReadySmsChange={setOrderReadySmsEnabled}
         />
       </section>
       )}

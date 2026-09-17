@@ -10,7 +10,9 @@ export type BadgeKey =
   | "spicy"
   | "vegetarian"
   | "vegan"
-  | "gluten_free";
+  | "gluten_free"
+  | "dairy_free"
+  | "nut_free";
 
 export const BADGE_VALUES: BadgeKey[] = [
   "popular",
@@ -20,6 +22,8 @@ export const BADGE_VALUES: BadgeKey[] = [
   "vegetarian",
   "vegan",
   "gluten_free",
+  "dairy_free",
+  "nut_free",
 ];
 
 export const BADGE_META: Record<
@@ -59,6 +63,16 @@ export const BADGE_META: Record<
   gluten_free: {
     label: "Gluten-free",
     emoji: "🌾",
+    className: "bg-paper text-ink-soft",
+  },
+  dairy_free: {
+    label: "Dairy-free",
+    emoji: "🥛",
+    className: "bg-paper text-ink-soft",
+  },
+  nut_free: {
+    label: "Nut-free",
+    emoji: "🥜",
     className: "bg-paper text-ink-soft",
   },
 };

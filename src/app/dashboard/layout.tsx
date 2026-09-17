@@ -25,6 +25,7 @@ const nav: { label: string; href: string; perm: Permission | null }[] = [
   { label: "Billing", href: "/dashboard/billing", perm: "settings:manage" },
   { label: "Settings", href: "/dashboard/settings", perm: "settings:manage" },
   { label: "Security", href: "/dashboard/security", perm: null },
+  { label: "Help", href: "/dashboard/help", perm: null },
   { label: "Support", href: "/support", perm: null },
 ];
 
@@ -77,6 +78,33 @@ export default async function DashboardLayout({
   // have nextLevel === "aal1", so this never affects them — login is unchanged.
   if (aal.data?.currentLevel === "aal1" && aal.data?.nextLevel === "aal2") {
     redirect("/mfa");
+  }
+
+  // A deactivated org blocks the whole team's dashboard access (see
+  // lib/account.ts#deactivateAccount) — the only way back in is the emailed
+  // reactivation link, never from inside here, since this IS "inside here".
+  if (membership?.organization.deactivatedAt) {
+    return (
+      <main className="min-h-dvh bg-paper flex items-center justify-center px-6">
+        <div className="w-full max-w-sm text-center">
+          <h1 className="font-display text-2xl font-semibold tracking-tight">
+            Account deactivated
+          </h1>
+          <p className="text-muted text-sm mt-2">
+            This account was deactivated and its subscription cancelled.
+            Check the owner&apos;s inbox for a reactivation link.
+          </p>
+          <form action={signOut} className="mt-6">
+            <button
+              type="submit"
+              className="text-sm text-ink-soft hover:text-danger underline"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </main>
+    );
   }
 
   const restaurant = membership?.organization.restaurants[0];

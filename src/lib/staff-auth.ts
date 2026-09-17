@@ -130,9 +130,13 @@ export const getStaffSession = cache(async () => {
 
   const staff = await prisma.staffAccount.findFirst({
     where: { id: payload.staffId, active: true },
-    include: { restaurant: true },
+    include: { restaurant: { include: { organization: { select: { deactivatedAt: true } } } } },
   });
   if (!staff || staff.restaurantId !== payload.restaurantId) return null;
+  // A session issued before deactivation stays a valid cookie — this is what
+  // actually cuts it off mid-shift, not just the login step. See
+  // lib/account.ts#deactivateAccount.
+  if (staff.restaurant.organization.deactivatedAt) return null;
   return { staff, restaurant: staff.restaurant };
 });
 

@@ -393,7 +393,7 @@ export async function updateKitchenStations(
         .map((n) => n.trim().slice(0, 24))
         .filter((n) => n.length > 0),
     ),
-  ).slice(0, 20);
+  ).slice(0, 10);
   if (clean.length === 0) clean.push("Kitchen");
 
   await prisma.restaurant.update({

@@ -106,7 +106,7 @@ function StationsEditor({ stations }: { stations: string[] }) {
 
   function add() {
     const name = draft.trim();
-    if (!name || list.includes(name)) return;
+    if (!name || list.includes(name) || list.length >= 10) return;
     const next = [...list, name];
     setList(next);
     setDraft("");
@@ -147,31 +147,35 @@ function StationsEditor({ stations }: { stations: string[] }) {
           </span>
         ))}
       </div>
-      <div className="flex items-end gap-3">
-        <div className="flex-1 max-w-xs">
-          <Label htmlFor="new-station">Add a station</Label>
-          <Input
-            id="new-station"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                add();
-              }
-            }}
-            placeholder="e.g. Barista"
-          />
+      {list.length >= 10 ? (
+        <p className="text-xs text-muted">Up to 10 stations — remove one to add another.</p>
+      ) : (
+        <div className="flex items-end gap-3">
+          <div className="flex-1 max-w-xs">
+            <Label htmlFor="new-station">Add a station</Label>
+            <Input
+              id="new-station"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  add();
+                }
+              }}
+              placeholder="e.g. Barista"
+            />
+          </div>
+          <button
+            disabled={pending || !draft.trim()}
+            onClick={add}
+            className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-ink/30 disabled:opacity-50"
+          >
+            Add
+          </button>
+          {saved && <span className="text-xs text-muted">Saved</span>}
         </div>
-        <button
-          disabled={pending || !draft.trim()}
-          onClick={add}
-          className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-ink/30 disabled:opacity-50"
-        >
-          Add
-        </button>
-        {saved && <span className="text-xs text-muted">Saved</span>}
-      </div>
+      )}
     </div>
   );
 }
