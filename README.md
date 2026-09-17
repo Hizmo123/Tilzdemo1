@@ -49,18 +49,32 @@ local development so signup logs you straight in.
 
 ## What's built
 
-Auth + multi-tenant isolation · restaurants, locations, tables · opaque QR tokens
-· menu with modifiers and images · customer ordering + running bill · order /
-kitchen lifecycle · bill splitting + concurrency-safe partial payments · staff
-email accounts with role-based access · PIN staff logins with lockout · customer
-service requests · audit log · sample-data onboarding.
+Auth + multi-tenant isolation · a guided onboarding wizard (country/timezone/
+language, venue type, service style, tables, hours, menu, branding, tax, POS)
+· restaurants, locations, tables · opaque, revocable QR tokens · menu with
+modifiers, images, allergens, badges and CSV import · deep branding
+customisation (theme presets, accent colour, fonts, layout, QR styling,
+printable table-card templates) with a WCAG contrast guardrail · kitchen
+routing to venue-defined prep stations, down to individual menu items ·
+customer ordering with per-item notes + running bill · order / kitchen
+lifecycle with staff approval and an optional strict "pay before ordering"
+mode · bill splitting + concurrency-safe partial payments · card surcharge ·
+staff email accounts with role-based access · PIN staff logins with lockout,
+including per-station kitchen logins that see only their own tickets ·
+realtime sync (Supabase Realtime + polling fallback) across dashboard, kitchen
+and staff screens · customer service requests · analytics, invoices, and
+weekly reports · plan tiers with entitlements and a lapsed-subscription grace
+period · audit log · rate limiting · health check · legal/support pages ·
+data export and account deletion requests.
 
 ## What's next
 
-Real payment processing (provider integration, webhooks as source of truth,
-refunds, subscription billing) and production hardening (rate limiting,
-monitoring, backups, legal/compliance review). See the payment abstraction in
-`src/lib/payments/` — the mock is the only provider wired up today.
+Real payment processing (a live provider integration, webhooks as source of
+truth, subscription billing) and a live POS connection (Square is scaffolded
+as the only planned integration). See the payment abstraction in
+`src/lib/payments/` — the mock is the only provider wired up today. Full
+customer-facing UI translation is also unstarted: `language` is captured and
+stored per venue, but the ordering page's own strings aren't translated yet.
 
 ## Notes
 
