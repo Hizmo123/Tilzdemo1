@@ -1,6 +1,6 @@
 "use server";
 
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import { SAMPLE_MENU } from "@/lib/sample-data";
 import { sameEveryDayHours, weekdayWeekendHours } from "@/lib/hours";
 import { getSetupChecklist, type ChecklistItem } from "@/lib/setup-checklist";
 import { entitlementsForTier } from "@/lib/entitlements";
+import { log } from "@/lib/log";
 import {
   createServiceClient,
   ensurePublicBucket,
@@ -206,7 +207,9 @@ export async function completeOnboarding(
     slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
   }
 
-  const { organizationId, restaurant } = await prisma.$transaction(async (tx) => {
+  let txResult;
+  try {
+    txResult = await prisma.$transaction(async (tx) => {
     const org = await tx.organization.create({ data: { name: a.restaurantName } });
 
     await tx.membership.create({
@@ -279,63 +282,114 @@ export async function completeOnboarding(
     }
 
     // Optional starter menu the owner can then edit, seeded per step 6.
+    //
+    // This used to be one `await tx.X.create()` per category/item/group/option
+    // — ~39 sequential round trips for the default sample menu alone, all
+    // inside one interactive transaction. Against a database that isn't
+    // co-located with the app server (see the region note elsewhere in this
+    // codebase — every round trip here costs ~150-250ms), that regularly blew
+    // past Prisma's 5s transaction timeout and failed the ENTIRE onboarding
+    // transaction, surfacing as "Something went wrong creating your venue"
+    // with no indication why. IDs are generated client-side so every level
+    // can be inserted with one `createMany` instead of one round trip per row
+    // — 4 batched calls total, regardless of menu size.
     if (a.sampleMenu) {
-      for (let ci = 0; ci < SAMPLE_MENU.length; ci++) {
-        const cat = SAMPLE_MENU[ci];
+      const categoryRows = SAMPLE_MENU.map((cat, ci) => {
         const win = a.menuPeriods ? windowFor(cat.name) : { from: null, to: null };
-        const category = await tx.menuCategory.create({
-          data: {
-            restaurantId: restaurant.id,
-            name: cat.name,
-            sortOrder: ci,
-            availableFrom: win.from,
-            availableTo: win.to,
-            station: a.menuStations ? stationFor(cat.name) : null,
-          },
-        });
-        for (let ii = 0; ii < cat.items.length; ii++) {
-          const item = cat.items[ii];
-          const created = await tx.menuItem.create({
-            data: {
-              categoryId: category.id,
-              name: item.name,
-              description: item.description ?? null,
-              priceCents: item.priceCents,
-              sortOrder: ii,
-            },
+        return {
+          id: randomUUID(),
+          restaurantId: restaurant.id,
+          name: cat.name,
+          sortOrder: ci,
+          availableFrom: win.from,
+          availableTo: win.to,
+          station: a.menuStations ? stationFor(cat.name) : null,
+        };
+      });
+
+      const itemRows: {
+        id: string;
+        categoryId: string;
+        name: string;
+        description: string | null;
+        priceCents: number;
+        sortOrder: number;
+      }[] = [];
+      const groupRows: {
+        id: string;
+        menuItemId: string;
+        name: string;
+        required: boolean;
+        maxSelect: number;
+        sortOrder: number;
+      }[] = [];
+      const optionRows: {
+        id: string;
+        groupId: string;
+        name: string;
+        priceDeltaCents: number;
+        sortOrder: number;
+      }[] = [];
+
+      SAMPLE_MENU.forEach((cat, ci) => {
+        const categoryId = categoryRows[ci].id;
+        cat.items.forEach((item, ii) => {
+          const itemId = randomUUID();
+          itemRows.push({
+            id: itemId,
+            categoryId,
+            name: item.name,
+            description: item.description ?? null,
+            priceCents: item.priceCents,
+            sortOrder: ii,
           });
-          for (let gi = 0; gi < (item.groups?.length ?? 0); gi++) {
-            const g = item.groups![gi];
-            const group = await tx.modifierGroup.create({
-              data: {
-                menuItemId: created.id,
-                name: g.name,
-                required: g.required ?? false,
-                maxSelect: g.maxSelect ?? 1,
-                sortOrder: gi,
-              },
+          (item.groups ?? []).forEach((g, gi) => {
+            const groupId = randomUUID();
+            groupRows.push({
+              id: groupId,
+              menuItemId: itemId,
+              name: g.name,
+              required: g.required ?? false,
+              maxSelect: g.maxSelect ?? 1,
+              sortOrder: gi,
             });
-            for (let oi = 0; oi < g.options.length; oi++) {
-              const o = g.options[oi];
-              await tx.modifierOption.create({
-                data: {
-                  groupId: group.id,
-                  name: o.name,
-                  priceDeltaCents: o.deltaCents ?? 0,
-                  sortOrder: oi,
-                },
+            g.options.forEach((o, oi) => {
+              optionRows.push({
+                id: randomUUID(),
+                groupId,
+                name: o.name,
+                priceDeltaCents: o.deltaCents ?? 0,
+                sortOrder: oi,
               });
-            }
-          }
-        }
-      }
+            });
+          });
+        });
+      });
+
+      await tx.menuCategory.createMany({ data: categoryRows });
+      if (itemRows.length) await tx.menuItem.createMany({ data: itemRows });
+      if (groupRows.length) await tx.modifierGroup.createMany({ data: groupRows });
+      if (optionRows.length) await tx.modifierOption.createMany({ data: optionRows });
     }
 
     // The draft's only job was surviving a mid-wizard refresh — done now.
     await tx.onboardingDraft.deleteMany({ where: { userId: user.id } });
 
     return { organizationId: org.id, restaurant };
-  });
+  }, { timeout: 15000 });
+  } catch (e) {
+    // Whatever actually broke here — a timed-out transaction, a constraint
+    // violation, a dropped connection — Next.js strips the real error before
+    // it reaches the client (correctly, to avoid leaking internals), which
+    // is exactly why this used to be a dead end to debug: the owner saw a
+    // generic message and there was no server-side trace of what happened.
+    log.error("onboarding.complete_failed", {
+      userId: user.id,
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return { error: "Something went wrong creating your venue. Please try again." };
+  }
+  const { organizationId, restaurant } = txResult;
 
   await audit({
     organizationId,
