@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { createServiceClient, MENU_IMAGE_BUCKET } from "@/lib/supabase/service";
+import {
+  createServiceClient,
+  describeStorageError,
+  MENU_IMAGE_BUCKET,
+  StorageNotConfiguredError,
+} from "@/lib/supabase/service";
+import { log } from "@/lib/log";
 
 export type ImageActionState = { error?: string; url?: string };
 
@@ -58,8 +64,18 @@ export async function uploadMenuImage(
   if (file.size > MAX_BYTES) return { error: "Image is too large." };
   if (!file.type.startsWith("image/")) return { error: "That isn't an image." };
 
-  const supabase = createServiceClient();
-  await ensureBucket(supabase);
+  let supabase;
+  try {
+    supabase = createServiceClient();
+    await ensureBucket(supabase);
+  } catch (e) {
+    if (e instanceof StorageNotConfiguredError) return { error: e.message };
+    log.error("menu_image.bucket_failed", {
+      itemId,
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return { error: "Couldn't prepare image storage. Please try again." };
+  }
 
   const restaurantId = item.category.restaurant.id;
   const path = `${restaurantId}/${itemId}-${randomBytes(6).toString("hex")}.jpg`;
@@ -68,7 +84,10 @@ export async function uploadMenuImage(
   const { error: upErr } = await supabase.storage
     .from(MENU_IMAGE_BUCKET)
     .upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-  if (upErr) return { error: "Upload failed. Please try again." };
+  if (upErr) {
+    log.error("menu_image.upload_failed", { itemId, message: upErr.message });
+    return { error: describeStorageError(upErr.message) };
+  }
 
   const { data: pub } = supabase.storage
     .from(MENU_IMAGE_BUCKET)
@@ -97,9 +116,18 @@ export async function removeMenuImage(itemId: string): Promise<ImageActionState>
   if (!item) return { error: "Item not found." };
 
   if (item.imageUrl) {
-    const supabase = createServiceClient();
-    const path = pathFromUrl(item.imageUrl);
-    if (path) await supabase.storage.from(MENU_IMAGE_BUCKET).remove([path]);
+    try {
+      const supabase = createServiceClient();
+      const path = pathFromUrl(item.imageUrl);
+      if (path) await supabase.storage.from(MENU_IMAGE_BUCKET).remove([path]);
+    } catch (e) {
+      // Best-effort cleanup — the item's imageUrl is cleared either way below,
+      // so a storage hiccup here just leaves an orphaned file, not a stuck UI.
+      log.error("menu_image.remove_failed", {
+        itemId,
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
   await prisma.menuItem.update({

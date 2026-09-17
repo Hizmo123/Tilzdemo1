@@ -16,6 +16,7 @@ import { log } from "@/lib/log";
 import {
   createServiceClient,
   ensurePublicBucket,
+  describeStorageError,
   MENU_IMAGE_BUCKET,
   StorageNotConfiguredError,
 } from "@/lib/supabase/service";
@@ -153,14 +154,25 @@ export async function uploadOnboardingLogo(
     return { error: "Couldn't reach image storage. Please try again." };
   }
 
-  await ensurePublicBucket(supabase, MENU_IMAGE_BUCKET);
+  try {
+    await ensurePublicBucket(supabase, MENU_IMAGE_BUCKET);
+  } catch (e) {
+    log.error("onboarding.logo_bucket_failed", {
+      userId: user.id,
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return { error: "Couldn't prepare image storage. Please try again." };
+  }
 
   const path = `onboarding/${user.id}/logo-${randomBytes(6).toString("hex")}.jpg`;
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error: upErr } = await supabase.storage
     .from(MENU_IMAGE_BUCKET)
     .upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-  if (upErr) return { error: `Upload failed: ${upErr.message}` };
+  if (upErr) {
+    log.error("onboarding.logo_upload_failed", { userId: user.id, message: upErr.message });
+    return { error: describeStorageError(upErr.message) };
+  }
 
   const { data: pub } = supabase.storage.from(MENU_IMAGE_BUCKET).getPublicUrl(path);
   return { url: pub.publicUrl };

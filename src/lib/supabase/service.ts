@@ -15,17 +15,21 @@ export class StorageNotConfiguredError extends Error {
 // like uploading to Storage. NEVER import this into client components — the
 // secret key must never reach the browser.
 //
-// The explicit `apikey` header below is required, not decorative: Supabase's
-// Storage gateway rejects the current-format `sb_secret_...` key when it only
-// sees an `Authorization: Bearer` header (which createClient() sets on its
-// own) — Storage specifically also needs `apikey` carrying the same key, or
-// it tries to parse something in the wrong slot as a JWT and fails with
-// "Invalid Compact JWS". Legacy JWT-format service_role keys don't hit this;
-// only the newer sb_secret_/sb_publishable_ keys do. This was the exact cause
-// of logo/cover/background uploads failing with that error.
+// The explicit `apikey` header below fixes the general "Storage rejects a
+// current-format sb_secret_... key when it only sees Authorization: Bearer"
+// case. On THIS project, though, that alone isn't enough — verified directly
+// against Supabase's live Storage API: even with both apikey and Authorization
+// headers set correctly, the gateway still rejects the sb_secret_ key outright
+// ("Invalid Compact JWS" / AccessDenied). That's a known gap where Storage
+// still requires the legacy JWT-format service_role key, not the new format,
+// on some projects. So this prefers SUPABASE_SERVICE_ROLE_KEY (the legacy JWT
+// key, from Supabase dashboard -> Project Settings -> API -> Legacy API keys)
+// when it's set, and only falls back to the new-format secret key otherwise —
+// which is what's currently failing every upload.
 export function createServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secret = process.env.SUPABASE_SECRET_KEY;
+  const legacyKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secret = legacyKey || process.env.SUPABASE_SECRET_KEY;
   if (!url || !secret) {
     throw new StorageNotConfiguredError();
   }
@@ -33,6 +37,18 @@ export function createServiceClient() {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { headers: { apikey: secret } },
   });
+}
+
+// Turns a raw Storage error into something an owner can actually act on.
+// "Invalid Compact JWS" / AccessDenied means the configured key isn't being
+// accepted by Storage (see createServiceClient's comment) — that's a
+// deployment config problem, not something retrying or picking a different
+// file fixes, so say so plainly instead of surfacing the raw gateway message.
+export function describeStorageError(rawMessage: string): string {
+  if (/compact jws|accessdenied/i.test(rawMessage)) {
+    return "Image storage isn't configured correctly — this needs fixing on our end, not yours. Please contact support.";
+  }
+  return `Upload failed: ${rawMessage}`;
 }
 
 export const MENU_IMAGE_BUCKET = "menu-images";

@@ -11,10 +11,12 @@ import { findContrastIssue } from "@/lib/theme";
 import {
   createServiceClient,
   ensurePublicBucket,
+  describeStorageError,
   MENU_IMAGE_BUCKET,
   StorageNotConfiguredError,
 } from "@/lib/supabase/service";
 import { parseHours } from "@/lib/hours";
+import { log } from "@/lib/log";
 import { normalizeAuPhone } from "@/lib/phone";
 import { sendOtp, verifyOtp } from "@/lib/otp";
 // Constants live in a plain module — a "use server" file may only export async
@@ -316,7 +318,10 @@ async function uploadVenueImage(
   const { error: upErr } = await supabase.storage
     .from(MENU_IMAGE_BUCKET)
     .upload(path, buffer, { contentType: "image/jpeg", upsert: true });
-  if (upErr) return { error: `Upload failed: ${upErr.message}` };
+  if (upErr) {
+    log.error("image.upload_failed", { kind, message: upErr.message });
+    return { error: describeStorageError(upErr.message) };
+  }
 
   const { data: pub } = supabase.storage.from(MENU_IMAGE_BUCKET).getPublicUrl(path);
   return { url: pub.publicUrl };
