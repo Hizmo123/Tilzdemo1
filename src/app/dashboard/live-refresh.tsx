@@ -20,7 +20,7 @@ import { useRealtimeRefresh } from "@/lib/use-realtime-refresh";
 //       — which on mobile shows up as "I tapped the table and nothing
 //       happened". Pausing around interactions lets taps land.
 export function LiveRefresh({
-  seconds = 5,
+  seconds = 20,
   restaurantId = null,
 }: {
   seconds?: number;

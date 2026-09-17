@@ -136,6 +136,7 @@ export default async function DashboardLayout({
             <Link
               key={item.label}
               href={item.href}
+              prefetch={false}
               className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
             >
               {item.label}

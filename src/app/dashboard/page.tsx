@@ -194,6 +194,7 @@ export default async function DashboardHome() {
                 <Link
                   key={t.id}
                   href={`/dashboard/tables/${t.id}`}
+                  prefetch={false}
                   className="rounded-[var(--radius-card)] border border-line bg-surface p-4 hover:border-pine/40 transition-colors"
                 >
                   <div className="flex items-center justify-between">
