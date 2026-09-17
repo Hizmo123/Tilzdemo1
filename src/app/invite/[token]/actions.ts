@@ -20,6 +20,15 @@ export async function acceptInvite(token: string): Promise<AcceptResult> {
     return { error: "This invite has already been used." };
   if (invite.expiresAt < new Date())
     return { error: "This invite has expired. Ask for a new one." };
+  // The invite is bound to one recipient — without this check, anyone signed
+  // in who obtains the link (forwarded, screenshotted, a leaked referrer)
+  // could join the organization with the invited role, regardless of who it
+  // was actually sent to.
+  if ((user.email ?? "").toLowerCase() !== invite.email.toLowerCase()) {
+    return {
+      error: `This invite was sent to ${invite.email}. Log in with that email to accept it.`,
+    };
+  }
 
   // Create the membership (or no-op if somehow already a member), then mark the
   // invite accepted — in one transaction.

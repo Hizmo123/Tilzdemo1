@@ -5,9 +5,11 @@ import { getStaffSession } from "@/lib/staff-auth";
 import { roleCan, ROLE_META } from "@/lib/rbac";
 import { formatCents } from "@/lib/money";
 import { getOpenRequests } from "@/lib/requests";
+import { getReadyOrders } from "@/lib/bills";
 import { LiveRefresh } from "@/app/dashboard/live-refresh";
 import { staffSignOut } from "./actions";
 import { RequestsBanner } from "./requests-banner";
+import { ReadyBanner } from "./ready-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -25,29 +27,33 @@ export default async function StaffHomePage({
   const currency = restaurant.currency;
   const canSeeBills = roleCan(staff.role, "bills:view");
 
-  const locations = await prisma.location.findMany({
-    where: { restaurantId: restaurant.id },
-    select: { id: true },
+  // Filtering through the table -> location -> restaurant relation directly
+  // (rather than pre-fetching location ids first) turns two sequential round
+  // trips into one query, which now also runs alongside the requests fetch.
+  const tablesQuery = prisma.table.findMany({
+    where: { location: { restaurantId: restaurant.id }, active: true },
+    orderBy: [{ section: "asc" }, { createdAt: "asc" }],
+    include: {
+      bills: {
+        where: { status: { in: ["OPEN", "PARTIALLY_PAID"] } },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        include: { _count: { select: { items: true } } },
+      },
+    },
   });
-  const locationIds = locations.map((l) => l.id);
-
-  const tables = canSeeBills
-    ? await prisma.table.findMany({
-        where: { locationId: { in: locationIds }, active: true },
-        orderBy: [{ section: "asc" }, { createdAt: "asc" }],
-        include: {
-          bills: {
-            where: { status: { in: ["OPEN", "PARTIALLY_PAID"] } },
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            include: { _count: { select: { items: true } } },
-          },
-        },
-      })
-    : [];
+  const [tables, openRequestRows, readyOrderRows] = await Promise.all([
+    canSeeBills ? tablesQuery : Promise.resolve([] as Awaited<typeof tablesQuery>),
+    getOpenRequests(restaurant.id),
+    roleCan(staff.role, "kitchen:manage") ? getReadyOrders(restaurant.id) : Promise.resolve([]),
+  ]);
+  const readyOrders = readyOrderRows.map((o) => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    tableLabel: o.bill.table.label,
+  }));
 
   const now = Date.now();
-  const openRequestRows = await getOpenRequests(restaurant.id);
   const openRequests = openRequestRows.map((r) => ({
     id: r.id,
     tableLabel: r.table.label,
@@ -68,7 +74,7 @@ export default async function StaffHomePage({
 
   return (
     <main className="min-h-dvh bg-paper">
-      <LiveRefresh seconds={5} />
+      <LiveRefresh seconds={5} restaurantId={restaurant.id} />
       <header className="border-b border-line bg-surface px-5 sm:px-8 py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
           <p className="font-display text-lg font-semibold tracking-tight">
@@ -112,6 +118,7 @@ export default async function StaffHomePage({
       </header>
 
       <div className="max-w-6xl mx-auto px-5 sm:px-8 py-6">
+        <ReadyBanner slug={slug} orders={readyOrders} />
         <RequestsBanner slug={slug} requests={openRequests} />
 
         <div className="flex items-baseline justify-between mb-4">

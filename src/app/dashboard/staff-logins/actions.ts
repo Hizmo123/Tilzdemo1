@@ -164,6 +164,28 @@ export async function changeStaffRole(staffId: string, role: Role) {
   return { ok: true as const };
 }
 
+// Locks (or unlocks, passing null) a KITCHEN account to one prep station —
+// see StaffAccount.assignedStation and the kitchen page's server-side
+// enforcement of it. Ignored for non-KITCHEN roles: assigning a station to a
+// STAFF/OWNER/etc. account does nothing since nothing reads it for them.
+export async function changeStaffStation(staffId: string, station: string | null) {
+  const authz = await getAuthz();
+  if (!authz.can("staff:manage")) return { error: "Not permitted." };
+  const restaurantId = await ownerRestaurantId();
+  if (!restaurantId) return { error: "Restaurant not found." };
+
+  const staff = await assertStaffOwned(staffId, restaurantId);
+  if (!staff) return { error: "Staff member not found." };
+
+  await prisma.staffAccount.update({
+    where: { id: staff.id },
+    data: { assignedStation: station && station.trim() ? station.trim().slice(0, 24) : null },
+  });
+
+  revalidatePath("/dashboard/staff-logins");
+  return { ok: true as const };
+}
+
 export async function deleteStaffLogin(staffId: string) {
   const authz = await getAuthz();
   if (!authz.can("staff:manage")) return { error: "Not permitted." };

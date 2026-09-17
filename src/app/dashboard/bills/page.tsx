@@ -25,21 +25,20 @@ export default async function BillsPage() {
   }
 
   const currency = ctx.restaurant.currency;
-  const tableIds = (
-    await prisma.table.findMany({
-      where: { locationId: ctx.location.id },
-      select: { id: true },
-    })
-  ).map((t) => t.id);
 
+  // Filtering through the table -> location relation directly avoids a
+  // separate sequential round trip to pre-fetch table ids first.
   const [open, paid] = await Promise.all([
     prisma.bill.findMany({
-      where: { tableId: { in: tableIds }, status: { in: ["OPEN", "PARTIALLY_PAID"] } },
+      where: {
+        table: { locationId: ctx.location.id },
+        status: { in: ["OPEN", "PARTIALLY_PAID"] },
+      },
       orderBy: { createdAt: "desc" },
       include: { table: true, items: true },
     }),
     prisma.bill.findMany({
-      where: { tableId: { in: tableIds }, status: "PAID" },
+      where: { table: { locationId: ctx.location.id }, status: "PAID" },
       orderBy: { paidAt: "desc" },
       take: 20,
       include: { table: true },
@@ -48,7 +47,7 @@ export default async function BillsPage() {
 
   return (
     <div className="space-y-8">
-      <LiveRefresh />
+      <LiveRefresh restaurantId={ctx.restaurant.id} />
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">
           Bills

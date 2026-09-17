@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
+import { getAuthz, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildReceiptData } from "@/lib/receipts";
 import { TaxInvoice } from "@/components/receipt/tax-invoice";
 import { PrintButton } from "@/components/receipt/print-button";
+import { EmailReceiptForm } from "@/components/receipt/email-receipt-form";
+import { RefundPanel } from "@/components/payments/refund-panel";
+import { emailReceiptCopy, refundPaymentAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +20,7 @@ export default async function OwnerReceiptPage({
 }) {
   const { billId } = await params;
   const user = await requireUser();
+  const authz = await getAuthz();
 
   const bill = await prisma.bill.findFirst({
     where: {
@@ -57,6 +61,7 @@ export default async function OwnerReceiptPage({
     items: bill.items,
     totalCents: bill.totalCents,
     amountPaidCents: bill.amountPaidCents,
+    refundedCents: bill.refundedCents,
     tipCents: bill.tipCents,
     payments: bill.payments,
   });
@@ -71,9 +76,36 @@ export default async function OwnerReceiptPage({
           ← Bills
         </Link>
         <TaxInvoice data={data} />
-        <div className="mt-4 flex justify-center">
+        <div className="mt-4 flex justify-center items-center gap-3 print:hidden">
           <PrintButton />
+          <EmailReceiptForm
+            action={emailReceiptCopy.bind(null, bill.id)}
+            initialEmail={bill.receiptEmail}
+            sentAt={bill.receiptEmailSentAt?.toISOString() ?? null}
+          />
         </div>
+        {authz.can("payments:refund") && (
+          <div className="mt-4 print:hidden">
+            <RefundPanel
+              payments={bill.payments
+                .filter((p) => p.status === "SUCCEEDED")
+                .map((p) => ({
+                  id: p.id,
+                  amountCents: p.amountCents,
+                  tipCents: p.tipCents,
+                  surchargeCents: p.surchargeCents,
+                  refundedCents: p.refundedCents,
+                  currency: p.currency,
+                  provider: p.provider,
+                  test: p.test,
+                  createdAt: p.createdAt.toISOString(),
+                }))}
+              onRefund={(paymentId, amountCents, reason) =>
+                refundPaymentAction(bill.id, paymentId, amountCents, reason)
+              }
+            />
+          </div>
+        )}
       </div>
     </main>
   );

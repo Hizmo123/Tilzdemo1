@@ -47,7 +47,7 @@ export function OwnerVerify({ initialPhone }: { initialPhone: string | null }) {
     start(async () => {
       const res = await sendOwnerVerification(phone);
       if ("error" in res) {
-        setError(res.error);
+        setError(res.error ?? null);
       } else {
         setStage("sent");
         setDevCode(res.devCode ?? null);
@@ -59,7 +59,7 @@ export function OwnerVerify({ initialPhone }: { initialPhone: string | null }) {
     setError(null);
     start(async () => {
       const res = await verifyOwnerVerification(phone, code);
-      if ("error" in res) setError(res.error);
+      if ("error" in res) setError(res.error ?? null);
       else {
         setChanging(false);
         router.refresh();

@@ -8,7 +8,7 @@ import {
   staffApproveOrder,
   staffRejectOrder,
   recallOrder,
-  staffCloseBillById,
+  refireItems,
   type OrderStatusName,
 } from "@/lib/bills";
 
@@ -73,14 +73,20 @@ export async function recallTicket(slug: string, orderId: string) {
   return { ok: true as const };
 }
 
-// Mark a pickup order's bill paid at the counter.
-export async function markPickupPaid(slug: string, billId: string) {
+// Re-fire item(s) that need re-cooking (dropped plate, send-back) as a new,
+// clearly-marked ticket — see refireItems in lib/bills.ts for why this can
+// never double-bill the guest.
+export async function refireTicketItems(
+  slug: string,
+  billItemIds: string[],
+  note?: string,
+) {
   const session = await requireStaffForSlug(slug);
   if (!session) return { error: "Your session has ended. Please sign in again." };
-  if (!roleCan(session.staff.role, "orders:manage"))
-    return { error: "Your role can't take payments." };
+  if (!roleCan(session.staff.role, "kitchen:manage"))
+    return { error: "Your role can't update the kitchen." };
 
-  const res = await staffCloseBillById(billId, session.restaurant.id);
+  const res = await refireItems(session.restaurant.id, billItemIds, note);
   if ("error" in res) return res;
   revalidatePath(`/staff/${slug}/kitchen`);
   return { ok: true as const };

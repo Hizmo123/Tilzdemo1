@@ -31,6 +31,29 @@ export function defaultHours(): DayHours[] {
   }));
 }
 
+// Same open/close every day — the onboarding wizard's "Same every day" preset.
+export function sameEveryDayHours(open: string, close: string): DayHours[] {
+  return Array.from({ length: 7 }, (_, day) => ({ day, closed: false, open, close }));
+}
+
+// One range Mon-Fri, another Sat-Sun — the wizard's "Weekdays + weekend" preset.
+export function weekdayWeekendHours(
+  weekdayOpen: string,
+  weekdayClose: string,
+  weekendOpen: string,
+  weekendClose: string,
+): DayHours[] {
+  return Array.from({ length: 7 }, (_, day) => {
+    const weekend = day === 0 || day === 6;
+    return {
+      day,
+      closed: false,
+      open: weekend ? weekendOpen : weekdayOpen,
+      close: weekend ? weekendClose : weekdayClose,
+    };
+  });
+}
+
 export function parseHours(raw: unknown): DayHours[] | null {
   if (!Array.isArray(raw) || raw.length !== 7) return null;
   const out: DayHours[] = [];

@@ -76,10 +76,28 @@ export default async function InvitePage({
       </p>
 
       {user ? (
-        <div className="mt-6">
-          <AcceptInvite token={token} />
-          <p className="text-xs text-muted mt-3">Signed in as {user.email}</p>
-        </div>
+        user.email?.toLowerCase() === invite.email.toLowerCase() ? (
+          <div className="mt-6">
+            <AcceptInvite token={token} />
+            <p className="text-xs text-muted mt-3">Signed in as {user.email}</p>
+          </div>
+        ) : (
+          <div className="mt-6 space-y-3">
+            <p className="text-sm text-danger">
+              This invite was sent to <span className="font-medium">{invite.email}</span>, but
+              you&apos;re signed in as {user.email}.
+            </p>
+            <p className="text-sm text-muted">
+              Sign out and log in (or create an account) with {invite.email} to accept it.
+            </p>
+            <Link
+              href="/login"
+              className="inline-block rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink/30"
+            >
+              Go to login
+            </Link>
+          </div>
+        )
       ) : (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-muted">

@@ -29,9 +29,13 @@ export async function GET(
     ? "png"
     : "svg";
   const safeLabel = table.label.replace(/[^a-zA-Z0-9-_]/g, "-");
+  const restaurant = table.location.restaurant;
 
   if (format === "png") {
-    const png = await qrPngBuffer(activeToken.token);
+    const png = await qrPngBuffer(activeToken.token, {
+      foreground: restaurant.qrForegroundColor,
+      background: restaurant.qrBackgroundColor,
+    });
     return new NextResponse(new Uint8Array(png), {
       headers: {
         "Content-Type": "image/png",
@@ -42,8 +46,16 @@ export async function GET(
 
   const svg = await qrPrintableSvg({
     token: activeToken.token,
-    restaurantName: table.location.restaurant.name,
+    restaurantName: restaurant.name,
     tableLabel: table.label,
+    template: restaurant.qrCardTemplate as "minimal" | "branded" | "bold",
+    accentColor: restaurant.brandColor,
+    logoDataUrl: restaurant.qrEmbedLogo ? restaurant.logoUrl : null,
+    qrStyle: {
+      foreground: restaurant.qrForegroundColor,
+      background: restaurant.qrBackgroundColor,
+      cornerStyle: restaurant.qrCornerStyle,
+    },
   });
   return new NextResponse(svg, {
     headers: {

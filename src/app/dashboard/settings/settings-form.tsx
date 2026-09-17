@@ -11,44 +11,54 @@ import {
   uploadBackground,
   removeBackground,
 } from "./actions";
-import { CURRENCIES, TIMEZONES } from "./constants";
+import { CURRENCIES } from "./constants";
+import { COUNTRIES, timezonesForCountry, currencyForCountry, hasTaxRules } from "@/lib/countries";
+import { LANGUAGES } from "@/lib/languages";
 import { compressImage } from "@/lib/compress-image";
 import {
   THEME_PRESETS,
   FONT_THEMES,
-  themeVars,
+  ACCENT_SWATCHES,
   type ThemeKey,
   type FontKey,
+  type CornerKey,
 } from "@/lib/theme";
+import { defaultHours, parseHours, type DayHours } from "@/lib/hours";
 import {
-  DAY_NAMES,
-  defaultHours,
-  parseHours,
-  type DayHours,
-} from "@/lib/hours";
-import { OwnerVerify } from "./owner-verify";
-
-const SWATCHES = [
-  "#0f5c42", // pine
-  "#a1552f", // terracotta
-  "#1d4ed8", // blue
-  "#b91c1c", // red
-  "#7c3aed", // violet
-  "#c2410c", // orange
-  "#0d9488", // teal
-  "#be185d", // pink
-  "#e11d48", // rose
-  "#15181b", // near-black
-];
+  MENU_LAYOUTS,
+  BG_PATTERNS,
+  defaultCardStyle,
+  type MenuLayout,
+  type CardStyle,
+} from "@/lib/menu-style";
+import { AbnVerify } from "./abn-verify";
+import { HoursEditor } from "@/components/venue-setup/hours-editor";
+import { CustomerPreview } from "@/components/venue-setup/customer-preview";
+import { CornerStylePicker } from "@/components/venue-setup/corner-style-picker";
+import { NotificationsPicker } from "@/components/venue-setup/notifications-picker";
+import { CustomisationPicker } from "@/components/venue-setup/customisation-picker";
+import { QrStylePicker } from "@/components/venue-setup/qr-style-picker";
 
 const THEME_KEYS = Object.keys(THEME_PRESETS) as ThemeKey[];
 const FONT_KEYS = Object.keys(FONT_THEMES) as FontKey[];
 
+// Renders only ONE section's controls at a time (the settings hub restructure
+// — see /dashboard/settings/page.tsx) while keeping every field's state and
+// the single shared save() call completely unchanged: a sub-page still shows
+// only its own area, but saving it still submits the full current settings
+// payload through the exact same updateSettings action as before. This is
+// deliberately a navigation split, not a rewrite of the save flow.
+export type SettingsSection = "venue" | "branding" | "service" | "hours" | "notifications";
+
 export function SettingsForm({
   initial,
+  section,
 }: {
+  section: SettingsSection;
   initial: {
     name: string;
+    country: string;
+    language: string;
     abn: string | null;
     timezone: string;
     currency: string;
@@ -56,6 +66,24 @@ export function SettingsForm({
     theme: string;
     themeMode: string;
     fontTheme: string;
+    cornerStyle: string;
+    tagline: string | null;
+    menuLayout: string;
+    cardStyle: unknown;
+    typeScale: string;
+    sectionHeaderStyle: string;
+    buttonShape: string;
+    buttonFill: string;
+    bgTreatment: string;
+    bgPatternKey: string | null;
+    bgOverlayStrength: number;
+    qrForegroundColor: string | null;
+    qrBackgroundColor: string | null;
+    qrCornerStyle: string;
+    qrEmbedLogo: boolean;
+    qrCardTemplate: string;
+    instagramHandle: string | null;
+    websiteUrl: string | null;
     logoUrl: string | null;
     coverUrl: string | null;
     bgImageUrl: string | null;
@@ -65,15 +93,25 @@ export function SettingsForm({
     customerPayment: boolean;
     staffApproval: boolean;
     paymentTiming: string;
-    takeawayEnabled: boolean;
+    requirePaymentBeforeOrder: boolean;
+    kitchenChime: boolean;
+    orderReadySmsEnabled: boolean;
+    surchargeEnabled: boolean;
+    surchargeBasisPoints: number;
     hours: unknown;
     slug: string;
     ownerPhone: string | null;
+    abnVerifiedAt: string | null;
+    abnVerifiedValue: string | null;
+    abnVerifiedName: string | null;
   };
 }) {
   const router = useRouter();
   const [name, setName] = useState(initial.name);
+  const [country, setCountry] = useState(initial.country);
+  const [language, setLanguage] = useState(initial.language);
   const [abn, setAbn] = useState(initial.abn ?? "");
+  const [ownerPhone, setOwnerPhone] = useState(initial.ownerPhone ?? "");
   const [timezone, setTimezone] = useState(initial.timezone);
   const [currency, setCurrency] = useState(initial.currency);
   const [brandColor, setBrandColor] = useState(initial.brandColor ?? "#0f5c42");
@@ -83,6 +121,35 @@ export function SettingsForm({
   const [themeMode, setThemeMode] = useState(initial.themeMode ?? "light");
   const [fontTheme, setFontTheme] = useState<FontKey>(
     (initial.fontTheme as FontKey) ?? "classic",
+  );
+  const [cornerStyle, setCornerStyle] = useState<CornerKey>(
+    (initial.cornerStyle as CornerKey) ?? "soft",
+  );
+  const [tagline, setTagline] = useState(initial.tagline ?? "");
+  const [menuLayout, setMenuLayout] = useState<MenuLayout>(
+    (initial.menuLayout as MenuLayout) ?? "list",
+  );
+  const [cardStyle, setCardStyle] = useState<CardStyle>(() => {
+    const o = initial.cardStyle;
+    return o && typeof o === "object" ? { ...defaultCardStyle(menuLayout), ...(o as object) } : defaultCardStyle(menuLayout);
+  });
+  const [typeScale, setTypeScale] = useState(initial.typeScale || "comfortable");
+  const [sectionHeaderStyle, setSectionHeaderStyle] = useState(initial.sectionHeaderStyle || "plain");
+  const [buttonShape, setButtonShape] = useState(initial.buttonShape || "rounded");
+  const [buttonFill, setButtonFill] = useState(initial.buttonFill || "solid");
+  const [bgTreatment, setBgTreatment] = useState(initial.bgTreatment || "solid");
+  const [bgPatternKey, setBgPatternKey] = useState(initial.bgPatternKey ?? "dots");
+  const [bgOverlayStrength, setBgOverlayStrength] = useState(initial.bgOverlayStrength ?? 55);
+  const [qrForegroundColor, setQrForegroundColor] = useState(initial.qrForegroundColor ?? "");
+  const [qrBackgroundColor, setQrBackgroundColor] = useState(initial.qrBackgroundColor ?? "");
+  const [qrCornerStyle, setQrCornerStyle] = useState(initial.qrCornerStyle || "square");
+  const [qrEmbedLogo, setQrEmbedLogo] = useState(initial.qrEmbedLogo ?? false);
+  const [qrCardTemplate, setQrCardTemplate] = useState(initial.qrCardTemplate || "branded");
+  const [instagramHandle, setInstagramHandle] = useState(initial.instagramHandle ?? "");
+  const [websiteUrl, setWebsiteUrl] = useState(initial.websiteUrl ?? "");
+  const [kitchenChime, setKitchenChime] = useState(initial.kitchenChime);
+  const [orderReadySmsEnabled, setOrderReadySmsEnabled] = useState(
+    initial.orderReadySmsEnabled,
   );
   const [tipEnabled, setTipEnabled] = useState(initial.tipEnabled);
   const [tipPresetsStr, setTipPresetsStr] = useState(
@@ -98,17 +165,26 @@ export function SettingsForm({
   const [paymentTiming, setPaymentTiming] = useState(
     initial.paymentTiming ?? "after",
   );
-  const [takeawayEnabled, setTakeawayEnabled] = useState(initial.takeawayEnabled);
+  const [requirePaymentBeforeOrder, setRequirePaymentBeforeOrder] = useState(
+    initial.requirePaymentBeforeOrder,
+  );
+  const [surchargeEnabled, setSurchargeEnabled] = useState(initial.surchargeEnabled);
+  const [surchargePercentStr, setSurchargePercentStr] = useState(
+    (initial.surchargeBasisPoints / 100).toString(),
+  );
   const [hours, setHours] = useState<DayHours[]>(
     parseHours(initial.hours) ?? defaultHours(),
   );
-
-  function setDay(day: number, patch: Partial<DayHours>) {
-    setHours((hs) => hs.map((h) => (h.day === day ? { ...h, ...patch } : h)));
-  }
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Held in state (not read straight from `initial`) so a successful upload
+  // shows up immediately without waiting on a full page refresh, and an
+  // instant local preview can show the moment a file is picked.
+  const [logoUrl, setLogoUrl] = useState(initial.logoUrl);
+  const [coverUrl, setCoverUrl] = useState(initial.coverUrl);
+  const [bgImageUrl, setBgImageUrl] = useState(initial.bgImageUrl);
 
   const logoRef = useRef<HTMLInputElement>(null);
   const [logoBusy, setLogoBusy] = useState(false);
@@ -124,23 +200,49 @@ export function SettingsForm({
       .split(",")
       .map((s) => parseInt(s.trim(), 10))
       .filter((n) => Number.isInteger(n) && n >= 1 && n <= 100);
+    const surchargePercentNum = Math.min(5, Math.max(0, parseFloat(surchargePercentStr) || 0));
     start(async () => {
       const res = await updateSettings({
         name,
+        country,
+        language,
         abn,
+        ownerPhone,
         timezone,
         currency,
         brandColor,
         theme,
         themeMode,
         fontTheme,
+        cornerStyle,
+        tagline,
+        menuLayout,
+        cardStyle,
+        typeScale,
+        sectionHeaderStyle,
+        buttonShape,
+        buttonFill,
+        bgTreatment,
+        bgPatternKey,
+        bgOverlayStrength,
+        qrForegroundColor,
+        qrBackgroundColor,
+        qrCornerStyle,
+        qrEmbedLogo,
+        qrCardTemplate,
+        instagramHandle,
+        websiteUrl,
         tipEnabled,
         tipPresets,
         customerOrdering,
         customerPayment,
         staffApproval,
         paymentTiming,
-        takeawayEnabled,
+        requirePaymentBeforeOrder,
+        kitchenChime,
+        orderReadySmsEnabled,
+        surchargeEnabled,
+        surchargePercent: surchargePercentNum,
         hours,
       });
       if (res.error) setError(res.error);
@@ -151,74 +253,100 @@ export function SettingsForm({
     });
   }
 
+  // Shared shape for the three image uploads: show an instant local preview
+  // (URL.createObjectURL) the moment a file is picked, swap it for the real
+  // stored URL on success, and roll back to whatever was there before on
+  // failure — previously the preview didn't update until a full refresh.
+  async function handleImageUpload(
+    file: File,
+    opts: {
+      maxDim: number;
+      quality: number;
+      filename: string;
+      current: string | null;
+      setCurrent: (url: string | null) => void;
+      setBusy: (busy: boolean) => void;
+      upload: (fd: FormData) => Promise<{ error?: string; url?: string }>;
+    },
+  ) {
+    const { maxDim, quality, filename, current, setCurrent, setBusy, upload } = opts;
+    const objectUrl = URL.createObjectURL(file);
+    const previous = current;
+    setCurrent(objectUrl);
+    setBusy(true);
+    setError(null);
+    try {
+      const blob = await compressImage(file, maxDim, quality);
+      const fd = new FormData();
+      fd.append("file", blob, filename);
+      const res = await upload(fd);
+      if (res.error) {
+        setError(res.error);
+        setCurrent(previous);
+      } else if (res.url) {
+        setCurrent(res.url);
+      }
+    } catch {
+      setError("Couldn't process that image.");
+      setCurrent(previous);
+    } finally {
+      setBusy(false);
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
   async function onLogo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    setLogoBusy(true);
-    setError(null);
-    try {
-      const blob = await compressImage(file, 400, 0.9);
-      const fd = new FormData();
-      fd.append("file", blob, "logo.jpg");
-      const res = await uploadLogo(fd);
-      if (res.error) setError(res.error);
-      else router.refresh();
-    } catch {
-      setError("Couldn't process that image.");
-    } finally {
-      setLogoBusy(false);
-    }
+    await handleImageUpload(file, {
+      maxDim: 400,
+      quality: 0.9,
+      filename: "logo.jpg",
+      current: logoUrl,
+      setCurrent: setLogoUrl,
+      setBusy: setLogoBusy,
+      upload: uploadLogo,
+    });
   }
 
   async function onCover(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    setCoverBusy(true);
-    setError(null);
-    try {
-      const blob = await compressImage(file, 1600, 0.85);
-      const fd = new FormData();
-      fd.append("file", blob, "cover.jpg");
-      const res = await uploadCover(fd);
-      if (res.error) setError(res.error);
-      else router.refresh();
-    } catch {
-      setError("Couldn't process that image.");
-    } finally {
-      setCoverBusy(false);
-    }
+    await handleImageUpload(file, {
+      maxDim: 1600,
+      quality: 0.85,
+      filename: "cover.jpg",
+      current: coverUrl,
+      setCurrent: setCoverUrl,
+      setBusy: setCoverBusy,
+      upload: uploadCover,
+    });
   }
 
   async function onBackground(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    setBgBusy(true);
-    setError(null);
-    try {
-      const blob = await compressImage(file, 1600, 0.8);
-      const fd = new FormData();
-      fd.append("file", blob, "bg.jpg");
-      const res = await uploadBackground(fd);
-      if (res.error) setError(res.error);
-      else router.refresh();
-    } catch {
-      setError("Couldn't process that image.");
-    } finally {
-      setBgBusy(false);
-    }
+    await handleImageUpload(file, {
+      maxDim: 1600,
+      quality: 0.8,
+      filename: "bg.jpg",
+      current: bgImageUrl,
+      setCurrent: setBgImageUrl,
+      setBusy: setBgBusy,
+      upload: uploadBackground,
+    });
   }
 
   const field =
     "w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 focus:border-pine focus:outline-none";
 
-  const previewStyle = themeVars({ theme, themeMode, fontTheme, brandColor });
-
   return (
     <div className="space-y-8 max-w-2xl">
       {/* Venue */}
+      {section === "venue" && (
       <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-4">
         <h2 className="font-display text-lg font-semibold tracking-tight">Venue</h2>
         <div>
@@ -229,15 +357,77 @@ export function SettingsForm({
             className={field}
           />
         </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm text-muted block mb-1">Country</label>
+            <select
+              value={country}
+              onChange={(e) => {
+                const next = e.target.value;
+                const zones = timezonesForCountry(next);
+                setCountry(next);
+                setCurrency(currencyForCountry(next));
+                if (!zones.includes(timezone)) setTimezone(zones[0]);
+              }}
+              className={field}
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-sm text-muted block mb-1">Menu language</label>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className={field}
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {hasTaxRules(country) ? (
+          <div>
+            <label className="text-sm text-muted block mb-1">
+              ABN <span className="text-xs">(shown on tax invoices)</span>
+            </label>
+            <input
+              value={abn}
+              onChange={(e) => setAbn(e.target.value)}
+              placeholder="11 digits"
+              inputMode="numeric"
+              className={field}
+            />
+            <div className="mt-2">
+              <AbnVerify
+                abn={abn}
+                verifiedAt={initial.abnVerifiedAt}
+                verifiedName={initial.abnVerifiedName}
+                verifiedAbn={initial.abnVerifiedValue}
+              />
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-muted rounded-lg border border-line bg-paper px-3.5 py-3">
+            We don&apos;t have tax rules for your country wired up yet.
+          </p>
+        )}
         <div>
           <label className="text-sm text-muted block mb-1">
-            ABN <span className="text-xs">(shown on tax invoices)</span>
+            Contact phone <span className="text-xs">(optional — not shown to customers)</span>
           </label>
           <input
-            value={abn}
-            onChange={(e) => setAbn(e.target.value)}
-            placeholder="11 digits"
-            inputMode="numeric"
+            inputMode="tel"
+            value={ownerPhone}
+            onChange={(e) => setOwnerPhone(e.target.value)}
+            placeholder="04xx xxx xxx"
             className={field}
           />
         </div>
@@ -249,7 +439,7 @@ export function SettingsForm({
               onChange={(e) => setTimezone(e.target.value)}
               className={field}
             >
-              {TIMEZONES.map((tz) => (
+              {timezonesForCountry(country).map((tz) => (
                 <option key={tz} value={tz}>
                   {tz.replace("_", " ")}
                 </option>
@@ -272,208 +462,270 @@ export function SettingsForm({
           </div>
         </div>
       </section>
-
-      {/* Owner verification */}
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          Owner verification
-        </h2>
-        <p className="text-sm text-muted">
-          Verify a mobile so we know a real person runs this venue. We&apos;ll
-          text a one-time code.
-        </p>
-        <OwnerVerify initialPhone={initial.ownerPhone} />
-      </section>
+      )}
 
       {/* Appearance */}
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-6">
-        <div>
-          <h2 className="font-display text-lg font-semibold tracking-tight">
-            Appearance
-          </h2>
-          <p className="text-sm text-muted mt-1">
-            How your ordering page looks when a customer scans a table. Changes
-            preview live below; press Save to publish.
-          </p>
-        </div>
+      {section === "branding" && (
+      <>
+      <div>
+        <h2 className="font-display text-lg font-semibold tracking-tight">
+          Appearance
+        </h2>
+        <p className="text-sm text-muted mt-1">
+          How your ordering page looks when a customer scans a table. Changes
+          preview live on the right; press Save to publish.
+        </p>
+      </div>
 
-        {/* Theme presets */}
-        <div>
-          <label className="text-sm text-muted block mb-2">Theme</label>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {THEME_KEYS.map((key) => {
-              const p = THEME_PRESETS[key];
-              const pal = themeMode === "dark" ? p.dark : p.light;
-              const active = theme === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setTheme(key)}
-                  className={`text-left rounded-xl border-2 p-2.5 transition-colors ${
-                    active ? "border-pine" : "border-line hover:border-ink/20"
-                  }`}
-                >
-                  <div
-                    className="h-10 rounded-lg mb-2 flex items-center gap-1 px-2"
-                    style={{ background: pal.paper, border: `1px solid ${pal.line}` }}
-                  >
-                    <span
-                      className="w-4 h-4 rounded-full"
-                      style={{ background: brandColor || p.defaultAccent }}
-                    />
-                    <span
-                      className="flex-1 h-2 rounded"
-                      style={{ background: pal.surface }}
-                    />
-                  </div>
-                  <span className="text-xs font-medium block">{p.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      <div className="grid lg:grid-cols-[1fr_320px] gap-6 items-start">
+        <div className="space-y-6 min-w-0">
+          {/* Theme & colour */}
+          <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-5">
+            <h3 className="text-sm font-semibold">Theme &amp; colour</h3>
 
-        {/* Light / dark */}
-        <div>
-          <label className="text-sm text-muted block mb-2">Base</label>
-          <div className="inline-flex rounded-lg border border-line p-0.5">
-            {(["light", "dark"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setThemeMode(m)}
-                className={`px-4 py-1.5 text-sm rounded-md capitalize transition-colors ${
-                  themeMode === m
-                    ? "bg-pine text-[color:var(--on-accent,#fff)]"
-                    : "text-muted hover:text-ink"
-                }`}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Accent colour */}
-        <div>
-          <label className="text-sm text-muted block mb-2">Accent colour</label>
-          <div className="flex flex-wrap items-center gap-2">
-            {SWATCHES.map((c) => (
-              <button
-                key={c}
-                onClick={() => setBrandColor(c)}
-                aria-label={`Accent ${c}`}
-                className={`w-9 h-9 rounded-full border-2 ${
-                  brandColor.toLowerCase() === c.toLowerCase()
-                    ? "border-ink"
-                    : "border-transparent"
-                }`}
-                style={{ backgroundColor: c }}
-              />
-            ))}
-            <label className="flex items-center gap-2 ml-1 text-sm text-muted cursor-pointer">
-              <input
-                type="color"
-                value={/^#[0-9a-fA-F]{6}$/.test(brandColor) ? brandColor : "#0f5c42"}
-                onChange={(e) => setBrandColor(e.target.value)}
-                className="w-9 h-9 rounded-full border border-line bg-transparent cursor-pointer p-0"
-                aria-label="Custom accent colour"
-              />
-              Custom
-            </label>
-          </div>
-        </div>
-
-        {/* Font pairing */}
-        <div>
-          <label className="text-sm text-muted block mb-2">Font</label>
-          <div className="grid grid-cols-3 gap-2">
-            {FONT_KEYS.map((key) => {
-              const f = FONT_THEMES[key];
-              const active = fontTheme === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setFontTheme(key)}
-                  className={`rounded-xl border-2 p-3 transition-colors ${
-                    active ? "border-pine" : "border-line hover:border-ink/20"
-                  }`}
-                >
-                  <span
-                    className="block text-lg font-semibold"
-                    style={{ fontFamily: f.display }}
-                  >
-                    Ag
-                  </span>
-                  <span className="block text-xs text-muted mt-1">{f.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Live preview */}
-        <div>
-          <label className="text-sm text-muted block mb-2">Preview</label>
-          <div
-            style={previewStyle}
-            className="relative rounded-2xl border border-line overflow-hidden"
-          >
-            {initial.bgImageUrl && (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={initial.bgImageUrl}
-                  alt=""
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background:
-                      themeMode === "dark"
-                        ? "rgba(8,8,10,0.75)"
-                        : "rgba(255,255,255,0.72)",
-                  }}
-                />
-              </>
-            )}
-            <div className="relative p-5 bg-paper/0">
-              <div className="text-center mb-4">
-                {initial.logoUrl ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={initial.logoUrl}
-                    alt=""
-                    className="h-8 w-auto mx-auto mb-1 object-contain"
-                  />
-                ) : null}
-                <p
-                  className="font-display text-lg font-semibold text-ink"
-                  style={{ fontFamily: "var(--font-display)" }}
-                >
-                  {name || "Your café"}
-                </p>
-                <p className="text-xs text-muted">Table 4</p>
+            <div>
+              <label className="text-sm text-muted block mb-2">Theme</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {THEME_KEYS.map((key) => {
+                  const p = THEME_PRESETS[key];
+                  const pal = themeMode === "dark" ? p.dark : p.light;
+                  const active = theme === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setTheme(key)}
+                      className={`text-left rounded-xl border-2 p-2.5 transition-colors ${
+                        active ? "border-pine" : "border-line hover:border-ink/20"
+                      }`}
+                    >
+                      <div
+                        className="h-10 rounded-lg mb-2 flex items-center gap-1 px-2"
+                        style={{ background: pal.paper, border: `1px solid ${pal.line}` }}
+                      >
+                        <span
+                          className="w-4 h-4 rounded-full"
+                          style={{ background: brandColor || p.defaultAccent }}
+                        />
+                        <span
+                          className="flex-1 h-2 rounded"
+                          style={{ background: pal.surface }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium block">{p.label}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="rounded-xl bg-surface border border-line p-3 mb-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-ink">Flat White</p>
-                  <p className="text-xs text-muted">Silky double shot</p>
-                </div>
-                <span className="text-xs rounded-lg bg-ink text-surface px-3 py-1.5">
-                  Add
-                </span>
-              </div>
-              <button
-                type="button"
-                className="w-full rounded-xl bg-pine text-[color:var(--on-accent,#fff)] py-2.5 text-sm font-medium"
-              >
-                Review order · 2
-              </button>
             </div>
-          </div>
+
+            <div>
+              <label className="text-sm text-muted block mb-2">Base</label>
+              <div className="inline-flex rounded-lg border border-line p-0.5">
+                {(["light", "dark"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setThemeMode(m)}
+                    className={`px-4 py-1.5 text-sm rounded-md capitalize transition-colors ${
+                      themeMode === m
+                        ? "bg-pine text-[color:var(--on-accent,#fff)]"
+                        : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm text-muted block mb-2">Accent colour</label>
+              <div className="flex flex-wrap items-center gap-2">
+                {ACCENT_SWATCHES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setBrandColor(c)}
+                    aria-label={`Accent ${c}`}
+                    className={`w-9 h-9 rounded-full border-2 ${
+                      brandColor.toLowerCase() === c.toLowerCase()
+                        ? "border-ink"
+                        : "border-transparent"
+                    }`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+                <label className="flex items-center gap-2 ml-1 text-sm text-muted cursor-pointer">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(brandColor) ? brandColor : "#0f5c42"}
+                    onChange={(e) => setBrandColor(e.target.value)}
+                    className="w-9 h-9 rounded-full border border-line bg-transparent cursor-pointer p-0"
+                    aria-label="Custom accent colour"
+                  />
+                  Custom
+                </label>
+              </div>
+            </div>
+          </section>
+
+          {/* Typography & shape */}
+          <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-5">
+            <h3 className="text-sm font-semibold">Typography &amp; shape</h3>
+
+            <div>
+              <label className="text-sm text-muted block mb-2">Font</label>
+              <div className="grid grid-cols-3 gap-2">
+                {FONT_KEYS.map((key) => {
+                  const f = FONT_THEMES[key];
+                  const active = fontTheme === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setFontTheme(key)}
+                      className={`rounded-xl border-2 p-3 min-w-0 overflow-hidden transition-colors ${
+                        active ? "border-pine" : "border-line hover:border-ink/20"
+                      }`}
+                    >
+                      {/* leading-none pins this to its own line box regardless
+                          of the chosen display font's own line-height metrics
+                          — some (e.g. Fraunces) default to a much taller one
+                          than the sans labels below, which without this could
+                          overlap. */}
+                      <span
+                        className="block text-lg font-semibold leading-none truncate"
+                        style={{ fontFamily: f.display }}
+                      >
+                        Ag
+                      </span>
+                      <span className="block text-xs text-muted mt-2 truncate">{f.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm text-muted block mb-2">Corner style</label>
+              <CornerStylePicker value={cornerStyle} onChange={setCornerStyle} />
+            </div>
+          </section>
+
+          {/* Menu layout & style */}
+          <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-5">
+            <h3 className="text-sm font-semibold">Menu layout &amp; style</h3>
+
+            <div>
+              <label className="text-sm text-muted block mb-2">Menu layout</label>
+              <div className="grid grid-cols-2 gap-2">
+                {MENU_LAYOUTS.map((l) => (
+                  <button
+                    key={l.value}
+                    type="button"
+                    onClick={() => setMenuLayout(l.value)}
+                    className={`text-left rounded-xl border-2 p-3 transition-colors ${
+                      menuLayout === l.value
+                        ? "border-pine bg-pine-soft"
+                        : "border-line hover:border-ink/20"
+                    }`}
+                  >
+                    <span className="text-sm font-medium block">{l.label}</span>
+                    <span className="text-xs text-muted mt-0.5 block">{l.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t border-line pt-5">
+              <CustomisationPicker
+                cardStyle={cardStyle}
+                onCardStyleChange={setCardStyle}
+                typeScale={typeScale}
+                onTypeScaleChange={setTypeScale}
+                sectionHeaderStyle={sectionHeaderStyle}
+                onSectionHeaderStyleChange={setSectionHeaderStyle}
+                buttonShape={buttonShape}
+                onButtonShapeChange={setButtonShape}
+                buttonFill={buttonFill}
+                onButtonFillChange={setButtonFill}
+                bgTreatment={bgTreatment}
+                onBgTreatmentChange={setBgTreatment}
+                bgPatternKey={bgPatternKey}
+                onBgPatternKeyChange={setBgPatternKey}
+                bgOverlayStrength={bgOverlayStrength}
+                onBgOverlayStrengthChange={setBgOverlayStrength}
+                hasBgImage={!!bgImageUrl}
+              />
+            </div>
+          </section>
+
+          {/* Branding details */}
+          <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-5">
+            <h3 className="text-sm font-semibold">Branding details</h3>
+
+            <div>
+              <label className="text-sm text-muted block mb-2">
+                Tagline <span className="text-xs">(optional)</span>
+              </label>
+              <input
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value)}
+                placeholder="e.g. Slow coffee, fast Wi-Fi"
+                maxLength={80}
+                className={field}
+              />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-muted block mb-2">
+                  Instagram <span className="text-xs">(optional)</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">@</span>
+                  <input
+                    value={instagramHandle}
+                    onChange={(e) => setInstagramHandle(e.target.value)}
+                    placeholder="yourvenue"
+                    maxLength={30}
+                    className={`${field} pl-7`}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm text-muted block mb-2">
+                  Website <span className="text-xs">(optional)</span>
+                </label>
+                <input
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  placeholder="yourvenue.com"
+                  maxLength={200}
+                  className={field}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted">
+              Tagline and social links are shown on your customer ordering page
+              so guests can follow or find you.
+            </p>
+          </section>
         </div>
-      </section>
+
+        {/* Live preview — sticky alongside the editor on wide screens */}
+        <div className="lg:sticky lg:top-6">
+          <p className="text-sm text-muted mb-2">Preview</p>
+          <CustomerPreview
+            appearance={{ theme, themeMode, fontTheme, brandColor, cornerStyle }}
+            restaurantName={name}
+            tagline={tagline}
+            logoUrl={logoUrl}
+            bgImageUrl={bgImageUrl}
+            cardStyle={cardStyle}
+            buttonShape={buttonShape}
+            buttonFill={buttonFill}
+            typeScale={typeScale}
+          />
+        </div>
+      </div>
 
       {/* Logo, banner, background */}
       <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-5">
@@ -484,10 +736,10 @@ export function SettingsForm({
         {/* Logo */}
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-lg border border-line bg-paper overflow-hidden flex items-center justify-center shrink-0">
-            {initial.logoUrl ? (
+            {logoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
-                src={initial.logoUrl}
+                src={logoUrl}
                 alt=""
                 className="w-full h-full object-contain"
               />
@@ -508,11 +760,11 @@ export function SettingsForm({
               onClick={() => logoRef.current?.click()}
               className="text-sm rounded-md border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
             >
-              {logoBusy ? "Uploading…" : initial.logoUrl ? "Replace logo" : "Upload logo"}
+              {logoBusy ? "Uploading…" : logoUrl ? "Replace logo" : "Upload logo"}
             </button>
-            {initial.logoUrl && (
+            {logoUrl && (
               <button
-                onClick={() => start(async () => { await removeLogo(); router.refresh(); })}
+                onClick={() => start(async () => { await removeLogo(); setLogoUrl(null); })}
                 className="text-sm text-muted hover:text-danger"
               >
                 Remove
@@ -528,9 +780,9 @@ export function SettingsForm({
             <span className="text-xs">(small header strip)</span>
           </label>
           <div className="rounded-lg border border-line bg-paper overflow-hidden h-24 flex items-center justify-center mb-2">
-            {initial.coverUrl ? (
+            {coverUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={initial.coverUrl} alt="" className="w-full h-full object-cover" />
+              <img src={coverUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               <span className="text-xs text-muted">No banner</span>
             )}
@@ -542,11 +794,11 @@ export function SettingsForm({
               onClick={() => coverRef.current?.click()}
               className="text-sm rounded-md border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
             >
-              {coverBusy ? "Uploading…" : initial.coverUrl ? "Replace banner" : "Upload banner"}
+              {coverBusy ? "Uploading…" : coverUrl ? "Replace banner" : "Upload banner"}
             </button>
-            {initial.coverUrl && (
+            {coverUrl && (
               <button
-                onClick={() => start(async () => { await removeCover(); router.refresh(); })}
+                onClick={() => start(async () => { await removeCover(); setCoverUrl(null); })}
                 className="text-sm text-muted hover:text-danger"
               >
                 Remove
@@ -562,9 +814,9 @@ export function SettingsForm({
             <span className="text-xs">(full-screen photo behind everything)</span>
           </label>
           <div className="rounded-lg border border-line bg-paper overflow-hidden h-28 flex items-center justify-center mb-2">
-            {initial.bgImageUrl ? (
+            {bgImageUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={initial.bgImageUrl} alt="" className="w-full h-full object-cover" />
+              <img src={bgImageUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               <span className="text-xs text-muted">No background</span>
             )}
@@ -576,11 +828,11 @@ export function SettingsForm({
               onClick={() => bgRef.current?.click()}
               className="text-sm rounded-md border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
             >
-              {bgBusy ? "Uploading…" : initial.bgImageUrl ? "Replace background" : "Upload background"}
+              {bgBusy ? "Uploading…" : bgImageUrl ? "Replace background" : "Upload background"}
             </button>
-            {initial.bgImageUrl && (
+            {bgImageUrl && (
               <button
-                onClick={() => start(async () => { await removeBackground(); router.refresh(); })}
+                onClick={() => start(async () => { await removeBackground(); setBgImageUrl(null); })}
                 className="text-sm text-muted hover:text-danger"
               >
                 Remove
@@ -593,7 +845,35 @@ export function SettingsForm({
         </div>
       </section>
 
+      {/* QR & table cards */}
+      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
+        <h2 className="font-display text-lg font-semibold tracking-tight">
+          QR code & table cards
+        </h2>
+        <p className="text-sm text-muted">
+          How your table QR codes look, and which printable card template
+          downloads use by default.
+        </p>
+        <QrStylePicker
+          foregroundColor={qrForegroundColor}
+          onForegroundColorChange={setQrForegroundColor}
+          backgroundColor={qrBackgroundColor}
+          onBackgroundColorChange={setQrBackgroundColor}
+          cornerStyle={qrCornerStyle}
+          onCornerStyleChange={setQrCornerStyle}
+          embedLogo={qrEmbedLogo}
+          onEmbedLogoChange={setQrEmbedLogo}
+          hasLogo={!!logoUrl}
+          cardTemplate={qrCardTemplate}
+          onCardTemplateChange={setQrCardTemplate}
+        />
+      </section>
+      </>
+      )}
+
       {/* Service model */}
+      {section === "service" && (
+      <>
       <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-4">
         <h2 className="font-display text-lg font-semibold tracking-tight">
           Service model
@@ -678,69 +958,61 @@ export function SettingsForm({
           </p>
         </div>
 
-        <label className="flex items-start gap-3 text-sm">
-          <input
-            type="checkbox"
-            checked={takeawayEnabled}
-            onChange={(e) => setTakeawayEnabled(e.target.checked)}
-            className="accent-pine w-4 h-4 mt-0.5"
-          />
-          <span>
-            <span className="font-medium">Accept pickup / takeaway orders</span>
-            <span className="block text-muted text-xs">
-              Guests order for pickup at{" "}
-              <code className="bg-paper rounded px-1">/to/{initial.slug}</code> —
-              each order gets its own pickup number.
+        {customerPayment && (
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={requirePaymentBeforeOrder}
+              onChange={(e) => setRequirePaymentBeforeOrder(e.target.checked)}
+              className="accent-pine w-4 h-4 mt-0.5"
+            />
+            <span>
+              <span className="font-medium">
+                Require payment before ordering (strict)
+              </span>
+              <span className="block text-muted text-xs">
+                An alternative to the softer &quot;prepay&quot; option above:
+                the customer page treats an unpaid order as blocked, not just
+                suggested to pay — no skip button, only pay or cancel. Off by
+                default.
+              </span>
             </span>
-          </span>
-        </label>
-      </section>
+          </label>
+        )}
 
-      {/* Opening hours */}
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          Opening hours
-        </h2>
-        <p className="text-sm text-muted">
-          Customers can browse the menu anytime, but ordering is only open during
-          these hours (venue local time).
-        </p>
-        <div className="space-y-1.5">
-          {hours.map((h) => (
-            <div key={h.day} className="flex items-center gap-3 text-sm">
-              <span className="w-24 shrink-0">{DAY_NAMES[h.day]}</span>
-              <label className="flex items-center gap-1.5 text-muted">
-                <input
-                  type="checkbox"
-                  checked={h.closed}
-                  onChange={(e) => setDay(h.day, { closed: e.target.checked })}
-                  className="accent-pine w-3.5 h-3.5"
-                />
-                Closed
-              </label>
-              {!h.closed && (
-                <>
-                  <input
-                    type="time"
-                    value={h.open}
-                    onChange={(e) => setDay(h.day, { open: e.target.value })}
-                    className="rounded-md border border-line bg-surface px-2 py-1 text-sm focus:border-pine focus:outline-none"
-                  />
-                  <span className="text-muted">–</span>
-                  <input
-                    type="time"
-                    value={h.close}
-                    onChange={(e) => setDay(h.day, { close: e.target.value })}
-                    className="rounded-md border border-line bg-surface px-2 py-1 text-sm focus:border-pine focus:outline-none"
-                  />
-                </>
-              )}
+        <div>
+          <label className="flex items-start gap-3 text-sm">
+            <input
+              type="checkbox"
+              checked={surchargeEnabled}
+              onChange={(e) => setSurchargeEnabled(e.target.checked)}
+              className="accent-pine w-4 h-4 mt-0.5"
+            />
+            <span>
+              <span className="font-medium">Add a card surcharge</span>
+              <span className="block text-muted text-xs">
+                Off by default. Shown to guests as its own line before they
+                confirm payment, and on every tax invoice — never hidden in
+                the total.
+              </span>
+            </span>
+          </label>
+          {surchargeEnabled && (
+            <div className="mt-2 ml-7 flex items-center gap-2">
+              <input
+                inputMode="decimal"
+                value={surchargePercentStr}
+                onChange={(e) => setSurchargePercentStr(e.target.value)}
+                className="w-20 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm focus:border-pine focus:outline-none"
+              />
+              <span className="text-sm text-muted">% surcharge, added to every card payment</span>
             </div>
-          ))}
+          )}
         </div>
       </section>
 
-      {/* Tipping */}
+      {/* Tipping — part of the Service model page (checkout-adjacent), even
+          though it sits here in the file next to Opening hours below. */}
       <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-4">
         <h2 className="font-display text-lg font-semibold tracking-tight">Tipping</h2>
         <label className="flex items-center gap-2 text-sm">
@@ -766,6 +1038,37 @@ export function SettingsForm({
           </div>
         )}
       </section>
+      </>
+      )}
+
+      {/* Opening hours */}
+      {section === "hours" && (
+      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
+        <h2 className="font-display text-lg font-semibold tracking-tight">
+          Opening hours
+        </h2>
+        <p className="text-sm text-muted">
+          Customers can browse the menu anytime, but ordering is only open during
+          these hours (venue local time).
+        </p>
+        <HoursEditor value={hours} onChange={setHours} />
+      </section>
+      )}
+
+      {/* Notifications */}
+      {section === "notifications" && (
+      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-4">
+        <h2 className="font-display text-lg font-semibold tracking-tight">
+          Notifications
+        </h2>
+        <NotificationsPicker
+          kitchenChime={kitchenChime}
+          onKitchenChimeChange={setKitchenChime}
+          orderReadySmsEnabled={orderReadySmsEnabled}
+          onOrderReadySmsChange={setOrderReadySmsEnabled}
+        />
+      </section>
+      )}
 
       {error && <p className="text-sm text-danger">{error}</p>}
       {msg && <p className="text-sm text-pine-deep">{msg}</p>}

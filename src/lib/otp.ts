@@ -5,6 +5,12 @@ import { sendSms } from "@/lib/sms";
 const CODE_LENGTH = 6;
 const TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
+// Without this, sendOtp had no limit at all — an attacker (or a buggy retry
+// loop) could spam SMS to any phone number indefinitely, which is both a real
+// cost (each real send bills the Twilio account) and a harassment vector
+// against whoever owns that number.
+const RESEND_COOLDOWN_SECONDS = 45;
+const MAX_SENDS_PER_HOUR = 5;
 
 function generateCode(): string {
   let code = "";
@@ -32,6 +38,24 @@ export async function sendOtp(
   phoneE164: string,
   purpose = "owner_verify",
 ): Promise<{ ok: true; devCode?: string } | { error: string }> {
+  const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const [mostRecent, sentThisHour] = await Promise.all([
+    prisma.otpChallenge.findFirst({
+      where: { phone: phoneE164, purpose },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
+    prisma.otpChallenge.count({
+      where: { phone: phoneE164, purpose, createdAt: { gte: hourAgo } },
+    }),
+  ]);
+  if (mostRecent && Date.now() - mostRecent.createdAt.getTime() < RESEND_COOLDOWN_SECONDS * 1000) {
+    return { error: "Please wait before requesting another code." };
+  }
+  if (sentThisHour >= MAX_SENDS_PER_HOUR) {
+    return { error: "Too many codes requested for this number. Try again later." };
+  }
+
   const code = generateCode();
   await prisma.otpChallenge.create({
     data: {

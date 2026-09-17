@@ -49,12 +49,13 @@ export default async function OrdersPage() {
       id: it.id,
       name: it.nameSnapshot,
       quantity: it.quantity,
+      note: it.note,
     })),
   }));
 
   return (
     <div className="space-y-6">
-      <LiveRefresh />
+      <LiveRefresh restaurantId={restaurant?.id ?? null} />
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">
           Orders

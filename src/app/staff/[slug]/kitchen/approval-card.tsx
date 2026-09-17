@@ -10,7 +10,7 @@ type Pending = {
   tableLabel: string;
   minutesAgo: number;
   note: string | null;
-  items: { id: string; name: string; quantity: number }[];
+  items: { id: string; name: string; quantity: number; note: string | null }[];
 };
 
 // A customer order held for staff approval. Accept sends it to the kitchen;
@@ -54,6 +54,7 @@ export function ApprovalCard({
           <li key={it.id} className="text-sm">
             <span className="font-medium tabular-nums">{it.quantity}×</span>{" "}
             {it.name}
+            {it.note && <span className="block text-xs text-amber-800">Note: {it.note}</span>}
           </li>
         ))}
       </ul>

@@ -2,21 +2,33 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useRealtimeRefresh } from "@/lib/use-realtime-refresh";
 
-// Re-fetches the current server-rendered page on an interval so payments and
-// new bills appear without a manual refresh. A pragmatic stand-in for true
-// push realtime (Supabase channels), which can replace this later without
-// touching the pages that use it.
+// Re-fetches the current server-rendered page so new orders, bills and
+// payments appear without a manual refresh.
 //
-// Two guards keep the refresh from getting in the user's way:
-//  - It skips while the tab is hidden (no point refreshing an unseen page, and
-//    it saves the phone's battery/data).
-//  - It pauses for a few seconds after any tap/click. A router.refresh() that
-//    fires the instant you tap a <Link> aborts the pending navigation — which
-//    on mobile shows up as "I tapped the table and nothing happened". Pausing
-//    around interactions lets taps land.
-export function LiveRefresh({ seconds = 5 }: { seconds?: number }) {
+//  - Instant: subscribed to the restaurant's realtime channel (see
+//    @/lib/realtime) — a mutation anywhere broadcasts immediately, so this
+//    refreshes the moment something actually changes instead of waiting for
+//    the next tick.
+//  - Polling stays on as a fallback for a missed/dropped broadcast, with two
+//    guards that keep it from getting in the user's way:
+//     - It skips while the tab is hidden (no point refreshing an unseen page,
+//       and it saves the phone's battery/data).
+//     - It pauses for a few seconds after any tap/click. A router.refresh()
+//       that fires the instant you tap a <Link> aborts the pending navigation
+//       — which on mobile shows up as "I tapped the table and nothing
+//       happened". Pausing around interactions lets taps land.
+export function LiveRefresh({
+  seconds = 5,
+  restaurantId = null,
+}: {
+  seconds?: number;
+  restaurantId?: string | null;
+}) {
   const router = useRouter();
+
+  useRealtimeRefresh(restaurantId, () => router.refresh());
 
   useEffect(() => {
     let pausedUntil = 0;

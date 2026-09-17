@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { staffLogin } from "@/lib/staff-auth";
 
-export type LoginState = { error?: string; ok?: boolean };
+export type LoginState = { error?: string; ok?: boolean; redirectTo?: string };
 
 // Verifies a staff PIN for a named account within a restaurant (by slug).
 // Lockout and hashing are handled in staffLogin; this just resolves the slug and
@@ -20,5 +20,12 @@ export async function submitStaffLogin(
 
   const result = await staffLogin(staffId, restaurant.id, pin);
   if (!result.ok) return { error: result.error };
-  return { ok: true };
+
+  // A station-locked kitchen account has no real use for the floor/home
+  // screen — send it straight to its own board, station pre-selected.
+  const redirectTo =
+    result.role === "KITCHEN" && result.assignedStation
+      ? `/staff/${slug}/kitchen?station=${encodeURIComponent(result.assignedStation)}`
+      : `/staff/${slug}/home`;
+  return { ok: true, redirectTo };
 }

@@ -10,8 +10,13 @@ import {
   voidBillItem,
   compBillItem,
   setBillDiscount,
+  moveBill,
+  mergeBills,
+  refundBillPayment,
   type AddItem,
 } from "@/lib/bills";
+import { audit } from "@/lib/audit";
+import { getEntitlements } from "@/lib/entitlements";
 
 // Staff takes an order at a table: adds items to that table's open bill. Prices
 // come from the DB (never the client). Authorized by the staff session, scoped
@@ -35,6 +40,14 @@ export async function staffAddItems(
     },
   });
   if (!table) return { error: "Table not found." };
+
+  // Lapsed-subscription grace period (spec B4) — same rule as the customer
+  // ordering path: existing service keeps running, only new ordering stops,
+  // and only once the grace period has actually passed.
+  const ent = await getEntitlements(session.restaurant.organizationId);
+  if (ent.orderingBlocked) {
+    return { error: "This venue can't take new orders right now — contact the owner." };
+  }
 
   const res = await addItemsForTable(
     {
@@ -121,6 +134,62 @@ export async function staffSetDiscount(
   if (!session) return { error: "Not permitted." };
   const res = await setBillDiscount(billId, session.restaurant.id, discountCents);
   if ("error" in res) return res;
+  revalidatePath(`/staff/${slug}/table/${tableId}`);
+  return { ok: true as const };
+}
+
+// ---- Move / merge -----------------------------------------------------------
+
+export async function staffMoveBill(slug: string, billId: string, toTableId: string) {
+  const session = await authedStaff(slug);
+  if (!session) return { error: "Not permitted." };
+  const res = await moveBill(session.restaurant.id, billId, toTableId);
+  if ("error" in res) return res;
+  revalidatePath(`/staff/${slug}/home`);
+  return { ok: true as const };
+}
+
+export async function staffMergeBills(slug: string, sourceBillId: string, targetBillId: string) {
+  const session = await authedStaff(slug);
+  if (!session) return { error: "Not permitted." };
+  const res = await mergeBills(session.restaurant.id, sourceBillId, targetBillId);
+  if ("error" in res) return res;
+  revalidatePath(`/staff/${slug}/home`);
+  return { ok: true as const };
+}
+
+// ---- Refunds -----------------------------------------------------------------
+
+export async function staffRefundPayment(
+  slug: string,
+  tableId: string,
+  paymentId: string,
+  amountCents: number,
+  reason: string,
+) {
+  const session = await requireStaffForSlug(slug);
+  if (!session) return { error: "Your session has ended. Please sign in again." };
+  if (!roleCan(session.staff.role, "payments:refund"))
+    return { error: "Your role can't issue refunds." };
+
+  // Staff PIN accounts have no email — `name` is the closest identifier and
+  // is what shows up in the refund/audit trail for a PIN-authenticated actor.
+  const res = await refundBillPayment(paymentId, session.restaurant.id, amountCents, reason, {
+    userId: session.staff.id,
+    email: session.staff.name,
+  });
+  if ("error" in res) return res;
+
+  await audit({
+    organizationId: session.restaurant.organizationId,
+    actorUserId: session.staff.id,
+    actorEmail: session.staff.name,
+    action: "payment.refunded",
+    resourceType: "Payment",
+    resourceId: paymentId,
+    metadata: { amountCents, reason, tableId, via: "staff_pin" },
+  });
+
   revalidatePath(`/staff/${slug}/table/${tableId}`);
   return { ok: true as const };
 }

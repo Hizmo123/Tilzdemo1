@@ -6,6 +6,7 @@ import {
   Space_Grotesk,
 } from "next/font/google";
 import "./globals.css";
+import { ToastProvider } from "@/components/ui/toast";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -55,7 +56,9 @@ export default function RootLayout({
       lang="en-AU"
       className={`${inter.variable} ${bricolage.variable} ${fraunces.variable} ${spaceGrotesk.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

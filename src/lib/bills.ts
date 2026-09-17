@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
 import { sendSms } from "@/lib/sms";
 import { normalizeAuPhone } from "@/lib/phone";
+import { notifyRestaurant } from "@/lib/realtime";
+import { formatCents } from "@/lib/money";
+import { log } from "@/lib/log";
+import { entitlementsForTier } from "@/lib/entitlements";
 
 // ---- Visit resolution -------------------------------------------------------
 
@@ -29,12 +33,43 @@ export type ResolvedVisit = {
   theme: string;
   themeMode: string;
   fontTheme: string;
+  cornerStyle: string;
+  tagline: string | null;
+  menuLayout: string;
+  instagramHandle: string | null;
+  websiteUrl: string | null;
   tipEnabled: boolean;
   tipPresets: number[];
   customerOrdering: boolean;
   customerPayment: boolean;
   staffApproval: boolean;
   paymentTiming: string;
+  // Opt-in strict variant of paymentTiming "before": that mode holds the
+  // order and *offers* payment as the primary next step; this one means the
+  // customer page never presents the placed order as a soft "you're free to
+  // skip payment" moment — see requirePaymentBeforeOrder's schema comment.
+  requirePaymentBeforeOrder: boolean;
+  splitMethods: string[];
+  orderReadySmsEnabled: boolean;
+  surchargeEnabled: boolean;
+  surchargeBasisPoints: number;
+  // Plan entitlements (see lib/entitlements.ts), resolved here so the
+  // customer page and its actions don't need a second round trip for them.
+  showTillzBranding: boolean;
+  orderingBlocked: boolean;
+  // Deep customisation (A5) — see lib/menu-style.ts for how these resolve.
+  cardStyle: unknown;
+  typeScale: string;
+  sectionHeaderStyle: string;
+  buttonShape: string;
+  buttonFill: string;
+  bgTreatment: string;
+  bgPatternKey: string | null;
+  bgOverlayStrength: number;
+  qrForegroundColor: string | null;
+  qrBackgroundColor: string | null;
+  qrCornerStyle: string;
+  qrEmbedLogo: boolean;
 };
 
 // Resolves an opaque visit token to its table/restaurant, or an invalid reason.
@@ -46,7 +81,19 @@ export async function resolveVisit(
   const qr = await prisma.qrToken.findUnique({
     where: { token },
     include: {
-      table: { include: { location: { include: { restaurant: true } } } },
+      table: {
+        include: {
+          location: {
+            include: {
+              restaurant: {
+                include: {
+                  organization: { select: { plan: true, subscriptionLapsedAt: true } },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -55,6 +102,9 @@ export async function resolveVisit(
   if (!qr.table.active) return { ok: false, reason: "table_inactive" };
 
   const r = qr.table.location.restaurant;
+  const ent = entitlementsForTier(r.organization.plan, {
+    lapsedAt: r.organization.subscriptionLapsedAt,
+  });
   return {
     ok: true,
     visit: {
@@ -74,14 +124,47 @@ export async function resolveVisit(
       theme: r.theme,
       themeMode: r.themeMode,
       fontTheme: r.fontTheme,
+      cornerStyle: r.cornerStyle,
+      tagline: r.tagline,
+      menuLayout: r.menuLayout,
+      instagramHandle: r.instagramHandle,
+      websiteUrl: r.websiteUrl,
       tipEnabled: r.tipEnabled,
       tipPresets: r.tipPresets,
       customerOrdering: r.customerOrdering,
       customerPayment: r.customerPayment,
       staffApproval: r.staffApproval,
       paymentTiming: r.paymentTiming,
+      requirePaymentBeforeOrder: r.requirePaymentBeforeOrder,
+      splitMethods: r.splitMethods,
+      orderReadySmsEnabled: r.orderReadySmsEnabled,
+      surchargeEnabled: r.surchargeEnabled,
+      surchargeBasisPoints: r.surchargeBasisPoints,
+      showTillzBranding: ent.showTillzBranding,
+      orderingBlocked: ent.orderingBlocked,
+      cardStyle: r.cardStyle,
+      typeScale: r.typeScale,
+      sectionHeaderStyle: r.sectionHeaderStyle,
+      buttonShape: r.buttonShape,
+      buttonFill: r.buttonFill,
+      bgTreatment: r.bgTreatment,
+      bgPatternKey: r.bgPatternKey,
+      bgOverlayStrength: r.bgOverlayStrength,
+      qrForegroundColor: r.qrForegroundColor,
+      qrBackgroundColor: r.qrBackgroundColor,
+      qrCornerStyle: r.qrCornerStyle,
+      qrEmbedLogo: r.qrEmbedLogo,
     },
   };
+}
+
+// A card surcharge is disclosed to the customer before they confirm (client
+// shows this same calculation as a preview), but the amount actually charged
+// is always recomputed here from the restaurant's stored rate — the client's
+// number is never trusted for the charge itself.
+export function surchargeFor(baseCents: number, basisPoints: number): number {
+  if (basisPoints <= 0 || baseCents <= 0) return 0;
+  return Math.round((baseCents * basisPoints) / 10000);
 }
 
 // ---- Menu -------------------------------------------------------------------
@@ -118,6 +201,27 @@ export async function getOpenBillWithItems(tableId: string) {
   });
 }
 
+// Same as above plus this bill's live orders (for the customer page's "your
+// orders" status list) in the SAME round trip — that list used to be a
+// separate sequential query fired only after this one resolved, which on a
+// database that isn't co-located with the app server (see the region note in
+// the A2 performance report) is a full extra network hop of pure latency on
+// every single customer page load, for data this call can return for free.
+export async function getOpenBillWithOrders(tableId: string) {
+  return prisma.bill.findFirst({
+    where: { tableId, status: { in: ["OPEN", "PARTIALLY_PAID"] } },
+    orderBy: { createdAt: "desc" },
+    include: {
+      items: { orderBy: { createdAt: "asc" } },
+      orders: {
+        where: { status: { not: "CANCELLED" } },
+        orderBy: { createdAt: "asc" },
+        include: { items: { select: { nameSnapshot: true, quantity: true } } },
+      },
+    },
+  });
+}
+
 // ---- Add items --------------------------------------------------------------
 
 // Recompute a bill's subtotal/total from its line items. Total == subtotal for
@@ -147,6 +251,9 @@ export type AddItem = {
   menuItemId: string;
   quantity: number;
   optionIds?: string[];
+  // Free text for this specific line, e.g. "no fries" — separate from the
+  // whole-send note (see addItemsForTable's own `note` param).
+  note?: string;
 };
 
 export type ModifierSnapshot = {
@@ -166,6 +273,12 @@ export async function addItemsToBill(
 ) {
   const resolved = await resolveVisit(token);
   if (!resolved.ok) return { error: "This table is no longer available." };
+  // Lapsed-subscription grace period (spec B4): existing service, viewing
+  // and paying an already-open bill all keep working — this is the ONE place
+  // new ordering actually stops, and only once the grace period has passed.
+  if (resolved.visit.orderingBlocked) {
+    return { error: "This venue can't take new orders right now. Please ask a staff member." };
+  }
   const { tableId, restaurantId, currency } = resolved.visit;
   return addItemsForTable(
     { tableId, restaurantId, currency },
@@ -242,6 +355,8 @@ export async function addItemsForTable(
   // violation — we retry, and the retry finds the winner's bill instead of
   // creating a second one.
   for (let attempt = 0; attempt < 3; attempt++) {
+    let orderIdForLog = "";
+    let addedForLog = 0;
     try {
       await prisma.$transaction(async (tx) => {
         // Find-or-create the single open bill for this table.
@@ -258,14 +373,25 @@ export async function addItemsForTable(
         const rest = await tx.restaurant.update({
           where: { id: restaurantId },
           data: { orderSeq: { increment: 1 } },
-          select: { orderSeq: true, staffApproval: true, paymentTiming: true },
+          select: {
+            orderSeq: true,
+            staffApproval: true,
+            paymentTiming: true,
+            requirePaymentBeforeOrder: true,
+          },
         });
         // Release gates for CUSTOMER orders (a waiter's own order is never held):
         //  - approval: staff must accept before the kitchen sees it.
-        //  - payment: prepay venue — the kitchen never sees it until it's paid.
+        //  - payment: prepay venue (paymentTiming "before"), or the stricter
+        //    opt-in requirePaymentBeforeOrder — either way the kitchen never
+        //    sees it until it's paid. The two are independent switches: a
+        //    venue can have "before" without the strict variant (today's
+        //    behaviour, unchanged) or turn on the strict variant on top of it
+        //    for a harder "no submitting without paying" customer flow.
         const awaitingApproval = source === "CUSTOMER" && rest.staffApproval;
         const awaitingPayment =
-          source === "CUSTOMER" && rest.paymentTiming === "before";
+          source === "CUSTOMER" &&
+          (rest.paymentTiming === "before" || rest.requirePaymentBeforeOrder);
         const held = awaitingApproval || awaitingPayment;
 
         // One order ticket per send.
@@ -318,7 +444,8 @@ export async function addItemsForTable(
                 : undefined,
               quantity: qty,
               lineTotalCents: resolved.unitPriceCents * qty,
-              station: item.category?.station ?? null,
+              station: item.station ?? item.category?.station ?? null,
+              note: line.note?.trim().slice(0, 140) || null,
             },
           });
           added++;
@@ -329,8 +456,18 @@ export async function addItemsForTable(
         if (added === 0) throw new EmptySend();
 
         await recompute(tx, bill.id);
+        orderIdForLog = order.id;
+        addedForLog = added;
       });
 
+      await notifyRestaurant(restaurantId);
+      log.info("order.created", {
+        restaurantId,
+        tableId,
+        orderId: orderIdForLog,
+        source,
+        lineCount: addedForLog,
+      });
       return { ok: true as const };
     } catch (e) {
       if (e instanceof LineError) return { error: e.reason };
@@ -342,10 +479,16 @@ export async function addItemsForTable(
         // Two carts raced to open this table's bill — re-read and retry.
         if (attempt < 2) continue;
       }
+      log.error("order.create_failed", {
+        restaurantId,
+        tableId,
+        error: e instanceof Error ? e.message : String(e),
+      });
       throw e;
     }
   }
 
+  log.warn("order.create_contended", { restaurantId, tableId });
   return { error: "This table is busy right now. Please try again." };
 }
 
@@ -475,10 +618,15 @@ export async function advanceOrderStatus(
     });
   }
 
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
 
 // Active kitchen tickets for a restaurant (not yet served or cancelled).
+// Joins each line's current menu item for allergens and 86-ability — a live
+// join, not a snapshot, since allergen warnings need to reflect today's menu
+// data, not whatever it was when the line was ordered (unlike price/name,
+// which are deliberately frozen).
 export async function getKitchenOrders(restaurantId: string) {
   return prisma.order.findMany({
     where: {
@@ -487,8 +635,26 @@ export async function getKitchenOrders(restaurantId: string) {
     },
     orderBy: { createdAt: "asc" },
     include: {
-      items: { orderBy: { createdAt: "asc" } },
+      items: {
+        orderBy: { createdAt: "asc" },
+        include: { menuItem: { select: { allergens: true, available: true } } },
+      },
       bill: { include: { table: true } },
+    },
+  });
+}
+
+// Orders the kitchen has marked READY but no one's marked SERVED yet — the
+// waiter-facing "go pick these up" queue (see the staff home page's
+// ReadyBanner, which buzzes/chimes when a new one appears here).
+export async function getReadyOrders(restaurantId: string) {
+  return prisma.order.findMany({
+    where: { restaurantId, status: "READY" },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      orderNumber: true,
+      bill: { select: { table: { select: { label: true } } } },
     },
   });
 }
@@ -525,6 +691,7 @@ export async function staffApproveOrder(orderId: string, restaurantId: string) {
       status: stillHeld ? "PENDING" : "SUBMITTED",
     },
   });
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
 
@@ -562,13 +729,21 @@ export async function staffRejectOrder(orderId: string, restaurantId: string) {
     });
     await recompute(tx, order.billId);
   });
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
 
 // ---- Pay --------------------------------------------------------------------
 
 export type PayResult =
-  | { paid: true; amountPaidCents: number; tipCents: number; fullyPaid: boolean; test: boolean }
+  | {
+      paid: true;
+      amountPaidCents: number;
+      tipCents: number;
+      surchargeCents: number;
+      fullyPaid: boolean;
+      test: boolean;
+    }
   | { error: string };
 
 // Pays a chosen amount toward the table's open bill, safely under concurrency.
@@ -584,9 +759,16 @@ export async function payBillAmount(
   token: string,
   requestedCents: number | null,
   tipCents = 0,
+  mode: "full" | "equal" | "custom" = "full",
 ): Promise<PayResult> {
   const resolved = await resolveVisit(token);
   if (!resolved.ok) return { error: "This table is no longer available." };
+
+  // The client never gets the final say on which split method is used — a
+  // hidden tab is presentation only, so it's re-checked here.
+  if (!resolved.visit.splitMethods.includes(mode)) {
+    return { error: "This payment option isn't available for this venue." };
+  }
 
   if (
     requestedCents !== null &&
@@ -606,12 +788,26 @@ export async function payBillAmount(
 
     const remaining = bill.totalCents - bill.amountPaidCents;
     if (remaining <= 0) {
-      return { paid: true, amountPaidCents: 0, tipCents: 0, fullyPaid: true, test: provider.isTest };
+      return {
+        paid: true,
+        amountPaidCents: 0,
+        tipCents: 0,
+        surchargeCents: 0,
+        fullyPaid: true,
+        test: provider.isTest,
+      };
     }
 
     // Clamp to the outstanding balance — never charge more than is owed.
     const amount = Math.min(requestedCents ?? remaining, remaining);
     if (amount <= 0) return { error: "Enter a valid amount." };
+
+    // Surcharge is on the amount actually charged to the card (goods share
+    // being settled now, plus any tip) — recomputed here from the venue's
+    // stored rate, never trusted from the client that showed the preview.
+    const surcharge = resolved.visit.surchargeEnabled
+      ? surchargeFor(amount + tip, resolved.visit.surchargeBasisPoints)
+      : 0;
 
     const expectedPaid = bill.amountPaidCents;
     const newPaid = expectedPaid + amount;
@@ -636,13 +832,14 @@ export async function payBillAmount(
 
     if (cas.count !== 1) continue; // lost the race — re-read and retry
 
-    // Balance reserved. Charge the provider (amount + any tip) and record it.
+    // Balance reserved. Charge the provider (amount + tip + surcharge) and
+    // record it.
     const idempotencyKey = `pay_${bill.id}_${randomBytes(8).toString("hex")}`;
     const result = await provider.createPayment({
-      amountCents: amount + tip,
+      amountCents: amount + tip + surcharge,
       currency: bill.currency,
       idempotencyKey,
-      metadata: { billId: bill.id, tipCents: String(tip) },
+      metadata: { billId: bill.id, tipCents: String(tip), surchargeCents: String(surcharge) },
     });
 
     await prisma.payment.create({
@@ -650,6 +847,7 @@ export async function payBillAmount(
         billId: bill.id,
         amountCents: amount,
         tipCents: tip,
+        surchargeCents: surcharge,
         currency: bill.currency,
         status: result.status,
         provider: provider.name,
@@ -671,15 +869,28 @@ export async function payBillAmount(
     // Prepay: settling the bill releases any orders that were held for payment.
     if (fullyPaid) await releasePaidOrders(bill.id);
 
+    await notifyRestaurant(resolved.visit.restaurantId);
+    log.info("payment.succeeded", {
+      restaurantId: resolved.visit.restaurantId,
+      billId: bill.id,
+      amountCents: amount,
+      tipCents: tip,
+      surchargeCents: surcharge,
+      provider: provider.name,
+      status: result.status,
+      test: result.test,
+    });
     return {
       paid: true,
       amountPaidCents: amount,
       tipCents: tip,
+      surchargeCents: surcharge,
       fullyPaid,
       test: result.test,
     };
   }
 
+  log.warn("payment.contended", { restaurantId: resolved.visit.restaurantId, billId: null });
   return {
     error: "The bill is being updated by someone else. Please try again.",
   };
@@ -708,6 +919,10 @@ export async function payBillItems(
 ): Promise<PayResult> {
   const resolved = await resolveVisit(token);
   if (!resolved.ok) return { error: "This table is no longer available." };
+
+  if (!resolved.visit.splitMethods.includes("items")) {
+    return { error: "This payment option isn't available for this venue." };
+  }
 
   const clean = selections.filter(
     (s) => s.billItemId && Number.isInteger(s.count) && s.count > 0,
@@ -743,6 +958,10 @@ export async function payBillItems(
     if (amount > remaining) {
       return { error: "This bill was partly paid already — please refresh." };
     }
+
+    const surcharge = resolved.visit.surchargeEnabled
+      ? surchargeFor(amount + tip, resolved.visit.surchargeBasisPoints)
+      : 0;
 
     const expectedPaid = bill.amountPaidCents;
     const newPaid = expectedPaid + amount;
@@ -783,16 +1002,22 @@ export async function payBillItems(
     // Reserved. Charge the provider and record the payment.
     const idempotencyKey = `payitems_${bill.id}_${randomBytes(8).toString("hex")}`;
     const result = await provider.createPayment({
-      amountCents: amount + tip,
+      amountCents: amount + tip + surcharge,
       currency: bill.currency,
       idempotencyKey,
-      metadata: { billId: bill.id, tipCents: String(tip), split: "items" },
+      metadata: {
+        billId: bill.id,
+        tipCents: String(tip),
+        surchargeCents: String(surcharge),
+        split: "items",
+      },
     });
     await prisma.payment.create({
       data: {
         billId: bill.id,
         amountCents: amount,
         tipCents: tip,
+        surchargeCents: surcharge,
         currency: bill.currency,
         status: result.status,
         provider: provider.name,
@@ -811,15 +1036,29 @@ export async function payBillItems(
     // Prepay: settling the bill releases any orders that were held for payment.
     if (fullyPaid) await releasePaidOrders(bill.id);
 
+    await notifyRestaurant(resolved.visit.restaurantId);
+    log.info("payment.succeeded", {
+      restaurantId: resolved.visit.restaurantId,
+      billId: bill.id,
+      amountCents: amount,
+      tipCents: tip,
+      surchargeCents: surcharge,
+      provider: provider.name,
+      status: result.status,
+      test: result.test,
+      split: "items",
+    });
     return {
       paid: true,
       amountPaidCents: amount,
       tipCents: tip,
+      surchargeCents: surcharge,
       fullyPaid,
       test: result.test,
     };
   }
 
+  log.warn("payment.contended", { restaurantId: resolved.visit.restaurantId, billId: null });
   return { error: "The bill is busy right now. Please try again." };
 }
 
@@ -850,6 +1089,7 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
     await recompute(tx, order.billId);
   });
 
+  await notifyRestaurant(resolved.visit.restaurantId);
   return { ok: true as const };
 }
 
@@ -866,6 +1106,139 @@ export async function setBillContact(token: string, phone: string) {
     data: { customerPhone: e164 },
   });
   return { ok: true as const };
+}
+
+// ---- Refunds -----------------------------------------------------------------
+
+export type RefundActor = { userId: string; email: string };
+
+export type RefundOutcome =
+  | { ok: true; refundedCents: number; status: "SUCCEEDED" | "PENDING" | "FAILED" }
+  | { error: string };
+
+// Refunds a specific payment, full or partial. Always scoped to a payment —
+// never the bill in aggregate — so it always ties back to a real processor
+// payment id for reconciliation.
+//
+// This deliberately never changes Bill.status or paidAt. A refund is a
+// reversal recorded against a settled bill, not a reopened tab. If it flipped
+// a PAID bill back to PARTIALLY_PAID/OPEN, and the table has since moved on
+// to a new bill (a very normal sequence — refunds often happen well after the
+// table turned over), that write would collide with the one-open-bill-per-
+// table partial unique index, which allows only one OPEN/PARTIALLY_PAID bill
+// per table. Instead this only adjusts the running paid/tip totals so revenue
+// reporting stays accurate, and the Refund row is the audit trail.
+//
+// Refund money is drawn from the payment in this order: surcharge, then tip,
+// then the goods amount — handing back the card fee first, since a venue
+// wouldn't expect to keep a surcharge on money it no longer holds.
+export async function refundBillPayment(
+  paymentId: string,
+  restaurantId: string,
+  amountCents: number,
+  reason: string,
+  actor: RefundActor,
+): Promise<RefundOutcome> {
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    return { error: "Enter a valid refund amount." };
+  }
+  const cleanReason = reason.trim();
+  if (!cleanReason) return { error: "A reason is required." };
+
+  const payment = await prisma.payment.findFirst({
+    where: {
+      id: paymentId,
+      status: "SUCCEEDED",
+      bill: { table: { location: { restaurantId } } },
+    },
+  });
+  if (!payment) return { error: "Payment not found." };
+
+  const envelope = payment.amountCents + payment.tipCents + payment.surchargeCents;
+  const provider = getPaymentProvider();
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const current = await prisma.payment.findUnique({ where: { id: payment.id } });
+    if (!current) return { error: "Payment not found." };
+
+    const refundable = envelope - current.refundedCents;
+    if (amountCents > refundable) {
+      return {
+        error: `Only ${formatCents(refundable, payment.currency)} is refundable on this payment.`,
+      };
+    }
+
+    const expectedRefunded = current.refundedCents;
+    const newRefunded = expectedRefunded + amountCents;
+
+    // Atomic reserve, same CAS pattern as the payment side.
+    const cas = await prisma.payment.updateMany({
+      where: { id: payment.id, refundedCents: expectedRefunded },
+      data: { refundedCents: newRefunded },
+    });
+    if (cas.count !== 1) continue; // lost the race — re-read and retry
+
+    const idempotencyKey = `refund_${payment.id}_${randomBytes(8).toString("hex")}`;
+    const result = await provider.refundPayment({
+      providerRef: payment.providerRef ?? "",
+      amountCents,
+      idempotencyKey,
+      reason: cleanReason,
+    });
+
+    await prisma.refund.create({
+      data: {
+        paymentId: payment.id,
+        amountCents,
+        reason: cleanReason,
+        status: result.status,
+        provider: provider.name,
+        providerRef: result.providerRef,
+        idempotencyKey,
+        actorUserId: actor.userId,
+        actorEmail: actor.email,
+        test: result.test,
+      },
+    });
+
+    if (result.status === "SUCCEEDED") {
+      const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+      const surchargeBound = payment.surchargeCents;
+      const tipBound = payment.surchargeCents + payment.tipCents;
+      const surchargeRefunded =
+        clamp(newRefunded, 0, surchargeBound) - clamp(expectedRefunded, 0, surchargeBound);
+      const tipRefunded =
+        clamp(newRefunded, surchargeBound, tipBound) -
+        clamp(expectedRefunded, surchargeBound, tipBound);
+      const goodsRefunded =
+        clamp(newRefunded, tipBound, envelope) - clamp(expectedRefunded, tipBound, envelope);
+      void surchargeRefunded; // not tracked on Bill — surcharge isn't part of amountPaidCents
+
+      await prisma.bill.update({
+        where: { id: payment.billId },
+        data: {
+          amountPaidCents: { decrement: goodsRefunded },
+          tipCents: { decrement: tipRefunded },
+          refundedCents: { increment: amountCents },
+        },
+      });
+    }
+
+    await notifyRestaurant(restaurantId);
+    log[result.status === "SUCCEEDED" ? "info" : "warn"]("payment.refunded", {
+      restaurantId,
+      paymentId: payment.id,
+      billId: payment.billId,
+      amountCents,
+      provider: provider.name,
+      status: result.status,
+      test: result.test,
+    });
+    return { ok: true, refundedCents: amountCents, status: result.status };
+  }
+
+  log.warn("payment.refund_contended", { restaurantId, paymentId: payment.id });
+  return { error: "That payment is being updated by someone else. Please try again." };
 }
 
 // ---- Order history (staff / kitchen) ---------------------------------------
@@ -915,7 +1288,66 @@ export async function recallOrder(orderId: string, restaurantId: string) {
     where: { id: order.id },
     data: { status: "PREPARING", servedAt: null },
   });
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
+}
+
+// Re-fires already-billed item(s) that need re-cooking — a dropped plate, a
+// send-back, a ticket bumped too far by mistake with no way back via recall
+// (e.g. it's since been paid and closed). Distinct from recallOrder: that
+// un-serves the SAME ticket; this creates a genuinely NEW ticket the kitchen
+// sees as fresh work, clearly badged, while re-pointing (never duplicating)
+// the existing BillItem rows so the guest is never charged twice — the bill's
+// totals are untouched because recompute never runs here; there's nothing to
+// recompute since no BillItem's price/quantity/voided state changes, only
+// which Order groups it.
+export async function refireItems(
+  restaurantId: string,
+  billItemIds: string[],
+  note?: string,
+): Promise<{ ok: true; orderId: string } | { error: string }> {
+  const ids = [...new Set(billItemIds)].filter(Boolean);
+  if (ids.length === 0) return { error: "Select at least one item." };
+
+  const items = await prisma.billItem.findMany({
+    where: { id: { in: ids }, bill: { table: { location: { restaurantId } } } },
+    include: { bill: { select: { id: true, tableId: true } } },
+  });
+  if (items.length !== ids.length) return { error: "Some items weren't found." };
+
+  const billId = items[0].bill.id;
+  const tableId = items[0].bill.tableId;
+  if (items.some((it) => it.bill.id !== billId)) {
+    return { error: "Can't re-fire items from different tables at once." };
+  }
+
+  const order = await prisma.$transaction(async (tx) => {
+    const rest = await tx.restaurant.update({
+      where: { id: restaurantId },
+      data: { orderSeq: { increment: 1 } },
+      select: { orderSeq: true },
+    });
+    const newOrder = await tx.order.create({
+      data: {
+        billId,
+        tableId,
+        restaurantId,
+        source: "STAFF",
+        status: "SUBMITTED",
+        orderNumber: rest.orderSeq,
+        isRefire: true,
+        note: note?.trim().slice(0, 200) || null,
+      },
+    });
+    await tx.billItem.updateMany({
+      where: { id: { in: ids } },
+      data: { orderId: newOrder.id },
+    });
+    return newOrder;
+  });
+
+  await notifyRestaurant(restaurantId);
+  return { ok: true as const, orderId: order.id };
 }
 
 // ---- Staff bill adjustments (void / comp / discount) -----------------------
@@ -939,6 +1371,7 @@ export async function voidBillItem(
     await tx.billItem.update({ where: { id: item.id }, data: { voided } });
     await recompute(tx, item.billId);
   });
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
 
@@ -954,6 +1387,7 @@ export async function compBillItem(
     await tx.billItem.update({ where: { id: item.id }, data: { comped } });
     await recompute(tx, item.billId);
   });
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
 
@@ -972,194 +1406,126 @@ export async function setBillDiscount(
     await tx.bill.update({ where: { id: bill.id }, data: { discountCents: d } });
     await recompute(tx, bill.id);
   });
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
 
-// Settle a specific bill in full (used for pickup orders paid at the counter),
-// scoped to the staff member's restaurant.
-export async function staffCloseBillById(billId: string, restaurantId: string) {
-  const provider = getPaymentProvider();
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const bill = await prisma.bill.findFirst({
+// ---- Move / merge tables ----------------------------------------------------
+//
+// Guests change tables. Two distinct real-world operations, kept distinct
+// rather than conflated into one "move" that guesses what you meant:
+//  - Move: this table's open bill continues on a different (currently empty)
+//    table. Nothing about the bill changes, only which table it's attached to.
+//  - Merge: two separate open bills (each may already be partially paid)
+//    become one. The surviving bill absorbs the other's items, orders and
+//    payment history; the source table's bill is voided and the table frees
+//    up. Partial payments are handled properly (summed onto the survivor),
+//    not blocked — a table that's already paid part of its tab is exactly
+//    the case a "just fold it into that bill" operation needs to get right.
+
+// Repoints an open bill (and its live kitchen tickets) to a different,
+// currently-empty table. Order.tableId is denormalized for the kitchen
+// screen, so it has to move in the same transaction or tickets already in
+// flight would show the wrong table until they're bumped.
+export async function moveBill(
+  restaurantId: string,
+  billId: string,
+  toTableId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const bill = await prisma.bill.findFirst({
+    where: { id: billId, status: { in: ["OPEN", "PARTIALLY_PAID"] }, table: { location: { restaurantId } } },
+  });
+  if (!bill) return { error: "Bill not found or already closed." };
+
+  const toTable = await prisma.table.findFirst({
+    where: { id: toTableId, active: true, location: { restaurantId } },
+  });
+  if (!toTable) return { error: "Table not found." };
+  if (toTable.id === bill.tableId) return { error: "Already on that table." };
+
+  const clash = await prisma.bill.findFirst({
+    where: { tableId: toTable.id, status: { in: ["OPEN", "PARTIALLY_PAID"] } },
+  });
+  if (clash) {
+    return { error: "That table already has an open bill — use merge instead." };
+  }
+
+  await prisma.$transaction([
+    prisma.bill.update({ where: { id: bill.id }, data: { tableId: toTable.id } }),
+    prisma.order.updateMany({ where: { billId: bill.id }, data: { tableId: toTable.id } }),
+  ]);
+
+  await notifyRestaurant(restaurantId);
+  return { ok: true as const };
+}
+
+// Folds one open bill into another. The target survives; the source is
+// voided once everything's been moved off it. Payments already taken against
+// the source move with it (audit trail intact) and their amounts are summed
+// onto the target's running total — recompute() only re-derives
+// subtotal/total from BillItems, it never touches amountPaidCents/tipCents,
+// so those are summed explicitly here.
+export async function mergeBills(
+  restaurantId: string,
+  sourceBillId: string,
+  targetBillId: string,
+): Promise<{ ok: true } | { error: string }> {
+  if (sourceBillId === targetBillId) {
+    return { error: "Pick two different tables to merge." };
+  }
+
+  const [source, target] = await Promise.all([
+    prisma.bill.findFirst({
       where: {
-        id: billId,
+        id: sourceBillId,
         status: { in: ["OPEN", "PARTIALLY_PAID"] },
         table: { location: { restaurantId } },
       },
-    });
-    if (!bill) return { error: "No open bill to close." };
-    const remaining = bill.totalCents - bill.amountPaidCents;
-    if (remaining <= 0) return { paid: true as const };
-
-    const cas = await prisma.bill.updateMany({
+    }),
+    prisma.bill.findFirst({
       where: {
-        id: bill.id,
-        amountPaidCents: bill.amountPaidCents,
+        id: targetBillId,
         status: { in: ["OPEN", "PARTIALLY_PAID"] },
+        table: { location: { restaurantId } },
       },
-      data: { amountPaidCents: bill.totalCents, status: "PAID", paidAt: new Date() },
-    });
-    if (cas.count !== 1) continue;
+    }),
+  ]);
+  if (!source || !target) return { error: "Both tables need an open bill to merge." };
 
-    const idempotencyKey = `staffpay_${bill.id}_${randomBytes(8).toString("hex")}`;
-    const result = await provider.createPayment({
-      amountCents: remaining,
-      currency: bill.currency,
-      idempotencyKey,
-      metadata: { billId: bill.id, source: "staff" },
+  await prisma.$transaction(async (tx) => {
+    await tx.order.updateMany({
+      where: { billId: source.id },
+      data: { billId: target.id, tableId: target.tableId },
     });
-    await prisma.payment.create({
+    await tx.billItem.updateMany({
+      where: { billId: source.id },
+      data: { billId: target.id },
+    });
+    // Preserve the payment audit trail on the surviving bill rather than
+    // leaving it stranded on one that's about to be voided.
+    await tx.payment.updateMany({
+      where: { billId: source.id },
+      data: { billId: target.id },
+    });
+    await tx.bill.update({
+      where: { id: target.id },
       data: {
-        billId: bill.id,
-        amountCents: remaining,
-        currency: bill.currency,
-        status: result.status,
-        provider: "counter",
-        providerRef: result.providerRef,
-        idempotencyKey,
-        test: result.test,
+        amountPaidCents: { increment: source.amountPaidCents },
+        tipCents: { increment: source.tipCents },
+        discountCents: { increment: source.discountCents },
       },
     });
-    await releasePaidOrders(bill.id);
-    return { paid: true as const };
-  }
-  return { error: "The bill is busy. Please try again." };
-}
-
-// ---- Takeaway / pickup orders ----------------------------------------------
-
-// Places a pickup order not tied to a table sitting: each pickup is its own
-// bill on the location's takeaway pseudo-table, with a pickup (order) number.
-export async function createTakeawayOrder(
-  slug: string,
-  customerName: string,
-  items: AddItem[],
-  note?: string,
-  clientRequestId?: string,
-  customerPhone?: string,
-) {
-  const restaurant = await prisma.restaurant.findUnique({
-    where: { slug },
-    include: { locations: { orderBy: { createdAt: "asc" }, take: 1 } },
+    await recompute(tx, target.id);
+    // The source table is now empty — void it and zero its stale totals so
+    // it never shows a phantom balance with nothing behind it.
+    await tx.bill.update({
+      where: { id: source.id },
+      data: { status: "VOIDED", subtotalCents: 0, totalCents: 0, discountCents: 0 },
+    });
   });
-  if (!restaurant || !restaurant.takeawayEnabled) {
-    return { error: "Pickup ordering isn't available here." };
-  }
-  const location = restaurant.locations[0];
-  if (!location) return { error: "Pickup ordering isn't set up yet." };
 
-  const name = (customerName ?? "").trim().slice(0, 60);
-  if (name.length < 1) return { error: "Please enter your name." };
-
-  const lines = items.filter(
-    (i) => i.menuItemId && Number.isInteger(i.quantity) && i.quantity > 0,
-  );
-  if (lines.length === 0) return { error: "Nothing to add." };
-  const cleanNote = note?.trim().slice(0, 200) || null;
-  const idemKey = clientRequestId?.trim() || null;
-
-  if (idemKey) {
-    const existing = await prisma.order.findUnique({
-      where: { clientRequestId: idemKey },
-    });
-    if (existing) {
-      return { ok: true as const, orderNumber: existing.orderNumber };
-    }
-  }
-
-  // The location's takeaway pseudo-table (created on first pickup order).
-  let table = await prisma.table.findFirst({
-    where: { locationId: location.id, isTakeaway: true },
-  });
-  if (!table) {
-    table = await prisma.table.create({
-      data: { locationId: location.id, label: "Pickup", isTakeaway: true },
-    });
-  }
-  const takeawayTable = table;
-
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const bill = await tx.bill.create({
-        data: {
-          tableId: takeawayTable.id,
-          currency: restaurant.currency,
-          isTakeaway: true,
-          customerName: name,
-          customerPhone: normalizeAuPhone(customerPhone ?? "") ?? undefined,
-        },
-      });
-      const rest = await tx.restaurant.update({
-        where: { id: restaurant.id },
-        data: { orderSeq: { increment: 1 } },
-        select: { orderSeq: true, staffApproval: true, paymentTiming: true },
-      });
-      const awaitingApproval = rest.staffApproval;
-      const awaitingPayment = rest.paymentTiming === "before";
-      const held = awaitingApproval || awaitingPayment;
-
-      const order = await tx.order.create({
-        data: {
-          billId: bill.id,
-          tableId: takeawayTable.id,
-          restaurantId: restaurant.id,
-          source: "CUSTOMER",
-          note: cleanNote,
-          clientRequestId: idemKey,
-          orderNumber: rest.orderSeq,
-          status: held ? "PENDING" : "SUBMITTED",
-          awaitingApproval,
-          awaitingPayment,
-        },
-      });
-
-      let added = 0;
-      for (const line of lines) {
-        const item = await tx.menuItem.findFirst({
-          where: {
-            id: line.menuItemId,
-            available: true,
-            category: { restaurantId: restaurant.id },
-          },
-          include: {
-            category: { select: { station: true } },
-            modifierGroups: { include: { options: true } },
-          },
-        });
-        if (!item) continue;
-        const resolved = resolveModifiers(item, line.optionIds ?? []);
-        if ("error" in resolved) throw new LineError(resolved.error);
-        const qty = Math.min(line.quantity, 99);
-        await tx.billItem.create({
-          data: {
-            billId: bill.id,
-            orderId: order.id,
-            menuItemId: item.id,
-            nameSnapshot: item.name,
-            unitPriceCents: resolved.unitPriceCents,
-            modifiers: resolved.modifiers.length
-              ? (resolved.modifiers as object[])
-              : undefined,
-            quantity: qty,
-            lineTotalCents: resolved.unitPriceCents * qty,
-            station: item.category?.station ?? null,
-          },
-        });
-        added++;
-      }
-      if (added === 0) throw new EmptySend();
-      await recompute(tx, bill.id);
-      return { orderNumber: rest.orderSeq };
-    });
-    return { ok: true as const, orderNumber: result.orderNumber };
-  } catch (e) {
-    if (e instanceof LineError) return { error: e.reason };
-    if (e instanceof EmptySend) return { error: "Those items aren't available." };
-    if (isUniqueViolation(e) && uniqueTargetIncludes(e, "clientRequestId")) {
-      return { ok: true as const };
-    }
-    throw e;
-  }
+  await notifyRestaurant(restaurantId);
+  return { ok: true as const };
 }
 
 // ---- Menu availability (shared) --------------------------------------------
@@ -1238,6 +1604,7 @@ export async function staffCloseBill(tableId: string, restaurantId: string) {
     });
     // Prepay: staff taking payment also releases any payment-held orders.
     await releasePaidOrders(bill.id);
+    await notifyRestaurant(restaurantId);
     return { paid: true as const };
   }
   return { error: "The bill is busy. Please try again." };

@@ -14,9 +14,10 @@ import type { CSSProperties } from "react";
 // colour (the one brand colour) + a FONT pairing + an optional background image.
 // ---------------------------------------------------------------------------
 
-export type ThemeKey = "warm" | "minimal" | "fresh" | "bold";
+export type ThemeKey = "warm" | "minimal" | "fresh" | "bold" | "ocean" | "sunset" | "slate";
 export type ThemeMode = "light" | "dark";
 export type FontKey = "classic" | "elegant" | "modern";
+export type CornerKey = "sharp" | "soft" | "round";
 
 type Palette = {
   paper: string;
@@ -120,7 +121,97 @@ export const THEME_PRESETS: Record<ThemeKey, Preset> = {
       line: "#26262c",
     },
   },
+  ocean: {
+    label: "Ocean",
+    blurb: "Deep blues and slate — calm, coastal.",
+    defaultAccent: "#1d4ed8",
+    light: {
+      paper: "#eef3fa",
+      surface: "#ffffff",
+      ink: "#0f1f33",
+      inkSoft: "#33455c",
+      muted: "#647389",
+      line: "#dbe4f0",
+    },
+    dark: {
+      paper: "#0a1420",
+      surface: "#122132",
+      ink: "#eaf1fb",
+      inkSoft: "#b8c8dd",
+      muted: "#7c8ba1",
+      line: "#1c2c40",
+    },
+  },
+  sunset: {
+    label: "Sunset",
+    blurb: "Warm coral and gold — vivid, energetic.",
+    defaultAccent: "#ea580c",
+    light: {
+      paper: "#fdf1e7",
+      surface: "#fffaf5",
+      ink: "#331d0f",
+      inkSoft: "#63412a",
+      muted: "#8f7259",
+      line: "#f0ddc9",
+    },
+    dark: {
+      paper: "#241408",
+      surface: "#331c0d",
+      ink: "#fbeee1",
+      inkSoft: "#dcbc9d",
+      muted: "#a68a6f",
+      line: "#432711",
+    },
+  },
+  slate: {
+    label: "Slate",
+    blurb: "Dark charcoal — sharp and moody, not just muted grey.",
+    defaultAccent: "#7c3aed",
+    light: {
+      paper: "#eef0f2",
+      surface: "#ffffff",
+      ink: "#1a1d23",
+      inkSoft: "#40454e",
+      muted: "#6f7480",
+      line: "#dbdfe4",
+    },
+    dark: {
+      paper: "#101216",
+      surface: "#1a1d23",
+      ink: "#eef0f2",
+      inkSoft: "#c3c7ce",
+      muted: "#8b909a",
+      line: "#2a2e35",
+    },
+  },
 };
+
+// A genuinely diverse accent-colour palette — spans warm/cool, saturated/muted,
+// light/dark, not just the primary hues. Offered as one-tap swatches on both
+// the onboarding wizard's and Settings' branding pages; a custom colour input
+// sits alongside it for anything not covered here.
+export const ACCENT_SWATCHES = [
+  "#0f5c42", // pine
+  "#0d9488", // teal
+  "#0891b2", // cyan
+  "#1d4ed8", // blue
+  "#4338ca", // indigo
+  "#7c3aed", // violet
+  "#a21caf", // fuchsia
+  "#be185d", // pink
+  "#e11d48", // rose
+  "#b91c1c", // red
+  "#c2410c", // orange
+  "#d97706", // amber
+  "#a1552f", // terracotta
+  "#65a30d", // olive
+  "#15803d", // green
+  "#0369a1", // sky
+  "#6d28d9", // deep purple
+  "#9f1239", // wine
+  "#57534e", // warm grey
+  "#15181b", // near-black
+] as const;
 
 export const FONT_THEMES: Record<
   FontKey,
@@ -142,6 +233,14 @@ export const FONT_THEMES: Record<
     display: "var(--font-space), ui-sans-serif, system-ui, sans-serif",
     sans: "var(--font-inter), ui-sans-serif, system-ui, sans-serif",
   },
+};
+
+// Card/button corner rounding. --radius-card was a fixed 14px in globals.css;
+// it now lives here so it themes per-venue like everything else.
+export const CORNER_STYLES: Record<CornerKey, { label: string; radius: string }> = {
+  sharp: { label: "Sharp", radius: "4px" },
+  soft: { label: "Soft", radius: "14px" },
+  round: { label: "Round", radius: "24px" },
 };
 
 // ---- colour helpers --------------------------------------------------------
@@ -193,6 +292,7 @@ export type Appearance = {
   themeMode?: string | null;
   fontTheme?: string | null;
   brandColor?: string | null;
+  cornerStyle?: string | null;
 };
 
 function presetOf(key?: string | null): Preset {
@@ -200,6 +300,9 @@ function presetOf(key?: string | null): Preset {
 }
 function fontOf(key?: string | null) {
   return FONT_THEMES[(key as FontKey) ?? "classic"] ?? FONT_THEMES.classic;
+}
+function cornerOf(key?: string | null) {
+  return CORNER_STYLES[(key as CornerKey) ?? "soft"] ?? CORNER_STYLES.soft;
 }
 
 // The full set of CSS variable overrides for a venue's appearance. Spread onto
@@ -211,6 +314,7 @@ export function themeVars(a: Appearance): CSSProperties {
   const accent =
     a.brandColor && parseHex(a.brandColor) ? a.brandColor : preset.defaultAccent;
   const font = fontOf(a.fontTheme);
+  const corner = cornerOf(a.cornerStyle);
 
   return {
     ["--color-paper" as string]: pal.paper,
@@ -225,6 +329,7 @@ export function themeVars(a: Appearance): CSSProperties {
     ["--on-accent" as string]: onAccent(accent),
     ["--font-display" as string]: font.display,
     ["--font-sans" as string]: font.sans,
+    ["--radius-card" as string]: corner.radius,
   } as CSSProperties;
 }
 
@@ -238,4 +343,59 @@ export function resolveAccent(a: Appearance): string {
 
 export function isValidHex(hex: string): boolean {
   return parseHex(hex) !== null;
+}
+
+// ---- legibility guardrail (A5) ----------------------------------------------
+// WCAG 2 relative luminance / contrast ratio — the real formula, not the
+// simplified perceived-luminance one `onAccent` uses above (that one's fine
+// for a quick "pick black or white text" choice; this one is a real pass/fail
+// threshold, used to block saving a combination that would be hard to read).
+function srgbChannel(v: number): number {
+  const c = v / 255;
+  return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+export function relativeLuminance(hex: string): number {
+  const rgb = parseHex(hex);
+  if (!rgb) return 1; // fail safe toward "assume light, demand contrast"
+  const [r, g, b] = rgb.map(srgbChannel);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+export function contrastRatio(hexA: string, hexB: string): number {
+  const a = relativeLuminance(hexA);
+  const b = relativeLuminance(hexB);
+  const lighter = Math.max(a, b);
+  const darker = Math.min(a, b);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+// WCAG AA for normal-size text is 4.5:1. Menu item names/prices are small
+// text on a phone screen, not a place to be generous with this threshold.
+export const MIN_READABLE_CONTRAST = 4.5;
+
+export function isReadableContrast(fg: string, bg: string): boolean {
+  return contrastRatio(fg, bg) >= MIN_READABLE_CONTRAST;
+}
+
+// Checks the combinations that actually matter for a venue's appearance
+// choice: body text on the page background, and the "on accent" text
+// (already computed to be black or white) against the accent itself — e.g. a
+// pale accent colour with white on-accent text would fail this even though
+// `onAccent` "successfully" picked a colour, because pale + white is still
+// unreadable. Returns the first failure found, or null if all pass.
+export function findContrastIssue(a: Appearance): string | null {
+  const preset = presetOf(a.theme);
+  const mode: ThemeMode = a.themeMode === "dark" ? "dark" : "light";
+  const pal = preset[mode];
+  const accent = resolveAccent(a);
+
+  if (!isReadableContrast(pal.ink, pal.paper)) {
+    return "This theme's text isn't readable against its own background — try a different theme.";
+  }
+  const onAccentColor = onAccent(accent);
+  if (!isReadableContrast(onAccentColor, accent)) {
+    return "That accent colour is too pale for button text to read clearly on it — try a darker shade.";
+  }
+  return null;
 }

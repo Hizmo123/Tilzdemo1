@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { appBaseUrl } from "@/lib/urls";
+import { qrDataUrlForUrl } from "@/lib/qr";
 import { StaffLoginsManager } from "./staff-logins-manager";
 
 export default async function StaffLoginsPage() {
@@ -53,6 +54,8 @@ export default async function StaffLoginsPage() {
   });
 
   const base = appBaseUrl();
+  const loginUrl = `${base}/staff/${restaurant.slug}`;
+  const qrPreview = await qrDataUrlForUrl(loginUrl);
 
   return (
     <div className="space-y-8">
@@ -71,12 +74,15 @@ export default async function StaffLoginsPage() {
       </div>
 
       <StaffLoginsManager
-        loginUrl={`${base}/staff/${restaurant.slug}`}
+        loginUrl={loginUrl}
+        qrPreview={qrPreview}
+        kitchenStations={restaurant.kitchenStations}
         staff={staff.map((s) => ({
           id: s.id,
           name: s.name,
           role: s.role,
           active: s.active,
+          assignedStation: s.assignedStation,
           lastLoginAt: s.lastLoginAt ? s.lastLoginAt.toISOString() : null,
         }))}
       />

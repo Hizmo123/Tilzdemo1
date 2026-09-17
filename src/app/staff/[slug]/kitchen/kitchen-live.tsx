@@ -1,57 +1,121 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useRealtimeRefresh } from "@/lib/use-realtime-refresh";
+import { useWakeLock } from "@/lib/use-wake-lock";
 
-// Keeps the kitchen board live and audible.
+const AUDIO_SESSION_KEY = "tillz.kitchen.audioReady";
+
+// Keeps the kitchen board live, audible, and awake for a full shift.
 //
-//  - Reliable refresh: re-fetches on an interval whenever the tab is visible.
-//    Unlike the general LiveRefresh, it does NOT pause after taps — a kitchen
-//    touchscreen gets tapped constantly, and pausing there would delay new
-//    tickets. (Polling is the transport for now; a Supabase Realtime broadcast
-//    can replace the interval later without touching this component's callers.)
-//  - Audible alert: compares the set of ticket ids across refreshes and chimes
-//    when a new one appears (never on first load). The chime is generated with
-//    the Web Audio API — no sound file, works offline.
-//
-// Browsers block audio until the user has interacted with the page, so the
-// first tap anywhere unlocks it; after a PIN login + opening this screen that's
-// already happened in practice.
+//  - Instant refresh: a new order, approval or status change broadcasts
+//    immediately (see @/lib/realtime) — a ticket appears the moment it's
+//    placed, not on the next poll tick.
+//  - Reliable polling as a fallback: re-fetches on an interval whenever the
+//    tab is visible, in case a broadcast is missed. Does NOT pause after taps
+//    — a kitchen touchscreen gets tapped constantly, and pausing there would
+//    delay new tickets.
+//  - Audible alert: compares the set of ticket ids across refreshes and
+//    chimes when a new one appears (never on first load). Browsers block
+//    audio until a real user gesture resumes it, and that block resets on
+//    every full page load/reload — a sessionStorage flag alone can't bypass
+//    it, so this always re-checks the AudioContext's actual state and only
+//    hides the "enable sound" prompt once it's genuinely running.
+//  - Screen wake lock: keeps a tablet on the pass from sleeping mid-service,
+//    re-acquiring after the tab is backgrounded then comes back.
+//  - Connection status: surfaced so a lost link to the server is obvious
+//    instead of a silently-stale ticket list.
 export function KitchenLive({
   ticketIds,
+  restaurantId,
   seconds = 4,
+  chimeEnabled = true,
 }: {
   ticketIds: string[];
+  restaurantId: string;
   seconds?: number;
+  chimeEnabled?: boolean;
 }) {
   const router = useRouter();
   const known = useRef<Set<string> | null>(null);
   const ctxRef = useRef<AudioContext | null>(null);
+  // Seed optimistically from last session's outcome so a device that's
+  // already been enabled today doesn't flash the gate while the real check
+  // (below) runs — that check still always runs and corrects this if wrong.
+  const [audioBlocked, setAudioBlocked] = useState(
+    () => typeof sessionStorage === "undefined" || sessionStorage.getItem(AUDIO_SESSION_KEY) !== "1",
+  );
+  const [audioChecked, setAudioChecked] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date>(new Date());
 
-  // Unlock / prime the audio context on the first interaction.
+  const { status } = useRealtimeRefresh(restaurantId, () => router.refresh());
+  const { supported: wakeLockSupported, active: wakeLockActive } = useWakeLock(true);
+
+  function getOrCreateCtx(): AudioContext | null {
+    if (ctxRef.current) return ctxRef.current;
+    try {
+      const Ctor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!Ctor) return null;
+      ctxRef.current = new Ctor();
+      return ctxRef.current;
+    } catch {
+      return null;
+    }
+  }
+
+  // On mount, and again whenever the tab regains focus (a suspended context
+  // doesn't always resume itself), try to resume audio and check whether it
+  // actually took — that check, not a stale flag, decides if the prompt shows.
   useEffect(() => {
-    const prime = () => {
-      try {
-        const Ctor =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext?: typeof AudioContext })
-            .webkitAudioContext;
-        if (Ctor && !ctxRef.current) ctxRef.current = new Ctor();
-        void ctxRef.current?.resume();
-      } catch {
-        /* ignore */
+    let cancelled = false;
+    async function check() {
+      const ctx = getOrCreateCtx();
+      if (!ctx) {
+        if (!cancelled) {
+          setAudioBlocked(true);
+          setAudioChecked(true);
+        }
+        return;
       }
+      if (ctx.state === "suspended") {
+        try {
+          await ctx.resume();
+        } catch {
+          /* still blocked — expected until a real tap */
+        }
+      }
+      if (cancelled) return;
+      setAudioBlocked(ctx.state !== "running");
+      setAudioChecked(true);
+      if (ctx.state === "running") {
+        sessionStorage.setItem(AUDIO_SESSION_KEY, "1");
+      }
+    }
+    check();
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", check);
     };
-    window.addEventListener("pointerdown", prime, { once: true });
-    prime();
-    return () => window.removeEventListener("pointerdown", prime);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function enableSound() {
+    const ctx = getOrCreateCtx();
+    void ctx?.resume().then(() => {
+      setAudioBlocked(ctx.state !== "running");
+      if (ctx.state === "running") sessionStorage.setItem(AUDIO_SESSION_KEY, "1");
+    });
+  }
 
   function chime() {
     const ctx = ctxRef.current;
-    if (!ctx) return;
+    if (!ctx || ctx.state !== "running") return;
     try {
-      if (ctx.state === "suspended") void ctx.resume();
       const t0 = ctx.currentTime;
       [880, 1320].forEach((freq, i) => {
         const osc = ctx.createOscillator();
@@ -80,7 +144,14 @@ export function KitchenLive({
     }
     const hasNew = ticketIds.some((id) => !known.current!.has(id));
     known.current = new Set(ticketIds);
-    if (hasNew) chime();
+    if (hasNew && chimeEnabled) chime();
+  }, [ticketIds, chimeEnabled]);
+
+  // Track when we last actually heard back from the server, so a stale
+  // screen is visible rather than silent. Any successful render with fresh
+  // server data (ticketIds recomputed) counts, whether or not it changed.
+  useEffect(() => {
+    setLastUpdatedAt(new Date());
   }, [ticketIds]);
 
   // Reliable polling — visible tabs only, no interaction pause.
@@ -91,5 +162,98 @@ export function KitchenLive({
     return () => clearInterval(id);
   }, [router, seconds]);
 
-  return null;
+  return (
+    <>
+      <ConnectionBanner status={status} lastUpdatedAt={lastUpdatedAt} />
+      {audioChecked && audioBlocked && chimeEnabled && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 px-6">
+          <div className="w-full max-w-xs rounded-[var(--radius-card)] bg-surface p-6 text-center">
+            <p className="text-2xl mb-2">🔔</p>
+            <h2 className="font-display text-lg font-semibold tracking-tight">
+              Enable kitchen sounds
+            </h2>
+            <p className="text-sm text-muted mt-1.5">
+              Browsers block sound until you tap once. Do this now so new
+              tickets chime all through service.
+            </p>
+            <button
+              onClick={enableSound}
+              className="mt-4 w-full rounded-xl bg-pine text-white py-3 font-medium hover:bg-pine-deep"
+            >
+              Enable sound
+            </button>
+          </div>
+        </div>
+      )}
+      {audioChecked && !audioBlocked && !wakeLockSupported && (
+        <WakeLockFallbackNotice />
+      )}
+    </>
+  );
+}
+
+// Wake Lock isn't universally supported (older Safari/iOS in particular).
+// Shown once per session rather than persistently, since it's a one-time
+// device-setup instruction, not an ongoing problem.
+function WakeLockFallbackNotice() {
+  const [dismissed, setDismissed] = useState(
+    () => typeof sessionStorage !== "undefined" && sessionStorage.getItem("tillz.kitchen.wakeLockNoticeSeen") === "1",
+  );
+  if (dismissed) return null;
+  return (
+    <div className="fixed top-2 inset-x-2 z-40 rounded-lg bg-amber-500 text-white text-sm px-4 py-2.5 flex items-center justify-between gap-3">
+      <span>
+        This device can&apos;t auto-keep the screen awake — turn off screen sleep
+        in its display settings for this shift.
+      </span>
+      <button
+        onClick={() => {
+          sessionStorage.setItem("tillz.kitchen.wakeLockNoticeSeen", "1");
+          setDismissed(true);
+        }}
+        className="shrink-0 underline"
+      >
+        Got it
+      </button>
+    </div>
+  );
+}
+
+function ConnectionBanner({
+  status,
+  lastUpdatedAt,
+}: {
+  status: "connecting" | "connected" | "disconnected";
+  lastUpdatedAt: Date;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const secondsAgo = Math.max(0, Math.round((now - lastUpdatedAt.getTime()) / 1000));
+  const stale = secondsAgo > 15;
+  const offline = status === "disconnected";
+
+  if (!offline && !stale) {
+    // All good — a small, quiet corner indicator rather than nothing at all,
+    // so "no news" still reads as "confirmed fine" not "untested".
+    return (
+      <div className="fixed bottom-2 right-2 z-40 text-[10px] text-muted bg-surface/80 backdrop-blur rounded-full px-2.5 py-1 border border-line">
+        Live · updated {secondsAgo <= 1 ? "just now" : `${secondsAgo}s ago`}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`fixed top-0 inset-x-0 z-40 text-center text-sm font-medium py-2 ${
+        offline ? "bg-danger text-white" : "bg-amber-500 text-white"
+      }`}
+    >
+      {offline
+        ? "⚠ Lost connection to the server — trying to reconnect…"
+        : `⚠ No update in ${secondsAgo}s — checking connection…`}
+    </div>
+  );
 }

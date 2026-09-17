@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/money";
 import { startOfTodayInTz } from "@/lib/time";
 import { countOpenRequests } from "@/lib/requests";
+import { getSetupChecklist } from "@/lib/setup-checklist";
 import { CreateRestaurantForm } from "./create-restaurant-form";
 import { LiveRefresh } from "./live-refresh";
 import { LoadSampleButton } from "./sample/load-sample-button";
@@ -45,21 +46,17 @@ export default async function DashboardHome() {
   const { restaurant, location } = ctx;
   const currency = restaurant.currency;
 
-  const tableIds = (
-    await prisma.table.findMany({
-      where: { locationId: location.id },
-      select: { id: true },
-    })
-  ).map((t) => t.id);
-
   // "Today" resets at the restaurant's local midnight, not the server's.
   const startOfToday = startOfTodayInTz(restaurant.timezone);
 
-  const [paidToday, openBills, paidTablesCount, tables, openRequests] =
+  // Filtering through the table -> location relation directly (rather than
+  // pre-fetching table ids and passing `{in: [...]}`) drops one full sequential
+  // round trip that used to block before any of these could even start.
+  const [paidToday, openBills, paidTablesCount, tables, openRequests, checklist] =
     await Promise.all([
       prisma.bill.aggregate({
         where: {
-          tableId: { in: tableIds },
+          table: { locationId: location.id },
           status: "PAID",
           paidAt: { gte: startOfToday },
         },
@@ -67,11 +64,14 @@ export default async function DashboardHome() {
         _count: true,
       }),
       prisma.bill.count({
-        where: { tableId: { in: tableIds }, status: { in: ["OPEN", "PARTIALLY_PAID"] } },
+        where: {
+          table: { locationId: location.id },
+          status: { in: ["OPEN", "PARTIALLY_PAID"] },
+        },
       }),
       prisma.bill.count({
         where: {
-          tableId: { in: tableIds },
+          table: { locationId: location.id },
           status: "PAID",
           paidAt: { gte: startOfToday },
         },
@@ -88,14 +88,19 @@ export default async function DashboardHome() {
         },
       }),
       countOpenRequests(restaurant.id),
+      // Derived live from real data every load, so it can never drift out of
+      // sync and naturally disappears for good once everything is genuinely
+      // done — run alongside the stats above instead of after them.
+      getSetupChecklist(restaurant),
     ]);
 
   const salesToday = paidToday._sum.totalCents ?? 0;
   const ordersToday = paidToday._count;
+  const checklistRemaining = checklist.filter((c) => !c.done);
 
   return (
     <div className="space-y-8">
-      <LiveRefresh />
+      <LiveRefresh restaurantId={restaurant.id} />
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">
           {restaurant.name}
@@ -114,6 +119,36 @@ export default async function DashboardHome() {
           value={String(openRequests > 0 ? openRequests : paidTablesCount)}
         />
       </div>
+
+      {checklistRemaining.length > 0 && (
+        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
+          <h2 className="font-display text-base font-semibold tracking-tight mb-3">
+            Finish setting up
+          </h2>
+          <ul className="space-y-2">
+            {checklist.map((item) => (
+              <li key={item.id} className="flex items-center gap-3">
+                <span
+                  className={`shrink-0 w-4.5 h-4.5 rounded-full border flex items-center justify-center text-[9px] ${
+                    item.done ? "bg-pine border-pine text-white" : "border-line text-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+                {item.href && !item.done ? (
+                  <Link href={item.href} className="text-sm text-ink hover:text-pine">
+                    {item.label}
+                  </Link>
+                ) : (
+                  <span className={`text-sm ${item.done ? "text-muted" : "text-ink"}`}>
+                    {item.label}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {tables.length === 0 && <LoadSampleButton />}
 

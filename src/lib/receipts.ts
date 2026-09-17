@@ -41,10 +41,14 @@ export type ReceiptData = {
   totalCents: number;
   amountPaidCents: number;
   tipCents: number;
+  surchargeCents: number;
+  refundedCents: number;
   payments: {
     provider: string;
     amountCents: number;
     tipCents: number;
+    surchargeCents: number;
+    refundedCents: number;
     test: boolean;
     createdAt: string;
   }[];
@@ -75,10 +79,13 @@ export function buildReceiptData(input: {
   totalCents: number;
   amountPaidCents: number;
   tipCents: number;
+  refundedCents: number;
   payments: {
     provider: string;
     amountCents: number;
     tipCents: number;
+    surchargeCents: number;
+    refundedCents: number;
     test: boolean;
     createdAt: Date;
   }[];
@@ -112,10 +119,14 @@ export function buildReceiptData(input: {
     totalCents: input.totalCents,
     amountPaidCents: input.amountPaidCents,
     tipCents: input.tipCents,
+    surchargeCents: input.payments.reduce((sum, p) => sum + p.surchargeCents, 0),
+    refundedCents: input.refundedCents,
     payments: input.payments.map((p) => ({
       provider: p.provider,
       amountCents: p.amountCents,
       tipCents: p.tipCents,
+      surchargeCents: p.surchargeCents,
+      refundedCents: p.refundedCents,
       test: p.test,
       createdAt: p.createdAt.toISOString(),
     })),

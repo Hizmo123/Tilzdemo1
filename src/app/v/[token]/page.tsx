@@ -1,9 +1,8 @@
 import {
   resolveVisit,
   getMenuForCustomer,
-  getOpenBillWithItems,
+  getOpenBillWithOrders,
 } from "@/lib/bills";
-import { prisma } from "@/lib/prisma";
 import { isOpenNow, isWithinWindow, parseHours } from "@/lib/hours";
 import { CustomerExperience } from "./customer-experience";
 
@@ -61,7 +60,7 @@ export default async function VisitPage({
   const { visit } = resolved;
   const [menuRows, billRow] = await Promise.all([
     getMenuForCustomer(visit.restaurantId),
-    getOpenBillWithItems(visit.tableId),
+    getOpenBillWithOrders(visit.tableId),
   ]);
 
   const open = isOpenNow(parseHours(visit.hours), visit.timezone);
@@ -73,6 +72,7 @@ export default async function VisitPage({
     .map((c) => ({
     id: c.id,
     name: c.name,
+    icon: c.icon,
     items: c.items.map((i) => ({
       id: i.id,
       name: i.name,
@@ -81,6 +81,7 @@ export default async function VisitPage({
       available: i.available,
       imageUrl: i.imageUrl,
       allergens: i.allergens,
+      badges: i.badges,
       groups: i.modifierGroups.map((g) => ({
         id: g.id,
         name: g.name,
@@ -106,7 +107,9 @@ export default async function VisitPage({
             quantity: it.quantity,
             paidQuantity: it.comped ? it.quantity : it.paidQuantity,
             lineTotalCents: it.comped ? 0 : it.lineTotalCents,
-            modifiers: (it.modifiers as { name: string }[] | null) ?? null,
+            modifiers: Array.isArray(it.modifiers)
+              ? (it.modifiers as { name: string }[])
+              : null,
           })),
         subtotalCents: billRow.subtotalCents,
         totalCents: billRow.totalCents,
@@ -115,14 +118,9 @@ export default async function VisitPage({
     : null;
 
   // Live status of the table's current orders, so the customer sees progress.
+  // Comes from the same query as the bill above now — see getOpenBillWithOrders.
   const orderStatuses = billRow
-    ? (
-        await prisma.order.findMany({
-          where: { billId: billRow.id, status: { not: "CANCELLED" } },
-          orderBy: { createdAt: "asc" },
-          include: { items: { select: { nameSnapshot: true, quantity: true } } },
-        })
-      ).map((o) => ({
+    ? billRow.orders.map((o) => ({
         id: o.id,
         // Surface a payment-held order distinctly so the customer knows to pay.
         status:
@@ -148,9 +146,28 @@ export default async function VisitPage({
       theme={visit.theme}
       themeMode={visit.themeMode}
       fontTheme={visit.fontTheme}
+      cornerStyle={visit.cornerStyle}
+      tagline={visit.tagline}
+      menuLayout={visit.menuLayout}
+      cardStyle={visit.cardStyle}
+      typeScale={visit.typeScale}
+      sectionHeaderStyle={visit.sectionHeaderStyle}
+      buttonShape={visit.buttonShape}
+      buttonFill={visit.buttonFill}
+      bgTreatment={visit.bgTreatment}
+      bgPatternKey={visit.bgPatternKey}
+      bgOverlayStrength={visit.bgOverlayStrength}
+      instagramHandle={visit.instagramHandle}
+      websiteUrl={visit.websiteUrl}
       paymentTiming={visit.paymentTiming}
+      requirePaymentBeforeOrder={visit.requirePaymentBeforeOrder}
       tipEnabled={visit.tipEnabled}
       tipPresets={visit.tipPresets}
+      surchargeEnabled={visit.surchargeEnabled}
+      surchargeBasisPoints={visit.surchargeBasisPoints}
+      showTillzBranding={visit.showTillzBranding}
+      splitMethods={visit.splitMethods}
+      orderReadySmsEnabled={visit.orderReadySmsEnabled}
       open={open}
       canOrder={visit.customerOrdering && open}
       canPay={visit.customerPayment}

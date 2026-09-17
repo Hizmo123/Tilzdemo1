@@ -1,19 +1,17 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
 import { getProductPerformance } from "@/lib/analytics";
+import { parseRangeParams } from "@/lib/date-range";
 import { formatCents } from "@/lib/money";
+import { AnalyticsTabs } from "@/components/dashboard/analytics-tabs";
+import { DateRangePicker } from "@/components/dashboard/date-range-picker";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { ProductsTable } from "../products-table";
-
-const RANGES: { key: string; label: string; days: number | null }[] = [
-  { key: "7", label: "7 days", days: 7 },
-  { key: "30", label: "30 days", days: 30 },
-  { key: "all", label: "All time", days: null },
-];
 
 export default async function ProductAnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
 }) {
   const authz = await getAuthz();
   const restaurant = authz.membership?.organization.restaurants[0];
@@ -25,7 +23,9 @@ export default async function ProductAnalyticsPage({
           Product performance
         </h1>
         <p className="text-muted">
-          {restaurant ? "You don't have permission to view analytics." : (
+          {restaurant ? (
+            "You don't have permission to view analytics."
+          ) : (
             <>
               Create your restaurant first from the{" "}
               <Link href="/dashboard" className="text-pine hover:underline">
@@ -39,10 +39,10 @@ export default async function ProductAnalyticsPage({
     );
   }
 
-  const { range } = await searchParams;
-  const active = RANGES.find((r) => r.key === range) ?? RANGES[1];
+  const sp = await searchParams;
+  const { preset, resolved } = parseRangeParams(sp, restaurant.timezone);
   const currency = restaurant.currency;
-  const data = await getProductPerformance(restaurant.id, active.days);
+  const data = await getProductPerformance(restaurant.id, resolved);
 
   return (
     <div className="space-y-6">
@@ -53,57 +53,21 @@ export default async function ProductAnalyticsPage({
         <p className="text-muted mt-1">How each menu item is selling.</p>
       </div>
 
-      {/* Tabs to the other analytics view */}
-      <div className="flex gap-2 text-sm">
-        <Link
-          href="/dashboard/analytics"
-          className="rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
-        >
-          Overview
-        </Link>
-        <span className="rounded-lg bg-ink text-surface px-3 py-1.5">Products</span>
-      </div>
+      <AnalyticsTabs active="/dashboard/analytics/products" />
 
       {!data.hasMenu ? (
         <p className="text-muted">Add menu items to see how they perform.</p>
       ) : (
         <>
-          {/* Range selector */}
-          <div className="flex gap-2">
-            {RANGES.map((r) => (
-              <Link
-                key={r.key}
-                href={`/dashboard/analytics/products?range=${r.key}`}
-                className={`rounded-lg px-3 py-1.5 text-sm ${
-                  r.key === active.key
-                    ? "bg-pine text-white"
-                    : "border border-line hover:border-ink/30"
-                }`}
-              >
-                {r.label}
-              </Link>
-            ))}
-          </div>
+          <DateRangePicker value={preset} customFrom={sp.from} customTo={sp.to} />
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
-              <p className="text-sm text-muted">Revenue ({active.label})</p>
-              <p className="font-display text-2xl font-semibold tracking-tight mt-1 tabular-nums">
-                {formatCents(data.totalRevenue, currency)}
-              </p>
-            </div>
-            <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
-              <p className="text-sm text-muted">Units sold</p>
-              <p className="font-display text-2xl font-semibold tracking-tight mt-1 tabular-nums">
-                {data.totalUnits}
-              </p>
-            </div>
-            <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
-              <p className="text-sm text-muted">Items with no sales</p>
-              <p className="font-display text-2xl font-semibold tracking-tight mt-1 tabular-nums">
-                {data.notSelling.length}
-              </p>
-            </div>
+            <StatCard
+              label={`Revenue · ${resolved.label}`}
+              value={formatCents(data.totalRevenue, currency)}
+            />
+            <StatCard label="Units sold" value={String(data.totalUnits)} />
+            <StatCard label="Items with no sales" value={String(data.notSelling.length)} />
           </div>
 
           {data.rows.length === 0 ? (
@@ -127,9 +91,7 @@ export default async function ProductAnalyticsPage({
                     className="text-sm rounded-lg border border-line px-3 py-1.5"
                   >
                     {n.name}
-                    {!n.available && (
-                      <span className="text-muted"> · sold out</span>
-                    )}
+                    {!n.available && <span className="text-muted"> · sold out</span>}
                   </span>
                 ))}
               </div>

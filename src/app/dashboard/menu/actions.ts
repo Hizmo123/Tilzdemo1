@@ -7,6 +7,9 @@ import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/money";
 import { audit } from "@/lib/audit";
 import { ALLERGEN_SET } from "@/lib/allergens";
+import { BADGE_VALUES } from "@/lib/menu-badges";
+
+const BADGE_SET = new Set<string>(BADGE_VALUES);
 
 export type MenuActionState = { error?: string };
 
@@ -353,6 +356,55 @@ export async function updateCategoryOptions(
   return {};
 }
 
+// Per-item prep station override — null falls back to the category's station
+// (see BillItem creation in lib/bills.ts, which reads item.station first).
+export async function updateItemStation(
+  itemId: string,
+  station: string,
+): Promise<MenuActionState> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+  const owned = await assertItemOwned(itemId, authz.user.id);
+  if (!owned) return { error: "Item not found." };
+
+  await prisma.menuItem.update({
+    where: { id: itemId },
+    data: { station: station.trim().slice(0, 24) || null },
+  });
+  revalidatePath("/dashboard/menu");
+  return {};
+}
+
+// The venue's own list of prep station names (e.g. "Barista", "Grill",
+// "Oven") — offered as choices in the category/item station pickers, and on
+// the kitchen screen's station tabs. Not a foreign key: renaming or removing
+// one here doesn't touch categories/items already routed to the old name.
+export async function updateKitchenStations(
+  names: string[],
+): Promise<MenuActionState> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+  const restaurantId = await requireRestaurantId();
+  if (!restaurantId) return { error: "Create your restaurant first." };
+
+  const clean = Array.from(
+    new Set(
+      names
+        .map((n) => n.trim().slice(0, 24))
+        .filter((n) => n.length > 0),
+    ),
+  ).slice(0, 20);
+  if (clean.length === 0) clean.push("Kitchen");
+
+  await prisma.restaurant.update({
+    where: { id: restaurantId },
+    data: { kitchenStations: clean },
+  });
+  revalidatePath("/dashboard/menu");
+  revalidatePath("/dashboard/settings/service");
+  return {};
+}
+
 // ---- Item allergens --------------------------------------------------------
 
 export async function updateItemAllergens(
@@ -368,6 +420,46 @@ export async function updateItemAllergens(
   await prisma.menuItem.update({
     where: { id: itemId },
     data: { allergens: clean },
+  });
+  revalidatePath("/dashboard/menu");
+  return {};
+}
+
+// A single emoji next to the category name on the customer menu. Any short
+// string is accepted (emoji are typically 1-4 UTF-16 code units after
+// combining marks/ZWJ sequences) — capped generously rather than validated
+// against a strict emoji regex, which is more trouble than it's worth here.
+export async function updateCategoryIcon(
+  categoryId: string,
+  icon: string,
+): Promise<MenuActionState> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+  const owned = await assertCategoryOwned(categoryId, authz.user.id);
+  if (!owned) return { error: "Category not found." };
+
+  const clean = icon.trim().slice(0, 8);
+  await prisma.menuCategory.update({
+    where: { id: categoryId },
+    data: { icon: clean || null },
+  });
+  revalidatePath("/dashboard/menu");
+  return {};
+}
+
+export async function updateItemBadges(
+  itemId: string,
+  badges: string[],
+): Promise<MenuActionState> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+  const owned = await assertItemOwned(itemId, authz.user.id);
+  if (!owned) return { error: "Item not found." };
+
+  const clean = badges.filter((b) => BADGE_SET.has(b)).slice(0, BADGE_VALUES.length);
+  await prisma.menuItem.update({
+    where: { id: itemId },
+    data: { badges: clean },
   });
   revalidatePath("/dashboard/menu");
   return {};

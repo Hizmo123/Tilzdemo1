@@ -5,7 +5,11 @@ import { gstBreakdown, formatAbn, type ReceiptData } from "@/lib/receipts";
 // render inside server components (customer and owner receipt pages). GST is
 // shown as the inclusive component (total / 11).
 export function TaxInvoice({ data }: { data: ReceiptData }) {
-  const { gstCents, exGstCents } = gstBreakdown(data.totalCents);
+  // A card surcharge is additional consideration for the supply, so it's
+  // folded into the taxable total for GST purposes rather than shown as a
+  // GST-free add-on.
+  const grandTotalCents = data.totalCents + data.surchargeCents;
+  const { gstCents, exGstCents } = gstBreakdown(grandTotalCents);
   const remaining = Math.max(0, data.totalCents - data.amountPaidCents);
   const fullyPaid = remaining <= 0;
   const issued = new Date(data.issuedAt);
@@ -71,15 +75,29 @@ export function TaxInvoice({ data }: { data: ReceiptData }) {
           value={formatCents(gstCents, data.currency)}
           muted
         />
+        {data.surchargeCents > 0 && (
+          <Row
+            label="Card surcharge (inc. GST)"
+            value={formatCents(data.surchargeCents, data.currency)}
+            muted
+          />
+        )}
         <Row
           label="Total (inc GST)"
-          value={formatCents(data.totalCents, data.currency)}
+          value={formatCents(grandTotalCents, data.currency)}
           bold
         />
         {data.tipCents > 0 && (
           <Row
             label="Tip"
             value={formatCents(data.tipCents, data.currency)}
+            muted
+          />
+        )}
+        {data.refundedCents > 0 && (
+          <Row
+            label="Refunded"
+            value={`−${formatCents(data.refundedCents, data.currency)}`}
             muted
           />
         )}
@@ -93,7 +111,7 @@ export function TaxInvoice({ data }: { data: ReceiptData }) {
                 {p.provider === "counter" ? "Paid at counter" : `Paid (${p.provider})`}
               </span>
               <span className="tabular-nums">
-                {formatCents(p.amountCents + p.tipCents, data.currency)}
+                {formatCents(p.amountCents + p.tipCents + p.surchargeCents, data.currency)}
               </span>
             </div>
           ))}

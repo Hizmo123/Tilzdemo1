@@ -57,7 +57,7 @@ export function Billing({
             <div
               key={p.tier}
               className={`rounded-2xl border bg-surface p-6 flex flex-col ${
-                p.tier === "VENUE" ? "border-2 border-pine" : "border-line"
+                p.tier === "STANDARD" ? "border-2 border-pine" : "border-line"
               }`}
             >
               <h3 className="font-display text-xl font-semibold tracking-tight">
@@ -91,12 +91,12 @@ export function Billing({
                 className={`mt-6 rounded-xl py-3 font-medium ${
                   isCurrent
                     ? "bg-paper text-muted cursor-default"
-                    : p.tier === "VENUE"
+                    : p.tier === "STANDARD"
                       ? "bg-pine text-white hover:bg-pine-deep"
                       : "border border-line hover:border-ink/30"
                 }`}
               >
-                {isCurrent ? "Current plan" : p.priceCents === 0 ? "Switch to Starter" : "Choose"}
+                {isCurrent ? "Current plan" : p.priceCents === 0 ? "Switch to Free" : "Choose"}
               </button>
             </div>
           );

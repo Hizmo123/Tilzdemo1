@@ -5,6 +5,7 @@ import {
   timingSafeEqual,
   randomInt,
 } from "crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 
@@ -28,11 +29,16 @@ const LOCKOUT_MINUTES = 15;
 const SESSION_TTL_HOURS = 12;
 const COOKIE_NAME = "tillz_staff";
 
-// The signing key reuses the existing server secret so no new env var is needed.
-// For production a dedicated STAFF_SESSION_SECRET would be cleaner.
+// Prefers a dedicated secret so a leak of the staff-session signing path
+// can't also be used to derive/replay against SUPABASE_SECRET_KEY, which has
+// full admin access to the whole database and storage. Falls back to the
+// Supabase key so existing deployments keep working without a config change —
+// but set STAFF_SESSION_SECRET (any long random string) in production.
 function signingKey(): string {
-  const key = process.env.SUPABASE_SECRET_KEY;
-  if (!key) throw new Error("SUPABASE_SECRET_KEY is required for staff sessions");
+  const key = process.env.STAFF_SESSION_SECRET ?? process.env.SUPABASE_SECRET_KEY;
+  if (!key) {
+    throw new Error("STAFF_SESSION_SECRET (or SUPABASE_SECRET_KEY) is required for staff sessions");
+  }
   return key;
 }
 
@@ -113,9 +119,11 @@ export async function clearStaffSession() {
 }
 
 // Resolves the current staff session to a live, active StaffAccount, or null.
-// Re-checks the DB every time so a deactivated staff member loses access
-// immediately, even with a still-valid cookie.
-export async function getStaffSession() {
+// Re-checks the DB every time (still per-request only — never cached across
+// requests) so a deactivated staff member loses access immediately, even with
+// a still-valid cookie. Cached per request so a page and any component it
+// renders can both ask for the session without paying for a second lookup.
+export const getStaffSession = cache(async () => {
   const jar = await cookies();
   const payload = verify(jar.get(COOKIE_NAME)?.value);
   if (!payload) return null;
@@ -126,12 +134,12 @@ export async function getStaffSession() {
   });
   if (!staff || staff.restaurantId !== payload.restaurantId) return null;
   return { staff, restaurant: staff.restaurant };
-}
+});
 
 // ---- Login with lockout -----------------------------------------------------
 
 export type StaffLoginResult =
-  | { ok: true }
+  | { ok: true; role: string; assignedStation: string | null }
   | { ok: false; error: string };
 
 // Verifies a PIN for a named staff account, applying attempt lockout. On success
@@ -175,7 +183,7 @@ export async function staffLogin(
     data: { failedAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
   });
   await setStaffSession(staff.id, restaurantId);
-  return { ok: true };
+  return { ok: true, role: staff.role, assignedStation: staff.assignedStation };
 }
 
 // Resolves the current staff session and confirms it belongs to the given venue

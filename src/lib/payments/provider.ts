@@ -22,9 +22,28 @@ export interface PaymentResult {
   test: boolean;
 }
 
+export type RefundStatusResult = "PENDING" | "SUCCEEDED" | "FAILED";
+
+export interface RefundInput {
+  // The original payment's providerRef — refunds always target a real
+  // processor payment, never the bill in aggregate.
+  providerRef: string;
+  amountCents: number;
+  idempotencyKey: string;
+  reason: string;
+}
+
+export interface RefundResult {
+  providerRef: string;
+  status: RefundStatusResult;
+  amountCents: number;
+  test: boolean;
+}
+
 export interface PaymentProvider {
   readonly name: string;
   readonly isTest: boolean;
   createPayment(input: CreatePaymentInput): Promise<PaymentResult>;
   getPaymentStatus(providerRef: string): Promise<PaymentIntentStatus>;
+  refundPayment(input: RefundInput): Promise<RefundResult>;
 }

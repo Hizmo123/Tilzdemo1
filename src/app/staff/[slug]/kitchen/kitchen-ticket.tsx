@@ -2,25 +2,36 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { advanceOrder, markPickupPaid } from "./actions";
+import { advanceOrder, refireTicketItems } from "./actions";
+import { staffSetAvailable } from "../menu/actions";
 import type { OrderStatusName } from "@/lib/bills";
 
-type Ticket = {
+type TicketItem = {
+  id: string;
+  menuItemId: string | null;
+  name: string;
+  quantity: number;
+  allergens: string[];
+  available: boolean;
+  note: string | null;
+};
+
+export type Ticket = {
   id: string;
   orderNumber: number | null;
   tableLabel: string;
-  isTakeaway: boolean;
   billId: string;
   status: OrderStatusName;
   source: string;
+  isRefire: boolean;
   note: string | null;
   prepay: boolean;
   billPaid: boolean;
   minutesAgo: number;
-  items: { id: string; name: string; quantity: number }[];
+  items: TicketItem[];
 };
 
-const NEXT_LABEL: Partial<Record<OrderStatusName, { to: OrderStatusName; label: string }>> = {
+export const NEXT_LABEL: Partial<Record<OrderStatusName, { to: OrderStatusName; label: string }>> = {
   SUBMITTED: { to: "PREPARING", label: "Start preparing" },
   PREPARING: { to: "READY", label: "Mark ready" },
   READY: { to: "SERVED", label: "Mark served" },
@@ -32,7 +43,15 @@ const STATUS_STYLE: Record<string, string> = {
   READY: "bg-pine-soft text-pine-deep",
 };
 
-export function KitchenTicket({ slug, ticket }: { slug: string; ticket: Ticket }) {
+export function KitchenTicket({
+  slug,
+  ticket,
+  shortcutNumber,
+}: {
+  slug: string;
+  ticket: Ticket;
+  shortcutNumber?: number;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +60,24 @@ export function KitchenTicket({ slug, ticket }: { slug: string; ticket: Ticket }
     setError(null);
     start(async () => {
       const res = await advanceOrder(slug, ticket.id, to);
+      if (res && "error" in res && res.error) setError(res.error);
+      else router.refresh();
+    });
+  }
+
+  function eighty6(menuItemId: string) {
+    setError(null);
+    start(async () => {
+      const res = await staffSetAvailable(slug, menuItemId, false);
+      if (res && "error" in res && res.error) setError(res.error);
+      else router.refresh();
+    });
+  }
+
+  function refireLine(billItemId: string, name: string) {
+    setError(null);
+    start(async () => {
+      const res = await refireTicketItems(slug, [billItemId], `Re-fire: ${name}`);
       if (res && "error" in res && res.error) setError(res.error);
       else router.refresh();
     });
@@ -63,13 +100,26 @@ export function KitchenTicket({ slug, ticket }: { slug: string; ticket: Ticket }
       className={`rounded-[var(--radius-card)] border border-line ${ageBorder} bg-surface p-4 flex flex-col`}
     >
       <div className="flex items-center justify-between mb-2 gap-2">
-        <span className="font-display text-lg font-semibold tracking-tight">
+        <span className="font-display text-lg font-semibold tracking-tight flex items-center gap-2">
+          {shortcutNumber && (
+            <span
+              title={`Press ${shortcutNumber} to bump this ticket`}
+              className="shrink-0 w-6 h-6 rounded-full bg-paper border border-line text-xs font-medium flex items-center justify-center text-muted"
+            >
+              {shortcutNumber}
+            </span>
+          )}
           {ticket.orderNumber != null && (
             <span className="text-muted">#{ticket.orderNumber} · </span>
           )}
           {ticket.tableLabel}
         </span>
         <div className="flex items-center gap-1.5 shrink-0">
+          {ticket.isRefire && (
+            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-danger-soft text-danger font-semibold">
+              ↻ Re-fire
+            </span>
+          )}
           {ticket.prepay && (
             <span
               className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold ${
@@ -95,11 +145,46 @@ export function KitchenTicket({ slug, ticket }: { slug: string; ticket: Ticket }
         {ticket.source === "STAFF" ? " · staff" : ""}
       </p>
 
-      <ul className="space-y-1 mb-3 flex-1">
+      <ul className="space-y-2 mb-3 flex-1">
         {ticket.items.map((it) => (
-          <li key={it.id} className="text-sm">
-            <span className="font-medium tabular-nums">{it.quantity}×</span>{" "}
-            {it.name}
+          <li key={it.id}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm">
+                <span className="font-medium tabular-nums">{it.quantity}×</span> {it.name}
+              </span>
+              <span className="flex items-center gap-1 shrink-0">
+                {it.menuItemId && it.available && (
+                  <button
+                    disabled={pending}
+                    onClick={() => eighty6(it.menuItemId!)}
+                    title="86 this item — mark sold out"
+                    className="text-[10px] rounded border border-line px-1.5 py-0.5 text-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
+                  >
+                    86
+                  </button>
+                )}
+                <button
+                  disabled={pending}
+                  onClick={() => refireLine(it.id, it.name)}
+                  title="Re-fire — needs re-cooking"
+                  className="text-[10px] rounded border border-line px-1.5 py-0.5 text-muted hover:border-ink/30 disabled:opacity-50"
+                >
+                  ↻
+                </button>
+              </span>
+            </div>
+            {it.note && (
+              <p className="mt-0.5 text-xs text-amber-800 bg-amber-50 rounded px-2 py-0.5 inline-block">
+                Note: {it.note}
+              </p>
+            )}
+            {/* Allergens must be unmissable, not a small grey tag — this is a
+                safety warning, not metadata. */}
+            {it.allergens.length > 0 && (
+              <p className="mt-0.5 text-xs font-semibold text-danger bg-danger-soft rounded px-2 py-1 inline-block">
+                ⚠ Contains: {it.allergens.join(", ")}
+              </p>
+            )}
           </li>
         ))}
       </ul>
@@ -112,28 +197,12 @@ export function KitchenTicket({ slug, ticket }: { slug: string; ticket: Ticket }
 
       {error && <p className="text-xs text-danger mb-2">{error}</p>}
 
-      {ticket.isTakeaway && !ticket.billPaid && (
-        <button
-          disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const res = await markPickupPaid(slug, ticket.billId);
-              if (res && "error" in res && res.error) setError(res.error);
-              else router.refresh();
-            })
-          }
-          className="mb-2 w-full rounded-lg border border-pine text-pine-deep py-2 text-sm font-medium hover:bg-pine-soft disabled:opacity-50"
-        >
-          {pending ? "…" : "Mark paid (counter)"}
-        </button>
-      )}
-
       <div className="flex gap-2">
         {next && (
           <button
             disabled={pending}
             onClick={() => move(next.to)}
-            className="flex-1 rounded-lg bg-pine text-white py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-50"
+            className="flex-1 rounded-lg bg-pine text-white py-3 text-base font-medium hover:bg-pine-deep disabled:opacity-50 min-h-[48px]"
           >
             {pending ? "…" : next.label}
           </button>
@@ -141,7 +210,7 @@ export function KitchenTicket({ slug, ticket }: { slug: string; ticket: Ticket }
         <button
           disabled={pending}
           onClick={() => move("CANCELLED")}
-          className="rounded-lg border border-line px-3 py-2 text-sm text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50"
+          className="rounded-lg border border-line px-3 py-3 text-sm text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50 min-h-[48px]"
         >
           Cancel
         </button>

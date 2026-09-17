@@ -7,6 +7,7 @@ import { signIn, type AuthState } from "../actions";
 import { createClient } from "@/lib/supabase/client";
 import { Label, Input, FormMessage } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { GoogleSignInButton } from "../google-sign-in-button";
 
 const initial: AuthState = {};
 
@@ -87,13 +88,16 @@ export default function LoginPage() {
         <span className="flex-1 h-px bg-line" />
       </div>
 
-      <button
-        onClick={signInWithPasskey}
-        disabled={pkPending}
-        className="w-full rounded-xl border border-line py-3 font-medium hover:border-ink/30 disabled:opacity-50"
-      >
-        {pkPending ? "Waiting for your device…" : "Sign in with fingerprint / Face ID"}
-      </button>
+      <div className="space-y-2">
+        <GoogleSignInButton />
+        <button
+          onClick={signInWithPasskey}
+          disabled={pkPending}
+          className="w-full rounded-xl border border-line py-3 font-medium hover:border-ink/30 disabled:opacity-50"
+        >
+          {pkPending ? "Waiting for your device…" : "Sign in with fingerprint / Face ID"}
+        </button>
+      </div>
       {pkError && <p className="text-sm text-danger mt-2 text-center">{pkError}</p>}
 
       <p className="text-sm text-muted mt-6 text-center">

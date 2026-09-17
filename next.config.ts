@@ -22,6 +22,23 @@ const nextConfig: NextConfig = {
   devIndicators: {
     position: "bottom-right",
   },
+  // Lets the browser map minified crash stack traces back to real file/line
+  // in devtools, so intermittent client-side errors are debuggable from a
+  // user's report instead of guesswork. Source is already public via the JS
+  // bundle either way; this just makes it readable.
+  productionBrowserSourceMaps: true,
+  // Strips console.log/info/debug from production client bundles (server
+  // code is untouched — this only affects what ships to the browser).
+  // console.error/warn survive so real client-side failures still surface.
+  compiler: {
+    removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
+  },
+  images: {
+    // Wildcard subdomain, not the specific project ref, so this doesn't
+    // silently break if the Supabase project is ever swapped — menu/logo/
+    // background images are all served from *.supabase.co Storage URLs.
+    remotePatterns: [{ protocol: "https", hostname: "**.supabase.co", pathname: "/storage/v1/object/public/**" }],
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

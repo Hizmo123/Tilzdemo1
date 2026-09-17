@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { generateToken } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
+import { canCreateTable } from "@/lib/entitlements";
 
 export type TableActionState = { error?: string };
 
@@ -30,6 +31,14 @@ export async function createTable(
   const authz = await getAuthz();
   if (!authz.can("tables:manage"))
     return { error: "You don't have permission to manage tables." };
+
+  // Table count is a plan limit (scale, not the core loop) — see
+  // lib/entitlements.ts. Only blocks creating a NEW table past the limit;
+  // existing tables are never hidden or disabled by this.
+  if (authz.membership) {
+    const check = await canCreateTable(authz.membership.organizationId);
+    if (!check.allowed) return { error: check.reason };
+  }
 
   const { location } = await requireActiveLocation();
 

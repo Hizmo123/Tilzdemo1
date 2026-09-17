@@ -1,17 +1,23 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { roleCan, type Permission } from "@/lib/rbac";
 
 // Returns the current Supabase user or null. Uses getUser() (not getSession())
-// so the token is verified against Supabase, not just read from the cookie.
-export async function getUser() {
+// so the token is verified against Supabase — a real network round trip, not
+// just a local cookie read. Wrapped in React's cache() so the many call sites
+// that independently need the user (the dashboard layout, a page, and that
+// page's own permission check) share ONE verification per request instead of
+// each paying for their own — a page under /dashboard used to trigger this
+// two or three times over before rendering anything.
+export const getUser = cache(async () => {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   return user;
-}
+});
 
 // Use in Server Components / actions that require a signed-in user.
 export async function requireUser() {
@@ -22,8 +28,10 @@ export async function requireUser() {
 
 // The tenant context for the signed-in user: their membership, organization,
 // and (for M1) the first restaurant. Everything server-side scopes to this —
-// never to an id sent from the browser.
-export async function getTenantContext() {
+// never to an id sent from the browser. Cached per request: getAuthz(),
+// getActiveLocation() and any page that also calls this directly all resolve
+// to the same in-flight/resolved promise instead of re-querying Prisma.
+export const getTenantContext = cache(async () => {
   const user = await requireUser();
 
   const membership = await prisma.membership.findFirst({
@@ -44,7 +52,7 @@ export async function getTenantContext() {
   });
 
   return { user, membership };
-}
+});
 
 // Authorization context: the signed-in user's role plus a `can()` check against
 // the permission matrix. Used by server actions to gate mutations, and by the

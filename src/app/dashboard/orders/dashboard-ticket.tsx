@@ -11,7 +11,7 @@ type Ticket = {
   status: OrderStatusName;
   source: string;
   minutesAgo: number;
-  items: { id: string; name: string; quantity: number }[];
+  items: { id: string; name: string; quantity: number; note: string | null }[];
 };
 
 const NEXT_LABEL: Partial<Record<OrderStatusName, { to: OrderStatusName; label: string }>> = {
@@ -65,6 +65,7 @@ export function DashboardTicket({ ticket }: { ticket: Ticket }) {
           <li key={it.id} className="text-sm">
             <span className="font-medium tabular-nums">{it.quantity}×</span>{" "}
             {it.name}
+            {it.note && <span className="block text-xs text-amber-800">Note: {it.note}</span>}
           </li>
         ))}
       </ul>

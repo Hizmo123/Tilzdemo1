@@ -36,6 +36,12 @@ enum PaymentStatus {
   FAILED
 }
 
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
 enum InviteStatus {
   PENDING
   ACCEPTED
@@ -45,8 +51,8 @@ enum InviteStatus {
 
 enum PlanTier {
   FREE
-  VENUE
-  GROUP
+  STANDARD
+  PRO
 }
 
 enum OrderStatus {
@@ -85,6 +91,21 @@ model Organization {
   planStatus  String       @default("none")
   cardLast4   String?
   subscribedAt DateTime?
+  // Set the moment a subscription lapses (payment failed / cancelled) — null
+  // means current. Nothing writes this yet: real Stripe Billing webhooks
+  // (Delivery 2) will, once those are connected. See lib/entitlements.ts for
+  // what happens once it's set: existing service and read access keep
+  // running through a grace period, and only past that does new ordering
+  // stop — never an instant, mid-service cutoff.
+  subscriptionLapsedAt DateTime?
+  // A self-service "please delete my account" request, not an instant purge.
+  // Paid bills are tax invoices — Australian tax law requires keeping those
+  // for 5 years, so financial records survive this request regardless; the
+  // request records the owner's intent and lets support finish the deletion
+  // once that's accounted for, rather than either doing nothing or silently
+  // destroying records the venue may still legally need. See lib/account.ts.
+  deletionRequestedAt      DateTime?
+  deletionRequestedByEmail String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   restaurants Restaurant[]
@@ -101,11 +122,32 @@ model Restaurant {
   name           String
   slug           String          @unique
   abn            String?
+  // Set once `abn` is confirmed against the Australian Business Register
+  // (see lib/abr.ts) — a real "this is a registered business" check, unlike
+  // the old phone-verification gate. abnVerifiedValue is the exact digits
+  // that were verified, kept separate from `abn` itself so a later manual
+  // edit to `abn` (via the plain settings form) is detected as no longer
+  // matching and correctly drops the verified badge rather than carrying it
+  // over onto an ABN that was never actually checked.
+  abnVerifiedAt    DateTime?
+  abnVerifiedValue String?
+  abnVerifiedName  String?
+  abnVerifiedGst   Boolean?
   venueType      String?
-  // The owner's mobile, set only after SMS verification at signup.
+  // Optional contact number — NOT a verification mechanism (see
+  // abnVerifiedAt for that). Nothing in the app gates on this being set.
   ownerPhone     String?
   currency       String          @default("AUD")
   timezone       String          @default("Australia/Sydney")
+  // ISO 3166-1 alpha-2 (e.g. "AU"). Gates which country-specific settings show
+  // up — right now that's just the tax step's ABN field (AU only); other
+  // countries get a "not set up yet" placeholder until real per-country rules
+  // are added. See lib/countries.ts.
+  country        String          @default("AU")
+  // ISO 639-1 (e.g. "en"). Only translates the fixed strings on the
+  // customer-facing ordering page (see lib/languages.ts) — menu item names/
+  // descriptions are whatever the owner typed, not machine-translated.
+  language       String          @default("en")
   logoUrl        String?
   coverUrl       String?
   bgImageUrl     String?
@@ -122,13 +164,111 @@ model Restaurant {
   // When customers pay: "after" = running tab, pay when ready (default);
   // "before" = prepay, prompt to pay as soon as an order is placed.
   paymentTiming    String        @default("after")
+  // Opt-in, stricter variant of paymentTiming "before": the customer page
+  // never treats a placed-but-unpaid order as "sent to the kitchen, pay
+  // whenever" — it's presented as blocked on payment, no soft skip. Only
+  // meaningful when customerPayment is on; off by default, an alternative
+  // alongside the normal ordering flow, not a replacement for it.
+  requirePaymentBeforeOrder Boolean @default(false)
   // Monotonic per-venue counter used to allocate human order numbers.
   orderSeq         Int           @default(0)
   // Opening hours as JSON: 7 entries [{day:0..6 (0=Sun), closed:bool,
   // open:"HH:MM", close:"HH:MM"}]. Null = always open.
   hours            Json?
-  // Whether guests can place pickup/takeaway orders (not tied to a table).
-  takeawayEnabled  Boolean       @default(false)
+  // How guests typically order in this venue (table service / QR / counter /
+  // mixed). Informational — doesn't itself drive settings, but is used to
+  // prioritise dashboard/sidebar emphasis via experienceMode.
+  serviceStyle     String?
+  // The onboarding "what should Tillz do for you" preset (digital_menu /
+  // order_and_pay / payment_only / custom). Drives the dashboard sidebar
+  // ordering; the underlying toggles above are what actually control
+  // product behaviour.
+  experienceMode   String?
+  // Which bill-splitting methods guests can use at checkout. Enforced
+  // server-side in payBillAmount/payBillItems, not just hidden in the UI.
+  splitMethods     String[]      @default(["full", "equal", "items", "custom"])
+  // Whether the kitchen board chimes on a new ticket.
+  kitchenChime     Boolean       @default(true)
+  // Venue-defined prep station names (e.g. ["Kitchen", "Barista", "Grill"]),
+  // offered as the choices in the category/item station pickers. Free text
+  // stored on MenuCategory.station / MenuItem.station still works even if it
+  // doesn't match one of these (e.g. legacy data, or a station since
+  // renamed) — this list is just what the pickers suggest, not a foreign key.
+  kitchenStations  String[]      @default(["Kitchen"])
+  // Whether the "text me when it's ready" capture appears on the customer's
+  // order-placed screen. Independent of whether Twilio is actually configured.
+  orderReadySmsEnabled Boolean   @default(true)
+  // Card/button corner rounding for the customer ordering page: sharp/soft/round.
+  cornerStyle      String        @default("soft")
+  // Optional short line shown under the venue name on the customer page.
+  tagline          String?
+  // How the customer menu is laid out: "list" (compact rows), "grid"
+  // (photo-forward cards), "magazine" (large editorial section headers, more
+  // breathing room), or "minimal" (text-only, ignores item photos even if
+  // uploaded — fastest scan for a quick-service counter).
+  menuLayout       String        @default("list")
+  // Card presentation, layered on top of menuLayout — a JSON blob (not one
+  // column each) since these five sub-choices are only ever read/written
+  // together and never queried individually:
+  //   imagePosition: "left" | "top" | "none"
+  //   imageAspect:   "square" | "4:3" | "16:9"
+  //   border:        "none" | "thin" | "bold"
+  //   shadow:        "none" | "soft" | "lifted"
+  //   divider:       "none" | "line" | "space"
+  // Null = use menuLayout's own sensible defaults (see lib/menu-style.ts).
+  cardStyle        Json?
+  // compact | comfortable | large — scales item name/price/description text
+  // size on top of the existing font PAIRING (fontTheme), which only chooses
+  // the typeface, not its scale.
+  typeScale        String        @default("comfortable")
+  // plain | underline | pill | bold-caps — category header treatment.
+  sectionHeaderStyle String      @default("plain")
+  // pill | rounded | square — independent of cornerStyle, which governs
+  // cards/dialogs; this is specifically the Add-to-cart / primary CTA shape.
+  buttonShape      String        @default("rounded")
+  // solid | outline | soft — the same buttons' fill treatment.
+  buttonFill       String        @default("solid")
+  // solid | pattern | photo — background treatment. "photo" is the existing
+  // bgImageUrl upload; "pattern" picks one of a small built-in set (see
+  // lib/menu-style.ts) tinted to the theme automatically, no upload needed.
+  bgTreatment      String        @default("solid")
+  bgPatternKey     String?
+  // 0-100 — how strong the readability overlay is over a photo background.
+  // Was a fixed value before; now the venue controls it because a busy photo
+  // needs more overlay than a calm one, and a dark theme needs less than a
+  // light one.
+  bgOverlayStrength Int          @default(55)
+  // QR styling (lib/qr.ts). Colours default to the venue's theme when unset
+  // (null) rather than duplicating brandColor here.
+  qrForegroundColor String?
+  qrBackgroundColor String?
+  qrCornerStyle    String        @default("square")
+  qrEmbedLogo      Boolean       @default(false)
+  // minimal | branded | bold — which printable table-card template QR
+  // downloads (table QR, staff sign-in, kitchen screen) use by default.
+  qrCardTemplate   String        @default("branded")
+  // Optional social/web links shown on the customer ordering page footer.
+  instagramHandle  String?
+  websiteUrl       String?
+  // Whether this venue uses Square today ("square" | "none" | null =
+  // unanswered). Square is the only POS asked about — the only one with a
+  // real integration on the roadmap (Delivery 1b). posProviderOther is
+  // legacy from an earlier multi-brand picker and is no longer written.
+  posProvider      String?
+  posProviderOther String?
+  // Captured intent to connect Square once that connection exists — settles
+  // card payments into the venue's existing Square account and offers a
+  // one-time menu import. Explicitly NOT order sync or ongoing menu sync.
+  squareConnectInterest Boolean @default(false)
+  // Card surcharge (spec: disclosed before confirm, its own line on the bill
+  // and tax invoice, included in the GST calc). Off by default — AU venues
+  // opt in. Stored in basis points (170 = 1.70%) for exact integer maths at
+  // charge time; never a float.
+  surchargeEnabled     Boolean @default(false)
+  surchargeBasisPoints Int     @default(0)
+  // Set once the onboarding wizard finishes. Backfilled to createdAt for rows
+  // that predate the wizard so nobody is re-onboarded by this migration.
+  onboardingCompletedAt DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   locations      Location[]
@@ -136,6 +276,18 @@ model Restaurant {
   staffAccounts  StaffAccount[]
 
   @@index([organizationId])
+}
+
+// In-progress onboarding wizard answers, keyed by the Supabase auth user id.
+// Exists only because no Restaurant/Organization/Membership row exists yet at
+// this point — the whole wizard is answered before completeOnboarding creates
+// them all atomically in one transaction. Deleted the moment onboarding
+// completes, in that same transaction. Lets a mid-wizard refresh resume with
+// every selection intact.
+model OnboardingDraft {
+  userId    String   @id
+  answers   Json
+  updatedAt DateTime @updatedAt
 }
 
 // A physical site. Tables hang off Location.
@@ -164,9 +316,6 @@ model Table {
   label      String
   section    String?
   active     Boolean   @default(true)
-  // A per-location pseudo-table that holds pickup/takeaway bills. Many open
-  // bills can share it (unlike real tables), one per pickup order.
-  isTakeaway Boolean   @default(false)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   qrTokens   QrToken[]
@@ -202,8 +351,13 @@ model MenuCategory {
   availableFrom String?
   availableTo   String?
   // Which prep station this category routes to (e.g. "kitchen", "bar",
-  // "coffee"). Null = the default kitchen board.
+  // "coffee"). Null = the default kitchen board. Individual items can
+  // override this — see MenuItem.station.
   station       String?
+  // A single emoji shown next to the category name on the customer menu
+  // (e.g. "☕"). Purely cosmetic, no upload required — the fastest way for a
+  // venue to make a category feel like theirs.
+  icon          String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   items        MenuItem[]
@@ -221,6 +375,15 @@ model MenuItem {
   imageUrl    String?
   available   Boolean      @default(true)
   allergens   String[]     @default([])
+  // Small merchandising tags — "popular", "new", "chefs_pick", "spicy",
+  // "vegetarian", "vegan", "gluten_free" (see lib/menu-badges.ts for the
+  // canonical list). Shown as coloured chips on the customer menu.
+  badges      String[]     @default([])
+  // Per-item prep station override — null means "use the category's
+  // station" (see MenuCategory.station). Lets one item in an otherwise
+  // kitchen-routed category go to a different board, e.g. a coffee-flavoured
+  // dessert still going to the barista.
+  station     String?
   sortOrder   Int          @default(0)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -273,13 +436,22 @@ model Bill {
   totalCents     Int        @default(0)
   amountPaidCents Int       @default(0)
   tipCents       Int        @default(0)
-  // Takeaway/pickup orders aren't tied to a physical table sitting.
-  isTakeaway     Boolean    @default(false)
+  // Cumulative amount refunded across all this bill's payments — display/
+  // reconciliation only. Refunds never change `status` or `paidAt` (a
+  // refund is a reversal on a settled bill, not a reopened tab — see
+  // refundPayment in lib/bills.ts for why that matters against the
+  // one-open-bill-per-table index).
+  refundedCents  Int        @default(0)
   customerName   String?
   // Optional mobile for an "order ready" SMS. E.164 (+61...).
   customerPhone  String?
   // Set once the "order ready" SMS has gone out, so it fires only once.
   readyNotifiedAt DateTime?
+  // Last email address a receipt was sent to, and when — lets the venue see
+  // whether/where a copy went out, and pre-fills the "email me a copy" form
+  // on repeat requests. Never required; a bill can be paid with no email.
+  receiptEmail      String?
+  receiptEmailSentAt DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   paidAt         DateTime?
@@ -288,7 +460,17 @@ model Bill {
   orders         Order[]
 
   @@index([tableId])
-  @@index([status])
+  @@index([paidAt])
+  // The actual shape of the app's single most common query — the customer
+  // page and the staff table page both do WHERE tableId = ? AND status IN
+  // (OPEN, PARTIALLY_PAID) on every load. The separate single-column indexes
+  // above don't combine into this as efficiently as one index that matches
+  // it directly.
+  @@index([tableId, status])
+  // Analytics, invoices, and the weekly report all filter WHERE status =
+  // PAID AND paidAt BETWEEN ? AND ? — replaces the standalone `status` index
+  // (a strict prefix of this one, so nothing that used it loses coverage).
+  @@index([status, paidAt])
 }
 
 // A line on a bill. name and unitPriceCents are SNAPSHOTS taken when the item
@@ -313,6 +495,9 @@ model BillItem {
   comped         Boolean   @default(false)
   // Prep station snapshot (from the item's category) for kitchen routing.
   station        String?
+  // Free-text customer annotation on this specific line, e.g. "no fries" —
+  // distinct from Order.note, which is one note for the whole send.
+  note           String?
   lineTotalCents Int
   orderId        String?
   order          Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
@@ -341,6 +526,12 @@ model Order {
   // both are false the order is released to the kitchen (SUBMITTED).
   awaitingApproval Boolean @default(false)
   awaitingPayment  Boolean @default(false)
+  // True for a ticket created by re-firing already-billed item(s) — a dropped
+  // plate or a send-back that needs re-cooking. Its BillItems are re-pointed
+  // from their original order rather than duplicated, so the bill is
+  // completely unaffected either way; this flag exists purely so the kitchen
+  // screen can badge it distinctly from a fresh order.
+  isRefire     Boolean     @default(false)
   note         String?
   // Idempotency: the client sends a stable id per "place order" tap so a
   // double-tap or a retried request can never create the same order twice.
@@ -350,7 +541,15 @@ model Order {
   servedAt     DateTime?
   items        BillItem[]
 
-  @@index([restaurantId, status])
+  // Covers getKitchenOrders' WHERE restaurantId = ? AND status IN (...)
+  // ORDER BY createdAt — the exact shape of every kitchen-screen load.
+  @@index([restaurantId, status, createdAt])
+  // Covers getRecentlyServed's WHERE restaurantId = ? AND status = SERVED
+  // AND servedAt >= ? ORDER BY servedAt DESC — the other query every kitchen
+  // page load runs. Separate from the index above since the trailing sort
+  // column differs (createdAt vs servedAt); one composite index can't serve
+  // both efficiently.
+  @@index([restaurantId, status, servedAt])
   @@index([billId])
 }
 
@@ -362,16 +561,52 @@ model Payment {
   bill           Bill          @relation(fields: [billId], references: [id], onDelete: Cascade)
   amountCents    Int
   tipCents       Int           @default(0)
+  // Card surcharge charged on top of amountCents+tipCents for this specific
+  // payment (spec: surcharge is a property of the transaction, so it's
+  // tracked per-payment rather than pre-baked into the bill total — this
+  // also makes it correct under split payments, where each payer's own
+  // charge carries its own surcharge).
+  surchargeCents Int           @default(0)
   currency       String        @default("AUD")
   status         PaymentStatus @default(PENDING)
   provider       String        @default("mock")
   providerRef    String?
   idempotencyKey String        @unique
+  // Cached running total of successful refunds against this payment. Kept in
+  // sync via the same compare-and-swap pattern as Bill.amountPaidCents.
+  refundedCents  Int           @default(0)
+  // Where the money physically is once the processor pays the venue out.
+  // Populated by a payout/transfer webhook once real processors land; stays
+  // null under the mock provider.
+  payoutStatus   String?
   test           Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  refunds        Refund[]
 
   @@index([billId])
+}
+
+// A refund against a specific payment (never against the bill in aggregate —
+// so it always ties back to a real processor payment id for reconciliation).
+// Full or partial; amountCents can be less than the payment's total so a
+// venue can refund, say, just one item's worth without touching the rest.
+model Refund {
+  id             String       @id @default(cuid())
+  paymentId      String
+  payment        Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amountCents    Int
+  reason         String
+  status         RefundStatus @default(PENDING)
+  provider       String
+  providerRef    String?
+  idempotencyKey String       @unique
+  actorUserId    String
+  actorEmail     String
+  test           Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  @@index([paymentId])
 }
 
 // A pending invitation for someone to join an organization with a role. The
@@ -423,6 +658,14 @@ model StaffAccount {
   restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   name           String
   role           Role       @default(STAFF)
+  // Locks a KITCHEN-role account to one prep station (from
+  // Restaurant.kitchenStations) — on login it goes straight to that
+  // station's board instead of the shared kitchen screen, and the kitchen
+  // page enforces the filter server-side rather than trusting the URL, so
+  // it's a real per-station device, not just a bookmarked filter. Null (the
+  // default, and the only sensible value for non-KITCHEN roles) sees every
+  // station, same as today.
+  assignedStation String?
   pinHash        String
   active         Boolean    @default(true)
   failedAttempts Int        @default(0)

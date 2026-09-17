@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { buildReceiptData } from "@/lib/receipts";
 import { TaxInvoice } from "@/components/receipt/tax-invoice";
 import { PrintButton } from "@/components/receipt/print-button";
+import { EmailReceiptForm } from "@/components/receipt/email-receipt-form";
+import { emailMyReceipt } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -73,14 +75,20 @@ export default async function CustomerReceiptPage({
     totalCents: bill.totalCents,
     amountPaidCents: bill.amountPaidCents,
     tipCents: bill.tipCents,
+    refundedCents: bill.refundedCents,
     payments: bill.payments,
   });
 
   return (
     <Shell backHref={`/v/${token}`}>
       <TaxInvoice data={data} />
-      <div className="mt-4 flex justify-center">
+      <div className="mt-4 flex flex-col items-center gap-3">
         <PrintButton />
+        <EmailReceiptForm
+          action={emailMyReceipt.bind(null, token)}
+          initialEmail={bill.receiptEmail}
+          sentAt={bill.receiptEmailSentAt?.toISOString() ?? null}
+        />
       </div>
     </Shell>
   );

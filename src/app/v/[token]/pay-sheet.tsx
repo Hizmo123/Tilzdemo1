@@ -14,7 +14,9 @@ type BillItem = {
   lineTotalCents: number;
 };
 
-type Mode = "full" | "equal" | "items" | "custom";
+export type Mode = "full" | "equal" | "items" | "custom";
+
+const ALL_MODES: Mode[] = ["full", "equal", "items", "custom"];
 
 export function PaySheet({
   token,
@@ -25,6 +27,9 @@ export function PaySheet({
   initialMode = "full",
   tipEnabled = false,
   tipPresets = [],
+  surchargeEnabled = false,
+  surchargeBasisPoints = 0,
+  allowedModes = ALL_MODES,
   onClose,
   onPaid,
 }: {
@@ -36,11 +41,19 @@ export function PaySheet({
   initialMode?: Mode;
   tipEnabled?: boolean;
   tipPresets?: number[];
+  surchargeEnabled?: boolean;
+  surchargeBasisPoints?: number;
+  // Which split methods this venue offers. Hiding a tab here is presentation
+  // only — the server re-checks the same restriction, so this can never be
+  // the only thing standing between a guest and a disallowed payment mode.
+  allowedModes?: Mode[];
   onClose: () => void;
   onPaid: (amountCents: number, fullyPaid: boolean) => void;
 }) {
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>(initialMode);
+  const [mode, setMode] = useState<Mode>(
+    allowedModes.includes(initialMode) ? initialMode : allowedModes[0] ?? "full",
+  );
   const [people, setPeople] = useState(2);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [customValue, setCustomValue] = useState("");
@@ -93,6 +106,13 @@ export function PaySheet({
         ? (dollarsToCents(tipCustom) ?? 0)
         : Math.round((payBase * tipPreset) / 100);
 
+  // Preview only — disclosed here so the guest sees it before confirming, but
+  // the server always recomputes this from the venue's stored rate at charge
+  // time, so this number is never trusted for the actual charge.
+  const surchargeCents = surchargeEnabled
+    ? Math.round((Math.min(payBase, remainingCents) + tipCents) * surchargeBasisPoints / 10000)
+    : 0;
+
   function pay() {
     const amount = chosenAmount();
     if (mode === "items" && itemsTotal <= 0) {
@@ -109,7 +129,7 @@ export function PaySheet({
       const res =
         mode === "items"
           ? await payItems(token, itemSelections, tipCents)
-          : await payBill(token, amount, tipCents);
+          : await payBill(token, amount, tipCents, mode);
       if (res && "error" in res) {
         setError(res.error);
         router.refresh();
@@ -145,8 +165,11 @@ export function PaySheet({
             </span>
           </p>
 
-          {/* Mode tabs */}
-          <div className="grid grid-cols-4 gap-1 rounded-lg bg-paper p-1 mb-4 text-sm">
+          {/* Mode tabs — only the split methods this venue actually offers */}
+          <div
+            className="grid gap-1 rounded-lg bg-paper p-1 mb-4 text-sm"
+            style={{ gridTemplateColumns: `repeat(${allowedModes.length}, minmax(0, 1fr))` }}
+          >
             {(
               [
                 ["full", "Full"],
@@ -154,7 +177,9 @@ export function PaySheet({
                 ["items", "Items"],
                 ["custom", "Custom"],
               ] as [Mode, string][]
-            ).map(([m, label]) => (
+            )
+              .filter(([m]) => allowedModes.includes(m))
+              .map(([m, label]) => (
               <button
                 key={m}
                 onClick={() => {
@@ -329,6 +354,15 @@ export function PaySheet({
             </div>
           )}
 
+          {surchargeCents > 0 && (
+            <p className="mb-3 flex justify-between text-sm text-muted rounded-lg bg-paper px-3.5 py-2.5">
+              <span>Card surcharge</span>
+              <span className="tabular-nums text-ink">
+                +{formatCents(surchargeCents, currency)}
+              </span>
+            </p>
+          )}
+
           {error && (
             <p className="mb-3 rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
               {error}
@@ -342,7 +376,7 @@ export function PaySheet({
           >
             {paying
               ? "Processing…"
-              : `Pay ${formatCents(Math.min(payBase, remainingCents) + tipCents, currency)}${
+              : `Pay ${formatCents(Math.min(payBase, remainingCents) + tipCents + surchargeCents, currency)}${
                   tipCents > 0 ? ` (incl. ${formatCents(tipCents, currency)} tip)` : ""
                 } · test`}
           </button>

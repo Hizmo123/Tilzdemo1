@@ -4,6 +4,8 @@ import type {
   CreatePaymentInput,
   PaymentResult,
   PaymentIntentStatus,
+  RefundInput,
+  RefundResult,
 } from "./provider";
 
 // A sandbox provider that always succeeds. It moves no real money and is the
@@ -28,5 +30,14 @@ export class MockPaymentProvider implements PaymentProvider {
 
   async getPaymentStatus(): Promise<PaymentIntentStatus> {
     return "SUCCEEDED";
+  }
+
+  async refundPayment(input: RefundInput): Promise<RefundResult> {
+    return {
+      providerRef: `mock_rf_${randomBytes(9).toString("hex")}`,
+      status: "SUCCEEDED",
+      amountCents: input.amountCents,
+      test: true,
+    };
   }
 }

@@ -12,7 +12,8 @@ export type Permission =
   | "staff:manage" // invite/remove staff, change roles
   | "bills:view" // see bills, payments, live tables
   | "audit:view" // see the activity log
-  | "settings:manage"; // restaurant/org settings
+  | "settings:manage" // restaurant/org settings
+  | "payments:refund"; // refund a payment, full or partial
 
 const ALL: Permission[] = [
   "menu:manage",
@@ -24,6 +25,7 @@ const ALL: Permission[] = [
   "bills:view",
   "audit:view",
   "settings:manage",
+  "payments:refund",
 ];
 
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
@@ -36,9 +38,13 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "kitchen:manage",
     "tables:manage",
     "bills:view",
+    "payments:refund",
   ],
   STAFF: ["menu:availability", "orders:manage", "kitchen:manage", "bills:view"],
-  KITCHEN: ["kitchen:manage", "bills:view"],
+  // menu:availability so the kitchen can 86 an item straight from the board
+  // the moment they run out — waiting on someone with a dashboard login to
+  // do it defeats the point of a kitchen screen.
+  KITCHEN: ["kitchen:manage", "menu:availability", "bills:view"],
   VIEW_ONLY: ["bills:view"],
 };
 
@@ -55,7 +61,7 @@ export const ROLE_META: Record<Role, { label: string; blurb: string }> = {
     blurb: "Menu, tables and bills. No staff or settings.",
   },
   STAFF: { label: "Staff", blurb: "See bills, mark items sold out." },
-  KITCHEN: { label: "Kitchen", blurb: "See bills and orders." },
+  KITCHEN: { label: "Kitchen", blurb: "See bills and orders, mark items sold out." },
   VIEW_ONLY: { label: "View only", blurb: "Read-only access to bills." },
 };
 

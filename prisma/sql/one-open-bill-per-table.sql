@@ -32,14 +32,14 @@
 --   );
 
 -- The guard: at most one OPEN/PARTIALLY_PAID bill per table. PAID/VOIDED/
--- CANCELLED bills are excluded, so the next customer on that table gets a fresh
--- bill as normal. Takeaway/pickup bills are excluded too — a pickup pseudo-table
--- legitimately holds many concurrent open bills, one per pickup order.
+-- CANCELLED bills are excluded, so the next customer on that table gets a
+-- fresh bill as normal.
 --
--- Re-running is safe. If you applied an earlier version of this index (without
--- the takeaway exclusion), drop it first so the new definition takes effect:
+-- Re-running is safe. If you applied an earlier version of this index (which
+-- also excluded takeaway/pickup pseudo-tables — that concept was removed),
+-- drop it first so the new definition takes effect:
 --   DROP INDEX IF EXISTS "one_open_bill_per_table";
 DROP INDEX IF EXISTS "one_open_bill_per_table";
 CREATE UNIQUE INDEX "one_open_bill_per_table"
   ON "Bill" ("tableId")
-  WHERE "status" IN ('OPEN', 'PARTIALLY_PAID') AND "isTakeaway" = false;
+  WHERE "status" IN ('OPEN', 'PARTIALLY_PAID');

@@ -30,7 +30,7 @@ export function StaffLoginForm({
         setError(res.error);
         setPin("");
       } else {
-        router.push(`/staff/${slug}/home`);
+        router.push(res.redirectTo ?? `/staff/${slug}/home`);
       }
     });
   }
