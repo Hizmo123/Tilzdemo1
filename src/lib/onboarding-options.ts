@@ -54,12 +54,6 @@ export const SERVICE_STYLES: {
     icon: "users",
   },
   {
-    value: "qr_ordering",
-    label: "QR ordering at the table",
-    desc: "Guests scan a code and order from their phone.",
-    icon: "qr",
-  },
-  {
     value: "counter",
     label: "Order at counter",
     desc: "Guests order and pay at the counter.",

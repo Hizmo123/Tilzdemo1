@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import { formatCents } from "@/lib/money";
+import { Spinner } from "@/components/ui/submit-button";
 import { BADGE_META, type BadgeKey } from "@/lib/menu-badges";
 import {
   resolveCardStyle,
@@ -490,6 +491,7 @@ export function MenuOrderer({
               disabled={pending}
               className={`w-full py-3.5 font-medium disabled:opacity-60 flex items-center justify-center gap-2 ${menuButtonClass(buttonShape, buttonFill)}`}
             >
+              {(pending || retrying) && <Spinner />}
               <span>
                 {retrying ? "Retrying…" : pending ? "Sending…" : submitLabel(count)}
               </span>
@@ -668,8 +670,9 @@ function ReviewSheet({
           <button
             onClick={onPlace}
             disabled={pending || cart.length === 0}
-            className="w-full rounded-xl bg-pine text-[color:var(--on-accent,#fff)] py-3.5 font-medium hover:bg-pine-deep disabled:opacity-60"
+            className="w-full rounded-xl bg-pine text-[color:var(--on-accent,#fff)] py-3.5 font-medium hover:bg-pine-deep disabled:opacity-60 flex items-center justify-center gap-2"
           >
+            {(pending || retrying) && <Spinner />}
             {retrying ? "Retrying…" : pending ? "Placing order…" : "Place order"}
           </button>
         </div>

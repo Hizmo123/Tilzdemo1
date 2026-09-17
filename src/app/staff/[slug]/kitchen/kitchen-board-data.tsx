@@ -160,12 +160,9 @@ export async function KitchenBoardData({
       <div className="max-w-3xl mx-auto px-5 py-6 space-y-6">
         {/* Board / Pass toggle — a station-locked device skips this entirely:
             Pass is deliberately cross-station, and the station is fixed, not
-            a tab to switch. */}
-        {lockedStation ? (
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <p className="text-sm font-medium text-muted">Station: {lockedStation}</p>
-          </div>
-        ) : (
+            a tab to switch. The station name is already in the header title
+            (see KitchenHeader), so there's nothing left to show here. */}
+        {!lockedStation && (
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="inline-flex rounded-lg border border-line p-0.5">
               <Link

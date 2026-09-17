@@ -18,6 +18,7 @@ export function KitchenHeader({
   slug,
   activeCount,
   staffName,
+  lockedStation,
 }: {
   slug: string;
   // Undefined while the ticket data is still streaming in behind a Suspense
@@ -25,6 +26,11 @@ export function KitchenHeader({
   // count for a moment rather than waiting on the same DB round trips.
   activeCount?: number;
   staffName: string;
+  // Server-known station for a station-locked device — shown in the title
+  // instead of the free-text "name this screen" label, since it's the real,
+  // authoritative identity of this screen rather than something staff have
+  // to remember to type in.
+  lockedStation?: string | null;
 }) {
   const router = useRouter();
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -71,9 +77,9 @@ export function KitchenHeader({
           ← Tables
         </button>
         <span className="font-display text-lg font-semibold tracking-tight shrink-0">
-          Kitchen
+          {lockedStation ? `Kitchen · ${lockedStation}` : "Kitchen"}
         </span>
-        {editing ? (
+        {!lockedStation && (editing ? (
           <input
             autoFocus
             value={label}
@@ -92,7 +98,7 @@ export function KitchenHeader({
           >
             {label || "Name screen"}
           </button>
-        )}
+        ))}
       </div>
       <div className="flex items-center gap-3 shrink-0">
         {fsSupported && (

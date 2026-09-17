@@ -63,7 +63,7 @@ export default async function KitchenPage({
 
   return (
     <main className="min-h-dvh bg-paper">
-      <KitchenHeader slug={slug} staffName={staff.name} />
+      <KitchenHeader slug={slug} staffName={staff.name} lockedStation={lockedStation} />
       <Suspense fallback={<BoardSkeleton />}>
         <KitchenBoardData
           slug={slug}

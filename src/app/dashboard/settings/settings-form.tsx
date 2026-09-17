@@ -37,7 +37,6 @@ import { CustomerPreview } from "@/components/venue-setup/customer-preview";
 import { CornerStylePicker } from "@/components/venue-setup/corner-style-picker";
 import { NotificationsPicker } from "@/components/venue-setup/notifications-picker";
 import { CustomisationPicker } from "@/components/venue-setup/customisation-picker";
-import { QrStylePicker } from "@/components/venue-setup/qr-style-picker";
 
 const THEME_KEYS = Object.keys(THEME_PRESETS) as ThemeKey[];
 const FONT_KEYS = Object.keys(FONT_THEMES) as FontKey[];
@@ -845,29 +844,6 @@ export function SettingsForm({
         </div>
       </section>
 
-      {/* QR & table cards */}
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          QR code & table cards
-        </h2>
-        <p className="text-sm text-muted">
-          How your table QR codes look, and which printable card template
-          downloads use by default.
-        </p>
-        <QrStylePicker
-          foregroundColor={qrForegroundColor}
-          onForegroundColorChange={setQrForegroundColor}
-          backgroundColor={qrBackgroundColor}
-          onBackgroundColorChange={setQrBackgroundColor}
-          cornerStyle={qrCornerStyle}
-          onCornerStyleChange={setQrCornerStyle}
-          embedLogo={qrEmbedLogo}
-          onEmbedLogoChange={setQrEmbedLogo}
-          hasLogo={!!logoUrl}
-          cardTemplate={qrCardTemplate}
-          onCardTemplateChange={setQrCardTemplate}
-        />
-      </section>
       </>
       )}
 

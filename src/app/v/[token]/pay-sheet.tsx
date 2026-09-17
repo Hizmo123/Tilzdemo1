@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { payBill, payItems } from "./actions";
 import { formatCents, dollarsToCents } from "@/lib/money";
+import { Spinner } from "@/components/ui/submit-button";
 
 type BillItem = {
   id: string;
@@ -372,8 +373,9 @@ export function PaySheet({
           <button
             onClick={pay}
             disabled={paying}
-            className="w-full rounded-xl bg-pine text-white py-3.5 font-medium hover:opacity-90 disabled:opacity-60 transition-opacity"
+            className="w-full rounded-xl bg-pine text-white py-3.5 font-medium hover:opacity-90 disabled:opacity-60 transition-opacity flex items-center justify-center gap-2"
           >
+            {paying && <Spinner />}
             {paying
               ? "Processing…"
               : `Pay ${formatCents(Math.min(payBase, remainingCents) + tipCents + surchargeCents, currency)}${
