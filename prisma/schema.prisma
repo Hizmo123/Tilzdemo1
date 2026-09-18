@@ -285,6 +285,7 @@ model Restaurant {
   locations      Location[]
   menuCategories MenuCategory[]
   staffAccounts  StaffAccount[]
+  tillzStands    TillzStand[]
 
   @@index([organizationId])
 }
@@ -332,8 +333,50 @@ model Table {
   qrTokens   QrToken[]
   bills      Bill[]
   requests   CustomerRequest[]
+  tillzStands TillzStand[]
 
   @@index([locationId])
+}
+
+// A physical Tillz stand (the printed table-top card with a QR code). id is
+// the value encoded in the QR/URL — high-entropy (generateStandId(), see
+// lib/stands.ts), never sequential, so it can't be enumerated. serial is the
+// human-readable label ("TZ-000123") used on packing slips and the admin
+// fulfilment queue — never put in a URL.
+//
+// Reassignability is the whole point of separating id from tableId: /s/<id>
+// always resolves to whatever table this row's tableId currently points at,
+// so moving a stand to a different table (or a different venue entirely,
+// though the app only supports same-restaurant moves today — see Task 5)
+// needs no reprint.
+enum StandStatus {
+  ORDERED
+  PRINTED
+  SHIPPED
+  ACTIVE
+  DEACTIVATED
+}
+
+model TillzStand {
+  id             String      @id
+  serial         String      @unique
+  status         StandStatus @default(ORDERED)
+  organizationId String?
+  restaurantId   String?
+  restaurant     Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  tableId        String?
+  table          Table?      @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  // The StandOrder that created this stand. Plain scalar for now, not a
+  // formal relation — StandOrder doesn't exist until Task 3, which upgrades
+  // this to a real @relation (needed for StandOrder -> stands traversal in
+  // the Task 4 fulfilment queue).
+  orderId        String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([restaurantId])
+  @@index([tableId])
+  @@index([status])
 }
 
 // An opaque, revocable token mapping a scanned QR to a table (spec §25, §126).
