@@ -46,3 +46,8 @@ revoke all on "Refund" from anon, authenticated;
 -- Supabase API keys, only via Prisma as the table owner.
 alter table "TillzStand" enable row level security;
 revoke all on "TillzStand" from anon, authenticated;
+
+-- Added when StandOrder landed (Task 3): shipping addresses and purchase
+-- amounts, same exposure pattern as everything else here.
+alter table "StandOrder" enable row level security;
+revoke all on "StandOrder" from anon, authenticated;

@@ -68,3 +68,11 @@ export const PLANS: PlanDef[] = [
 export function planByTier(tier: PlanTier): PlanDef {
   return PLANS.find((p) => p.tier === tier) ?? PLANS[0];
 }
+
+// Physical Tillz stand pricing (AUD, excluding GST) — the one-time
+// print-on-demand charge a venue pays when ordering stands (see the "Order
+// physical stands" flow). Deliberately a flat per-unit price, not tiered by
+// plan — a stand is a physical good, unrelated to the subscription catalog
+// above. Change this one constant to reprice; nowhere else references a raw
+// number for it.
+export const STAND_UNIT_PRICE_CENTS = 1500;
