@@ -35,6 +35,28 @@ export async function updateSession(request: NextRequest) {
   const isProtected = path.startsWith("/dashboard");
   const isAuthPage = path === "/login" || path === "/signup";
 
+  // Second, independent wall in front of /admin (the real gate is
+  // requirePlatformAdmin(), called in the /admin layout and in every /admin
+  // server action — see src/lib/platform-admin.ts). Inlined rather than
+  // imported from there: that module pulls in next/headers' cookies() via
+  // the Node-oriented server Supabase client, which isn't the right shape
+  // for the Edge-run middleware client already in scope here. Never reveals
+  // that /admin exists — same redirect-to-/dashboard for a non-admin as for
+  // a signed-out visitor.
+  if (path.startsWith("/admin")) {
+    const allowlist = new Set(
+      (process.env.PLATFORM_ADMIN_USER_IDS ?? "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
+    );
+    if (!user || !allowlist.has(user.id)) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
