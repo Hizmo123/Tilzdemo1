@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { visitUrl, standUrl } from "@/lib/urls";
+import { visitUrl } from "@/lib/urls";
 
 // Base URL + visit URL resolution live in @/lib/urls (shared with invite/auth
 // links). Re-exported here so existing `@/lib/qr` imports keep working.
@@ -33,44 +33,6 @@ export async function qrPngBufferForUrl(
       dark: safeHex(colors?.foreground, "#000000"),
       light: safeHex(colors?.background, "#ffffff"),
     },
-  });
-}
-
-// ---- Physical stand QR export (Task 2) --------------------------------------
-// A screen QR (qrDataUrlForUrl/qrPngBufferForUrl above) is tuned for a phone
-// display: small, medium error correction, a 1-2 module quiet zone. None of
-// that survives a real print run — a thin quiet zone gets trimmed by a
-// printer's own margin handling and fails scans, and a centre logo (which
-// the admin fulfilment pack may composite on later) needs high error
-// correction to still decode with a chunk of the code obscured. This is
-// deliberately a SEPARATE generator from the /v screen QR functions above —
-// never reused for them, and they're never reused for this.
-
-const STAND_QR_PRINT_OPTIONS = {
-  width: 1200, // >=1000px at print resolution
-  margin: 4, // quiet zone, in QR modules — >=4 per the spec's own minimum
-  errorCorrectionLevel: "H" as const, // survives a centre logo overlay
-};
-
-// Print-ready PNG for a physical Tillz stand's QR, encoding /s/<standId> (see
-// lib/urls.ts#standUrl) — never a table's /v/<token> URL directly, so the
-// stand can be reassigned to a different table later with no reprint.
-export async function standQrPng(standId: string): Promise<Buffer> {
-  return QRCode.toBuffer(standUrl(standId), {
-    type: "png",
-    ...STAND_QR_PRINT_OPTIONS,
-    color: { dark: "#000000", light: "#ffffff" },
-  });
-}
-
-// Vector variant of the same print-ready stand QR, for any print pipeline
-// that wants to scale losslessly rather than work from a fixed-resolution
-// raster.
-export async function standQrSvg(standId: string): Promise<string> {
-  return QRCode.toString(standUrl(standId), {
-    type: "svg",
-    ...STAND_QR_PRINT_OPTIONS,
-    color: { dark: "#000000", light: "#ffffff" },
   });
 }
 
