@@ -45,3 +45,11 @@ revoke all on "Refund" from anon, authenticated;
 -- as the table owner.
 alter table "TillzStand" enable row level security;
 revoke all on "TillzStand" from anon, authenticated;
+
+-- Added with the stand order/fulfilment addendum: StandOrder carries a
+-- venue's shipping address, StandOrderItem which table each stand is
+-- bound for — neither belongs on the anon/authenticated API surface.
+alter table "StandOrder" enable row level security;
+alter table "StandOrderItem" enable row level security;
+revoke all on "StandOrder" from anon, authenticated;
+revoke all on "StandOrderItem" from anon, authenticated;
