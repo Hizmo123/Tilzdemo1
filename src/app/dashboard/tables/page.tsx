@@ -39,21 +39,13 @@ export default async function TablesPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
-            Tables
-          </h1>
-          <p className="text-muted mt-1">
-            {ctx.restaurant.name} · {ctx.location.name}
-          </p>
-        </div>
-        <Link
-          href="/dashboard/tables/order-stands"
-          className="shrink-0 text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
-        >
-          Order physical stands
-        </Link>
+      <div>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">
+          Tables
+        </h1>
+        <p className="text-muted mt-1">
+          {ctx.restaurant.name} · {ctx.location.name}
+        </p>
       </div>
 
       <CreateTableForm />

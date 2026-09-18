@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser, getOwnedTable, getAuthz } from "@/lib/auth";
+import { requireUser, getOwnedTable } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { qrDataUrl, visitUrl } from "@/lib/qr";
 import { QrActions } from "./qr-actions";
 import { NfcSection } from "./nfc-section";
-import { StandSection } from "./stand-section";
 
 export default async function TableDetailPage({
   params,
@@ -17,24 +16,10 @@ export default async function TableDetailPage({
   const table = await getOwnedTable(user.id, tableId);
   if (!table) notFound();
 
-  const authz = await getAuthz();
-  const restaurantId = table.location.restaurant.id;
-
-  const [activeToken, stand, otherTables] = await Promise.all([
-    prisma.qrToken.findFirst({
-      where: { tableId: table.id, active: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.tillzStand.findFirst({
-      where: { tableId: table.id, status: { not: "DEACTIVATED" } },
-      select: { id: true, serial: true, status: true },
-    }),
-    prisma.table.findMany({
-      where: { location: { restaurantId }, active: true, id: { not: table.id } },
-      orderBy: { label: "asc" },
-      select: { id: true, label: true },
-    }),
-  ]);
+  const activeToken = await prisma.qrToken.findFirst({
+    where: { tableId: table.id, active: true },
+    orderBy: { createdAt: "desc" },
+  });
 
   const preview = activeToken ? await qrDataUrl(activeToken.token) : null;
   const url = activeToken ? visitUrl(activeToken.token) : null;
@@ -116,12 +101,6 @@ export default async function TableDetailPage({
           </div>
 
           <QrActions tableId={table.id} active={table.active} />
-
-          <StandSection
-            stand={stand}
-            otherTables={otherTables}
-            canManage={authz.can("settings:manage")}
-          />
 
           {url && <NfcSection url={url} />}
         </div>
