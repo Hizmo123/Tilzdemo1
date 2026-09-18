@@ -11,11 +11,6 @@ const RATE_LIMITS: { prefix: string; limit: number; windowMs: number }[] = [
   // Customer ordering/paying surface — generous, since a real table full of
   // people ordering, paying and refreshing can generate real traffic.
   { prefix: "/v/", limit: 300, windowMs: 5 * 60 * 1000 },
-  // Stand QR resolve (/s/<id> -> /v/<token>): a redirect-only endpoint hit
-  // once per scan, not an interactive page needing repeated requests, so a
-  // much lower ceiling than /v/ still comfortably covers real use while
-  // making enumeration of the 16-char stand id space meaningfully slower.
-  { prefix: "/s/", limit: 60, windowMs: 5 * 60 * 1000 },
   // Auth pages — Supabase already rate-limits the underlying sign-in/sign-up
   // calls itself; this is a second, coarser layer against a script just
   // hammering the page.
