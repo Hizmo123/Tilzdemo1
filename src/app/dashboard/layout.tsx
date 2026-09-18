@@ -13,6 +13,7 @@ import { MobileNav } from "./mobile-nav";
 const nav: { label: string; href: string; perm: Permission | null }[] = [
   { label: "Overview", href: "/dashboard", perm: null },
   { label: "Tables", href: "/dashboard/tables", perm: "tables:manage" },
+  { label: "Order Tillz stands", href: "/dashboard/stands", perm: "tables:manage" },
   { label: "Orders", href: "/dashboard/orders", perm: "kitchen:manage" },
   { label: "Kitchen screen", href: "/dashboard/kitchen", perm: "kitchen:manage" },
   { label: "Menu", href: "/dashboard/menu", perm: "menu:availability" },

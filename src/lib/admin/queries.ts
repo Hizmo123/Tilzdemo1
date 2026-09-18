@@ -176,6 +176,17 @@ export async function getOrgDetail(organizationId: string) {
 
 // ---- Stand fulfilment ---------------------------------------------------
 
+// Lightweight counts for the admin home page's "open" queue widget — the
+// full order list with addresses/table breakdown lives at /admin/fulfilment
+// itself, this is just enough to surface that something's waiting.
+export async function getFulfilmentCounts() {
+  const [awaitingPrint, awaitingShip] = await Promise.all([
+    prisma.standOrder.count({ where: { status: "PAID" } }),
+    prisma.standOrder.count({ where: { status: "PRINTED" } }),
+  ]);
+  return { awaitingPrint, awaitingShip };
+}
+
 // Paid orders the platform still owes a print/ship on, PAID first (nothing
 // shipped yet), then PRINTED, oldest paid first within each — mirrors a
 // real print queue. PENDING_PAYMENT orders never appear here; they aren't

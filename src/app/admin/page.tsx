@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
-import { getPlatformOverview, getRecentActivity } from "@/lib/admin/queries";
+import { getPlatformOverview, getRecentActivity, getFulfilmentCounts } from "@/lib/admin/queries";
 import { planByTier } from "@/lib/plans";
 import { formatCents } from "@/lib/money";
 
@@ -17,7 +18,11 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 
 export default async function AdminHomePage() {
   await requirePlatformAdmin();
-  const [overview, activity] = await Promise.all([getPlatformOverview(), getRecentActivity()]);
+  const [overview, activity, fulfilment] = await Promise.all([
+    getPlatformOverview(),
+    getRecentActivity(),
+    getFulfilmentCounts(),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -72,6 +77,20 @@ export default async function AdminHomePage() {
           No separate publish/unpublish flag exists in this codebase — &quot;onboarded&quot; uses
           Restaurant.onboardingCompletedAt as the closest available proxy for &quot;live&quot;.
         </p>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold text-muted mb-2">Stand fulfilment</h2>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Stat label="Awaiting print" value={String(fulfilment.awaitingPrint)} />
+          <Stat label="Awaiting shipment" value={String(fulfilment.awaitingShip)} />
+        </div>
+        <Link
+          href="/admin/fulfilment"
+          className="text-xs text-pine hover:underline mt-2 inline-block"
+        >
+          Open fulfilment queue →
+        </Link>
       </section>
 
       <section>
