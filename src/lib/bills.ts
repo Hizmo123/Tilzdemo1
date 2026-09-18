@@ -800,6 +800,14 @@ export async function payBillAmount(
   ) {
     return { error: "Enter a valid amount." };
   }
+  // Belt and braces: "custom" must always name a positive amount. null means
+  // "pay the full remaining balance" everywhere else in this function, but
+  // that meaning must never be reachable through the custom-amount path —
+  // the client already blocks this before calling here (see pay-sheet.tsx),
+  // this is the server-side backstop in case that ever changes.
+  if (mode === "custom" && (requestedCents === null || requestedCents <= 0)) {
+    return { error: "Enter a valid amount." };
+  }
   const tip = Number.isInteger(tipCents) && tipCents > 0 ? tipCents : 0;
 
   const provider = getPaymentProvider();

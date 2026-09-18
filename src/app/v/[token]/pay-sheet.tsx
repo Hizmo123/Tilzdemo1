@@ -120,9 +120,19 @@ export function PaySheet({
       setError("Select at least one item.");
       return;
     }
-    if (mode === "custom" && (customCents === null || customCents <= 0)) {
-      setError("Enter a valid amount, e.g. 20 or 20.50.");
-      return;
+    if (mode === "custom") {
+      // Never let a $0/blank/invalid custom entry fall through to `amount`
+      // being null — null means "pay everything" everywhere downstream
+      // (see payBillAmount), and that meaning must only ever be reachable
+      // from the explicit "full" mode, never from this field.
+      if (customCents === null || customCents <= 0) {
+        setError("Enter a valid amount, e.g. 20 or 20.50.");
+        return;
+      }
+      if (customCents > remainingCents) {
+        setError(`That's more than what's remaining (${formatCents(remainingCents, currency)}).`);
+        return;
+      }
     }
     setError(null);
     const optimistic = amount ?? remainingCents;
