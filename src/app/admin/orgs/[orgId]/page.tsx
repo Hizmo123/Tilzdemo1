@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { getOrgDetail } from "@/lib/admin/queries";
 import { planByTier } from "@/lib/plans";
-import { formatCents } from "@/lib/money";
 
 export default async function AdminOrgDetailPage({
   params,
@@ -14,7 +13,7 @@ export default async function AdminOrgDetailPage({
   const { orgId } = await params;
   const found = await getOrgDetail(orgId);
   if (!found) notFound();
-  const { org, standOrders } = found;
+  const { org } = found;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -70,25 +69,6 @@ export default async function AdminOrgDetailPage({
         )}
       </section>
 
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-        <h2 className="font-display text-lg font-semibold tracking-tight mb-3">
-          Stand orders ({standOrders.length})
-        </h2>
-        {standOrders.length === 0 ? (
-          <p className="text-sm text-muted">No stand orders.</p>
-        ) : (
-          <ul className="space-y-1.5 text-sm">
-            {standOrders.map((o) => (
-              <li key={o.id} className="flex items-center justify-between">
-                <span>
-                  {o.quantity} stand{o.quantity === 1 ? "" : "s"} · {formatCents(o.amountCents)}
-                </span>
-                <span className="text-xs text-muted">{o.status}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }

@@ -85,25 +85,6 @@ export default async function AdminHomePage() {
       </section>
 
       <section>
-        <h2 className="text-sm font-semibold text-muted mb-2">Stand inventory</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <Stat label="Ordered" value={String(overview.standInventory.ORDERED)} />
-          <Stat label="Printed" value={String(overview.standInventory.PRINTED)} />
-          <Stat label="Shipped" value={String(overview.standInventory.SHIPPED)} />
-          <Stat label="Active" value={String(overview.standInventory.ACTIVE)} />
-          <Stat label="Deactivated" value={String(overview.standInventory.DEACTIVATED)} />
-        </div>
-        <p className="text-xs text-muted mt-2">
-          {overview.openFulfilmentOrders} open fulfilment order
-          {overview.openFulfilmentOrders === 1 ? "" : "s"} (paid, not yet shipped) — see{" "}
-          <a href="/admin/fulfilment" className="text-pine hover:underline">
-            Stand fulfilment
-          </a>
-          .
-        </p>
-      </section>
-
-      <section>
         <h2 className="text-sm font-semibold text-muted mb-2">Recent activity</h2>
         {activity.length === 0 ? (
           <p className="text-sm text-muted">Nothing recorded yet.</p>

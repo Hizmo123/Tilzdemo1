@@ -9,67 +9,11 @@
 // requirePlatformAdmin() before importing/calling anything from here.
 
 import { prisma } from "@/lib/prisma";
-import type { StandOrderStatus, PlanTier, StandStatus } from "@prisma/client";
+import type { PlanTier } from "@prisma/client";
 import { PLANS, planByTier } from "@/lib/plans";
 import { entitlementsForTier } from "@/lib/entitlements";
 
-// Stand orders for the admin fulfilment queue (Task 4). Defaults to PAID,
-// unshipped-first — that's the actual work queue; PENDING_PAYMENT orders
-// never got here (no stands exist for them yet) and CANCELLED ones are done.
-//
-// StandOrder.restaurantId/organizationId are plain scalars, not formal
-// Prisma relations (see the schema comment on TillzStand — same reasoning:
-// this table is meant to be read cross-tenant, not joined through the
-// tenant-scoped Restaurant/Organization graph), so the venue/org names are
-// batch-fetched separately and joined in application code rather than via a
-// Prisma `include`.
-export async function listFulfilmentOrders(status?: StandOrderStatus) {
-  const orders = await prisma.standOrder.findMany({
-    where: status ? { status } : { status: { in: ["PAID", "PRINTED", "SHIPPED"] } },
-    orderBy: [{ shippedAt: "asc" }, { paidAt: "asc" }],
-    include: {
-      stands: {
-        select: { id: true, serial: true, status: true, table: { select: { label: true } } },
-        orderBy: { serial: "asc" },
-      },
-    },
-  });
-
-  const restaurantIds = [...new Set(orders.map((o) => o.restaurantId))];
-  const restaurants = await prisma.restaurant.findMany({
-    where: { id: { in: restaurantIds } },
-    select: { id: true, name: true, organization: { select: { name: true } } },
-  });
-  const byId = new Map(restaurants.map((r) => [r.id, r]));
-
-  return orders.map((order) => ({
-    ...order,
-    restaurantName: byId.get(order.restaurantId)?.name ?? "(deleted venue)",
-    organizationName: byId.get(order.restaurantId)?.organization.name ?? "(deleted org)",
-  }));
-}
-
-export async function getFulfilmentOrder(orderId: string) {
-  const order = await prisma.standOrder.findUnique({
-    where: { id: orderId },
-    include: {
-      stands: {
-        select: { id: true, serial: true, status: true, table: { select: { label: true } } },
-        orderBy: { serial: "asc" },
-      },
-    },
-  });
-  if (!order) return null;
-
-  const restaurant = await prisma.restaurant.findUnique({
-    where: { id: order.restaurantId },
-    select: { name: true, slug: true },
-  });
-
-  return { order, restaurant };
-}
-
-// ---- Platform overview (Task 6) ---------------------------------------------
+// ---- Platform overview -------------------------------------------------------
 
 export type PlatformOverview = {
   mrrCents: number;
@@ -77,8 +21,6 @@ export type PlatformOverview = {
   subscriptions: { active: number; inGrace: number; lapsed: number; free: number };
   totals: { organisations: number; venues: number; published: number; unpublished: number };
   funnel: { signedUp: number; completedOnboarding: number; published: number; firstOrder: number };
-  standInventory: Record<StandStatus, number>;
-  openFulfilmentOrders: number;
   // No per-extra-venue overage price exists anywhere in this codebase (see
   // lib/entitlements.ts's venueLimit — it only ever BLOCKS creating past the
   // limit, there's no add-on charge). Counted here for visibility rather
@@ -137,10 +79,9 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     mrrCents: mrrByTierMap.get(p.tier)?.mrrCents ?? 0,
   }));
 
-  const [venues, publishedVenues, standCounts, restaurantsWithOrders] = await Promise.all([
+  const [venues, publishedVenues, restaurantsWithOrders] = await Promise.all([
     prisma.restaurant.count(),
     prisma.restaurant.count({ where: { onboardingCompletedAt: { not: null } } }),
-    prisma.tillzStand.groupBy({ by: ["status"], _count: true }),
     // Distinct restaurantIds with at least one Order — Order.restaurantId is
     // a plain denormalized field, so this is a direct query rather than a
     // deep menu -> item -> billItem traversal.
@@ -154,19 +95,6 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
   });
   for (const r of restaurantOrgRows) orgIdByRestaurantId.set(r.id, r.organizationId);
   const firstOrderOrgCount = new Set(orgIdByRestaurantId.values()).size;
-
-  const standInventory = {
-    ORDERED: 0,
-    PRINTED: 0,
-    SHIPPED: 0,
-    ACTIVE: 0,
-    DEACTIVATED: 0,
-  } as Record<StandStatus, number>;
-  for (const row of standCounts) standInventory[row.status] = row._count;
-
-  const openFulfilmentOrders = await prisma.standOrder.count({
-    where: { status: { in: ["PAID", "PRINTED"] } },
-  });
 
   return {
     mrrCents,
@@ -190,13 +118,11 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
       published: publishedVenues,
       firstOrder: firstOrderOrgCount,
     },
-    standInventory,
-    openFulfilmentOrders,
     orgsOverVenueLimit,
   };
 }
 
-// ---- Organisation directory (Task 6) ----------------------------------------
+// ---- Organisation directory ---------------------------------------------------
 
 export async function searchOrganizations(query?: string) {
   return prisma.organization.findMany({
@@ -245,11 +171,5 @@ export async function getOrgDetail(organizationId: string) {
   });
   if (!org) return null;
 
-  const standOrders = await prisma.standOrder.findMany({
-    where: { organizationId },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, status: true, quantity: true, amountCents: true, createdAt: true, paidAt: true },
-  });
-
-  return { org, standOrders };
+  return { org };
 }
