@@ -173,3 +173,42 @@ export async function getOrgDetail(organizationId: string) {
 
   return { org };
 }
+
+// ---- Stand fulfilment ---------------------------------------------------
+
+// Paid orders the platform still owes a print/ship on, PAID first (nothing
+// shipped yet), then PRINTED, oldest paid first within each — mirrors a
+// real print queue. PENDING_PAYMENT orders never appear here; they aren't
+// this team's problem until the charge actually succeeds.
+export async function listFulfilmentOrders() {
+  return prisma.standOrder.findMany({
+    where: { status: { in: ["PAID", "PRINTED", "SHIPPED"] } },
+    orderBy: [{ status: "asc" }, { paidAt: "asc" }],
+    include: {
+      organization: { select: { name: true } },
+      restaurant: { select: { name: true, slug: true } },
+      items: {
+        include: {
+          table: { select: { label: true } },
+          stand: { select: { serial: true, qrToken: true } },
+        },
+      },
+    },
+  });
+}
+
+export async function getFulfilmentOrder(orderId: string) {
+  return prisma.standOrder.findUnique({
+    where: { id: orderId },
+    include: {
+      organization: { select: { name: true } },
+      restaurant: { select: { name: true, slug: true } },
+      items: {
+        include: {
+          table: { select: { label: true } },
+          stand: { select: { serial: true, qrToken: true } },
+        },
+      },
+    },
+  });
+}

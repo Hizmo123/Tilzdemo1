@@ -375,7 +375,8 @@ model TillzStand {
   tableId        String?
   table          Table?      @relation(fields: [tableId], references: [id], onDelete: SetNull)
   orderId        String?
-  order          StandOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  order          StandOrder?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderItem      StandOrderItem?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -432,7 +433,8 @@ model StandOrderItem {
   order      StandOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   tableId    String
   table      Table      @relation(fields: [tableId], references: [id], onDelete: Cascade)
-  standId    String?    @unique
+  standId    String?     @unique
+  stand      TillzStand? @relation(fields: [standId], references: [id])
   createdAt  DateTime   @default(now())
 
   @@index([orderId])
