@@ -34,3 +34,11 @@ export function appBaseUrl(): string {
 export function visitUrl(token: string): string {
   return `${appBaseUrl()}/v/${token}`;
 }
+
+// The URL a physical Tillz stand's printed QR encodes. Always /s/<qrToken> —
+// never the table's own /v/<token> visit URL directly, since that's exactly
+// what lets an activated stand be moved to a different table later with no
+// reprint (see lib/stands.ts#resolveStand).
+export function standUrl(qrToken: string): string {
+  return `${appBaseUrl()}/s/${qrToken}`;
+}

@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { generateToken } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
 import { canCreateTable } from "@/lib/entitlements";
+import { activateStandBySerial } from "@/lib/stands";
 
 export type TableActionState = { error?: string };
 
@@ -80,6 +81,47 @@ export async function createTable(
   });
 
   revalidatePath("/dashboard/tables");
+  return {};
+}
+
+// Claims a physical Tillz stand onto this table by its printed serial — the
+// only place a stand's tableId is ever set (see lib/stands.ts). Scoped to the
+// signed-in user's own org/restaurant on both ends.
+export async function activateStandForTable(
+  tableId: string,
+  _prev: TableActionState,
+  formData: FormData,
+): Promise<TableActionState> {
+  const authz = await getAuthz();
+  if (!authz.can("tables:manage"))
+    return { error: "You don't have permission to manage tables." };
+  if (!authz.membership) return { error: "No organization found." };
+
+  const table = await getOwnedTable(authz.user.id, tableId);
+  if (!table) return { error: "Table not found." };
+
+  const serial = String(formData.get("serial") ?? "").trim();
+  if (!serial) return { error: "Enter the serial printed on the stand." };
+
+  const result = await activateStandBySerial({
+    organizationId: authz.membership.organizationId,
+    restaurantId: table.location.restaurant.id,
+    serial,
+    tableId: table.id,
+  });
+  if ("error" in result) return { error: result.error };
+
+  await audit({
+    organizationId: authz.membership.organizationId,
+    actorUserId: authz.user.id,
+    actorEmail: authz.user.email ?? "",
+    action: "stand.activated",
+    resourceType: "Table",
+    resourceId: table.id,
+    metadata: { serial },
+  });
+
+  revalidatePath(`/dashboard/tables/${tableId}`);
   return {};
 }
 

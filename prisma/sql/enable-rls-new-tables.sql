@@ -38,3 +38,10 @@ revoke all on "OnboardingDraft" from anon, authenticated;
 -- financial reversal records, same exposure pattern as everything else here.
 alter table "Refund" enable row level security;
 revoke all on "Refund" from anon, authenticated;
+
+-- Added when TillzStand (re)landed (stand/QR base rebuild): qrToken is a
+-- printed QR's actual secret value — doubly important this is never
+-- reachable via the anon/authenticated Supabase API keys, only via Prisma
+-- as the table owner.
+alter table "TillzStand" enable row level security;
+revoke all on "TillzStand" from anon, authenticated;

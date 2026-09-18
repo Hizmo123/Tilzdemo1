@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { qrDataUrl, visitUrl } from "@/lib/qr";
 import { QrActions } from "./qr-actions";
 import { NfcSection } from "./nfc-section";
+import { ActivateStandForm } from "./activate-stand-form";
 
 export default async function TableDetailPage({
   params,
@@ -23,6 +24,10 @@ export default async function TableDetailPage({
 
   const preview = activeToken ? await qrDataUrl(activeToken.token) : null;
   const url = activeToken ? visitUrl(activeToken.token) : null;
+
+  const stand = await prisma.tillzStand.findFirst({
+    where: { tableId: table.id, status: "ACTIVE" },
+  });
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -101,6 +106,20 @@ export default async function TableDetailPage({
           </div>
 
           <QrActions tableId={table.id} active={table.active} />
+
+          {stand ? (
+            <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
+              <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
+                Physical stand
+              </h2>
+              <p className="text-sm text-muted">
+                Stand <span className="font-medium text-ink">{stand.serial}</span>{" "}
+                is active on this table.
+              </p>
+            </div>
+          ) : (
+            <ActivateStandForm tableId={table.id} />
+          )}
 
           {url && <NfcSection url={url} />}
         </div>

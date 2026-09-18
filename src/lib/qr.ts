@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { visitUrl } from "@/lib/urls";
+import { visitUrl, standUrl } from "@/lib/urls";
 
 // Base URL + visit URL resolution live in @/lib/urls (shared with invite/auth
 // links). Re-exported here so existing `@/lib/qr` imports keep working.
@@ -33,6 +33,44 @@ export async function qrPngBufferForUrl(
       dark: safeHex(colors?.foreground, "#000000"),
       light: safeHex(colors?.background, "#ffffff"),
     },
+  });
+}
+
+// ---- Physical stand QR export ------------------------------------------------
+// A screen QR (qrDataUrlForUrl/qrPngBufferForUrl above) is tuned for a phone
+// display: small, medium error correction, a 1-2 module quiet zone. None of
+// that survives a real print run — a thin quiet zone gets trimmed by a
+// printer's own margin handling and fails scans, and a centre logo/caption
+// composited on later needs high error correction to still decode with a
+// chunk of the code obscured. Deliberately a SEPARATE generator from the /v
+// screen QR functions above — never reused for them, and they're never
+// reused for this.
+
+const STAND_QR_PRINT_OPTIONS = {
+  width: 1200, // >=1000px at print resolution
+  margin: 4, // quiet zone, in QR modules
+  errorCorrectionLevel: "H" as const, // survives a centre logo/caption overlay
+};
+
+// Print-ready PNG for a physical Tillz stand's QR, encoding /s/<qrToken>
+// (see lib/urls.ts#standUrl) — never a table's /v/<token> URL directly, so
+// the stand can be activated onto (or later moved to) a different table
+// with no reprint.
+export async function standQrPng(qrToken: string): Promise<Buffer> {
+  return QRCode.toBuffer(standUrl(qrToken), {
+    type: "png",
+    ...STAND_QR_PRINT_OPTIONS,
+    color: { dark: "#000000", light: "#ffffff" },
+  });
+}
+
+// Vector variant of the same print-ready stand QR — preferred for the admin
+// fulfilment pack (lossless at any print size).
+export async function standQrSvg(qrToken: string): Promise<string> {
+  return QRCode.toString(standUrl(qrToken), {
+    type: "svg",
+    ...STAND_QR_PRINT_OPTIONS,
+    color: { dark: "#000000", light: "#ffffff" },
   });
 }
 
