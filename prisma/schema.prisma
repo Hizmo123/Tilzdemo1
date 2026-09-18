@@ -285,7 +285,6 @@ model Restaurant {
   locations      Location[]
   menuCategories MenuCategory[]
   staffAccounts  StaffAccount[]
-  tillzStands    TillzStand[]
 
   @@index([organizationId])
 }
@@ -333,78 +332,8 @@ model Table {
   qrTokens   QrToken[]
   bills      Bill[]
   requests   CustomerRequest[]
-  tillzStands TillzStand[]
 
   @@index([locationId])
-}
-
-// A physical Tillz stand (the printed table-top card with a QR code). id is
-// the value encoded in the QR/URL — high-entropy (generateStandId(), see
-// lib/stands.ts), never sequential, so it can't be enumerated. serial is the
-// human-readable label ("TZ-000123") used on packing slips and the admin
-// fulfilment queue — never put in a URL.
-//
-// Reassignability is the whole point of separating id from tableId: /s/<id>
-// always resolves to whatever table this row's tableId currently points at,
-// so moving a stand to a different table (or a different venue entirely,
-// though the app only supports same-restaurant moves today — see Task 5)
-// needs no reprint.
-enum StandStatus {
-  ORDERED
-  PRINTED
-  SHIPPED
-  ACTIVE
-  DEACTIVATED
-}
-
-model TillzStand {
-  id             String      @id
-  serial         String      @unique
-  status         StandStatus @default(ORDERED)
-  organizationId String?
-  restaurantId   String?
-  restaurant     Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
-  tableId        String?
-  table          Table?      @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  // The StandOrder that created this stand.
-  orderId        String?
-  order          StandOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  @@index([restaurantId])
-  @@index([tableId])
-  @@index([status])
-}
-
-// A venue's print-on-demand purchase of physical stands — quantity x
-// STAND_UNIT_PRICE_CENTS (lib/plans.ts), a one-time charge, never a
-// subscription line. Stands are only ever created (see lib/stands.ts /
-// the order-stands action) AFTER this reaches PAID — never speculatively
-// before payment confirms.
-enum StandOrderStatus {
-  PENDING_PAYMENT
-  PAID
-  PRINTED
-  SHIPPED
-  CANCELLED
-}
-
-model StandOrder {
-  id              String           @id @default(cuid())
-  organizationId  String
-  restaurantId    String
-  status          StandOrderStatus @default(PENDING_PAYMENT)
-  quantity        Int
-  amountCents     Int
-  createdAt       DateTime         @default(now())
-  paidAt          DateTime?
-  shippedAt       DateTime?
-  shippingAddress Json?
-  stands          TillzStand[]
-
-  @@index([organizationId])
-  @@index([status])
 }
 
 // An opaque, revocable token mapping a scanned QR to a table (spec §25, §126).
