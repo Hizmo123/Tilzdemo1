@@ -94,10 +94,19 @@ export async function mintStandsForOrder(orderId: string): Promise<void> {
   if (!order || order.status === "PENDING_PAYMENT") return;
 
   for (const item of order.items) {
-    if (item.standId) continue;
+    if (item.standId) continue; // cheap fast path — skip the tx/lock entirely when already minted
     await prisma.$transaction(async (tx) => {
-      const fresh = await tx.standOrderItem.findUnique({ where: { id: item.id } });
-      if (!fresh || fresh.standId) return;
+      // Row lock: blocks a concurrent mintStandsForOrder call on this same
+      // item until this transaction commits (or rolls back), so the
+      // standId re-read right after actually reflects any winner that got
+      // here first — unlike a plain SELECT under Postgres's default
+      // read-committed isolation, which would let both calls see standId
+      // as still null and mint twice.
+      const [locked] = await tx.$queryRaw<{ standId: string | null }[]>`
+        SELECT "standId" FROM "StandOrderItem" WHERE id = ${item.id} FOR UPDATE
+      `;
+      if (!locked || locked.standId) return;
+
       const stand = await mintStand(tx, {
         organizationId: order.organizationId,
         restaurantId: order.restaurantId,
@@ -107,7 +116,7 @@ export async function mintStandsForOrder(orderId: string): Promise<void> {
         data: { orderId: order.id },
       });
       await tx.standOrderItem.update({
-        where: { id: fresh.id },
+        where: { id: item.id },
         data: { standId: stand.id },
       });
     });
