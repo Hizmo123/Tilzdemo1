@@ -68,3 +68,7 @@ export const PLANS: PlanDef[] = [
 export function planByTier(tier: PlanTier): PlanDef {
   return PLANS.find((p) => p.tier === tier) ?? PLANS[0];
 }
+
+// Price for one physical Tillz stand, ordered from the dashboard (spec: the
+// order/fulfilment addendum). Flat, regardless of plan tier or quantity.
+export const STAND_UNIT_PRICE_CENTS = 2900;
