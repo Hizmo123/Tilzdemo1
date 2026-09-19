@@ -342,6 +342,15 @@ export function CustomerExperience({
             <div className="mt-4 flex justify-center">
               <EmailReceiptForm action={emailMyReceipt.bind(null, token)} />
             </div>
+            <button
+              onClick={() => {
+                setPaid(null);
+                setView("home");
+              }}
+              className="mt-6 w-full rounded-xl border border-line py-3 font-medium hover:border-ink/30 transition-colors"
+            >
+              Back to menu
+            </button>
           </div>
         </div>
       </Shell>
