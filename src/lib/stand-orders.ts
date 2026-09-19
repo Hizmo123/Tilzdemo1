@@ -1,7 +1,6 @@
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
-import { STAND_UNIT_PRICE_CENTS } from "@/lib/plans";
 import { mintStand } from "@/lib/stands";
 
 export type PlaceStandOrderResult =
@@ -9,14 +8,18 @@ export type PlaceStandOrderResult =
   | { error: string };
 
 // One-time charge + order for physical Tillz stands — one StandOrderItem per
-// chosen table. A flat per-unit price, so the amount is always recomputed
-// server-side from STAND_UNIT_PRICE_CENTS * tableIds.length, never trusted
-// from the client. Mints the actual TillzStand rows only after the charge
-// succeeds (mintStandsForOrder below) — a failed/pending charge never
-// produces stands to ship.
+// chosen table. Price always comes from the server's own read of the
+// StandProduct row (never trusted from the client) — unitPriceCents is that
+// product's CURRENT priceCents at order time, and totalCents is
+// unitPriceCents * tableIds.length. productTitleSnapshot/productType are
+// copied onto the order too, so a later edit or retirement of the product
+// never changes what a past order shows it bought. Mints the actual
+// TillzStand rows only after the charge succeeds (mintStandsForOrder below)
+// — a failed/pending charge never produces stands to ship.
 export async function placeStandOrder(args: {
   organizationId: string;
   restaurantId: string;
+  standProductId: string;
   tableIds: string[];
   shippingName: string;
   shippingAddress: string;
@@ -27,26 +30,35 @@ export async function placeStandOrder(args: {
   const tableIds = [...new Set(args.tableIds)];
   if (tableIds.length === 0) return { error: "Pick at least one table." };
 
-  const tables = await prisma.table.findMany({
-    where: {
-      id: { in: tableIds },
-      location: { restaurantId: args.restaurantId },
-    },
-  });
+  const [tables, product] = await Promise.all([
+    prisma.table.findMany({
+      where: {
+        id: { in: tableIds },
+        location: { restaurantId: args.restaurantId },
+      },
+    }),
+    prisma.standProduct.findUnique({ where: { id: args.standProductId } }),
+  ]);
   if (tables.length !== tableIds.length) {
     return { error: "One of those tables wasn't found." };
   }
+  if (!product || !product.active) {
+    return { error: "That product is no longer available." };
+  }
 
   const quantity = tableIds.length;
-  const totalCents = STAND_UNIT_PRICE_CENTS * quantity;
+  const totalCents = product.priceCents * quantity;
 
   const order = await prisma.standOrder.create({
     data: {
       organizationId: args.organizationId,
       restaurantId: args.restaurantId,
       status: "PENDING_PAYMENT",
+      standProductId: product.id,
+      productTitleSnapshot: product.title,
+      productType: product.type,
       quantity,
-      unitPriceCents: STAND_UNIT_PRICE_CENTS,
+      unitPriceCents: product.priceCents,
       totalCents,
       shippingName: args.shippingName,
       shippingAddress: args.shippingAddress,

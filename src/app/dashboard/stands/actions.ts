@@ -9,6 +9,7 @@ import { placeStandOrder } from "@/lib/stand-orders";
 export type StandOrderActionState = { error?: string; success?: boolean };
 
 const schema = z.object({
+  standProductId: z.string().min(1, "Choose a product."),
   tableIds: z.array(z.string().min(1)).min(1, "Pick at least one table."),
   shippingName: z.string().trim().min(1, "Enter a recipient name.").max(120),
   shippingAddress: z.string().trim().min(1, "Enter a street address.").max(200),
@@ -29,6 +30,7 @@ export async function orderStands(
   const { restaurant } = await requireActiveLocation();
 
   const parsed = schema.safeParse({
+    standProductId: formData.get("productId"),
     tableIds: formData.getAll("tableIds"),
     shippingName: formData.get("shippingName"),
     shippingAddress: formData.get("shippingAddress"),
@@ -52,7 +54,10 @@ export async function orderStands(
     action: "stand_order.placed",
     resourceType: "StandOrder",
     resourceId: result.orderId,
-    metadata: { tableCount: String(parsed.data.tableIds.length) },
+    metadata: {
+      tableCount: String(parsed.data.tableIds.length),
+      standProductId: parsed.data.standProductId,
+    },
   });
 
   revalidatePath("/dashboard/stands");

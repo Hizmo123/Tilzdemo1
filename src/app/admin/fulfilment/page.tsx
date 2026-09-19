@@ -33,8 +33,12 @@ export default async function FulfilmentPage() {
                   <p className="font-medium">
                     {order.organization.name} · {order.restaurant.name}
                   </p>
+                  <p className="text-sm mt-0.5">
+                    {order.quantity}× {order.productType ?? ""}{" "}
+                    {order.productTitleSnapshot ?? "(product unknown)"} — Tables{" "}
+                    {order.items.map((i) => i.table.label).join(", ")}
+                  </p>
                   <p className="text-xs text-muted mt-0.5">
-                    {order.quantity} stand{order.quantity === 1 ? "" : "s"} ·{" "}
                     {formatCents(order.totalCents)} · paid{" "}
                     {order.paidAt
                       ? new Date(order.paidAt).toLocaleDateString("en-AU")
