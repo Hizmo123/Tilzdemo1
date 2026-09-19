@@ -572,6 +572,7 @@ export function CustomerExperience({
               sectionHeaderStyle={sectionHeaderStyle}
               buttonShape={buttonShape}
               buttonFill={buttonFill}
+              persistKey={token}
             />
           ) : (
             <>

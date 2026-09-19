@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { formatCents } from "@/lib/money";
 import { Spinner } from "@/components/ui/submit-button";
 import { BADGE_META, type BadgeKey } from "@/lib/menu-badges";
@@ -100,6 +100,7 @@ export function MenuOrderer({
   typeScale = "comfortable",
   buttonShape = "rounded",
   buttonFill = "solid",
+  persistKey,
 }: {
   menu: OrderCategory[];
   currency: string;
@@ -117,6 +118,13 @@ export function MenuOrderer({
   typeScale?: string;
   buttonShape?: string;
   buttonFill?: string;
+  // When set, the cart + note are persisted to localStorage under this key
+  // (see storageKey below) so a customer who leaves the menu mid-browse and
+  // comes back — same table, same device — keeps what they'd added.
+  // localStorage is per-browser, so a second person at the same table on
+  // their own phone never sees this. Omit for the staff order panel, which
+  // has no per-visit token and should keep its in-memory-only behaviour.
+  persistKey?: string;
 }) {
   const cs = resolveCardStyle(layout, cardStyle);
   const ts = resolveTypeScale(typeScale);
@@ -135,6 +143,43 @@ export function MenuOrderer({
   // duplicate on the server, no matter how many times the client retries it.
   const submitKeyRef = useRef<string | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storageKey = persistKey ? `tillz_cart_${persistKey}` : null;
+  const hydratedRef = useRef(false);
+
+  // Rehydrate once on mount — not in the useState initializer, since that
+  // runs during SSR/hydration where localStorage doesn't exist (or wouldn't
+  // match the server-rendered empty cart, causing a hydration mismatch).
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed?.cart)) setCart(parsed.cart);
+        if (typeof parsed?.note === "string") setNote(parsed.note);
+      }
+    } catch {
+      // Private mode / corrupted value — fall back to an empty cart.
+    } finally {
+      hydratedRef.current = true;
+    }
+    // Only ever runs once per mount, keyed to this specific storageKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  // Persist on every cart/note change, once rehydration has had its chance
+  // to run first — otherwise the initial empty-cart render would overwrite
+  // whatever was already saved before the hydrate effect gets to read it.
+  useEffect(() => {
+    if (!storageKey || !hydratedRef.current) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ cart, note }));
+    } catch {
+      // Private mode can throw on write too — losing persistence here is
+      // fine, the cart just keeps working in memory for this session.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, note, storageKey]);
 
   const count = cart.reduce((a, l) => a + l.quantity, 0);
   const subtotal = cart.reduce((a, l) => a + l.unitCents * l.quantity, 0);
@@ -232,6 +277,13 @@ export function MenuOrderer({
       }
       setCart([]);
       setNote("");
+      if (storageKey) {
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {
+          // Nothing to do — the in-memory cart is already cleared either way.
+        }
+      }
       setReviewOpen(false);
       setRetrying(false);
       submitKeyRef.current = null;
