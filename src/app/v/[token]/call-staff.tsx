@@ -10,7 +10,10 @@ export function CallStaff({
   variant = "button",
 }: {
   token: string;
-  variant?: "button" | "block";
+  // "fab" is a small floating affordance for screens with their own primary
+  // content (e.g. the menu, which already has a sticky cart bar at the
+  // bottom) — same action, just out of the way rather than a full-width row.
+  variant?: "button" | "block" | "fab";
 }) {
   const [pending, start] = useTransition();
   const [sent, setSent] = useState(false);
@@ -21,6 +24,18 @@ export function CallStaff({
       setSent(true);
       setTimeout(() => setSent(false), 4000);
     });
+  }
+
+  if (variant === "fab") {
+    return (
+      <button
+        onClick={call}
+        disabled={pending || sent}
+        className="fixed top-4 right-4 z-10 rounded-full border border-line bg-surface/95 backdrop-blur px-3.5 py-2 text-xs font-medium shadow-sm hover:border-ink/30 disabled:opacity-70 transition-colors"
+      >
+        {sent ? "✓ Notified" : pending ? "Notifying…" : "Call staff"}
+      </button>
+    );
   }
 
   if (sent) {

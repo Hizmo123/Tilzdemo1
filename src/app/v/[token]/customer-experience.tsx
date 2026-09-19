@@ -549,6 +549,7 @@ export function CustomerExperience({
   if (view === "menu") {
     return (
       <Shell>
+        <CallStaff token={token} variant="fab" />
         <div className="max-w-sm mx-auto px-5 pt-6">
           {Back}
           <h1 className="font-display text-2xl font-semibold tracking-tight mb-4">
