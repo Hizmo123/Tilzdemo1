@@ -113,7 +113,7 @@ export default async function KitchenSetupPage() {
         <p className="text-sm text-muted mb-3">
           Whoever sets up the tablet needs their own PIN to sign in. Create
           one (or reset an existing one) from{" "}
-          <Link href="/dashboard/staff-logins" className="text-pine hover:underline">
+          <Link href="/dashboard/staff/logins" className="text-pine hover:underline">
             Staff logins
           </Link>{" "}
           — PINs are shown once at creation, so have this open on another

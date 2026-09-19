@@ -43,8 +43,6 @@ const navSections: NavSection[] = [
     label: "Team",
     items: [
       { label: "Team", href: "/dashboard/staff", perm: "staff:manage" },
-      { label: "Staff logins", href: "/dashboard/staff-logins", perm: "staff:manage" },
-      { label: "Activity", href: "/dashboard/activity", perm: "audit:view" },
     ],
   },
   {

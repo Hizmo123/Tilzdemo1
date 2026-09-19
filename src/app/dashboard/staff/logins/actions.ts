@@ -72,7 +72,7 @@ export async function createStaffLogin(
     metadata: { name: parsed.data.name, role: parsed.data.role },
   });
 
-  revalidatePath("/dashboard/staff-logins");
+  revalidatePath("/dashboard/staff/logins");
   // The plaintext PIN is returned once for the owner to hand over; it's not
   // stored and can't be shown again — only reset.
   return { createdPin: pin, createdName: parsed.data.name };
@@ -106,7 +106,7 @@ export async function resetPin(
     metadata: { name: staff.name },
   });
 
-  revalidatePath("/dashboard/staff-logins");
+  revalidatePath("/dashboard/staff/logins");
   return { createdPin: pin, createdName: staff.name };
 }
 
@@ -134,7 +134,7 @@ export async function setStaffActive(staffId: string, active: boolean) {
     metadata: { name: staff.name, active },
   });
 
-  revalidatePath("/dashboard/staff-logins");
+  revalidatePath("/dashboard/staff/logins");
   return { ok: true as const };
 }
 
@@ -160,7 +160,7 @@ export async function changeStaffRole(staffId: string, role: Role) {
     metadata: { name: staff.name, from: staff.role, to: role },
   });
 
-  revalidatePath("/dashboard/staff-logins");
+  revalidatePath("/dashboard/staff/logins");
   return { ok: true as const };
 }
 
@@ -182,7 +182,7 @@ export async function changeStaffStation(staffId: string, station: string | null
     data: { assignedStation: station && station.trim() ? station.trim().slice(0, 24) : null },
   });
 
-  revalidatePath("/dashboard/staff-logins");
+  revalidatePath("/dashboard/staff/logins");
   return { ok: true as const };
 }
 
@@ -207,6 +207,6 @@ export async function deleteStaffLogin(staffId: string) {
     metadata: { name: staff.name },
   });
 
-  revalidatePath("/dashboard/staff-logins");
+  revalidatePath("/dashboard/staff/logins");
   return { ok: true as const };
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { StaffManager } from "./staff-manager";
+import { StaffTabs } from "@/components/dashboard/staff-tabs";
 
 export default async function StaffPage() {
   const authz = await getAuthz();
@@ -59,6 +60,8 @@ export default async function StaffPage() {
           Invite staff and control what each person can do.
         </p>
       </div>
+
+      <StaffTabs active="/dashboard/staff" showActivity={authz.can("audit:view")} />
 
       <StaffManager
         members={members.map((m) => ({

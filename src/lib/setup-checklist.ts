@@ -49,7 +49,7 @@ export async function getSetupChecklist(restaurant: {
   const staffItem: ChecklistItem = {
     id: "staff",
     label: "Create a staff PIN login",
-    href: "/dashboard/staff-logins",
+    href: "/dashboard/staff/logins",
     done: staffAccountCount > 0,
   };
   const abnItem: ChecklistItem = {
