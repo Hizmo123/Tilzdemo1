@@ -46,3 +46,9 @@ alter table "StandOrder" enable row level security;
 alter table "StandOrderItem" enable row level security;
 revoke all on "StandOrder" from anon, authenticated;
 revoke all on "StandOrderItem" from anon, authenticated;
+
+-- Added with the StandProduct catalog: not sensitive on its own, but same
+-- blanket policy as every other table here — all access goes through Prisma
+-- (admin CRUD, venue buy screen), never the anon/authenticated API surface.
+alter table "StandProduct" enable row level security;
+revoke all on "StandProduct" from anon, authenticated;

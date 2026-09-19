@@ -396,6 +396,33 @@ enum StandOrderStatus {
   SHIPPED
 }
 
+// QR vs NFC is display/labelling only — both resolve through the exact same
+// /s/<qrToken> flow (lib/stands.ts), never a backend fork.
+enum StandType {
+  QR
+  NFC
+}
+
+// Admin-managed catalog listing a venue picks from on the "Order Tillz
+// stands" screen (dashboard/stands). Never hard-deleted — retiring one only
+// sets active=false, since a past StandOrder can still reference it (see
+// StandOrder.standProductId) and must keep resolving for order history.
+model StandProduct {
+  id          String     @id @default(cuid())
+  title       String
+  description String
+  imageUrl    String?
+  type        StandType
+  priceCents  Int
+  active      Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  standOrders StandOrder[]
+
+  @@index([active, sortOrder])
+}
+
 model StandOrder {
   id             String           @id @default(cuid())
   organizationId String
@@ -403,6 +430,13 @@ model StandOrder {
   restaurantId   String
   restaurant     Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   status         StandOrderStatus @default(PENDING_PAYMENT)
+  standProductId String?
+  standProduct   StandProduct?    @relation(fields: [standProductId], references: [id], onDelete: SetNull)
+  // Snapshot of the product at order time — survives the product later being
+  // edited or retired (active=false), so a historical order still shows what
+  // was actually bought rather than whatever the catalog says today.
+  productTitleSnapshot String?
+  productType          StandType?
   quantity       Int
   unitPriceCents Int
   totalCents     Int
