@@ -49,8 +49,13 @@ const navSections: NavSection[] = [
     label: "Account",
     items: [
       { label: "Billing", href: "/dashboard/billing", perm: "settings:manage" },
-      { label: "Settings", href: "/dashboard/settings", perm: "settings:manage" },
-      { label: "Security", href: "/dashboard/security", perm: null },
+      // null, not "settings:manage": Settings now folds in Security (2FA/
+      // passkeys), which every signed-in role could always reach directly
+      // before (see settings/page.tsx's own per-card permission filter,
+      // separate from this nav-level check) — gating the nav item itself
+      // to settings:manage would remove their only nav path to it, even
+      // though the page underneath would still show them that one card.
+      { label: "Settings", href: "/dashboard/settings", perm: null },
     ],
   },
 ];
