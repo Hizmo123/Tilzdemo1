@@ -13,6 +13,14 @@ import { ReadyBanner } from "./ready-banner";
 
 export const dynamic = "force-dynamic";
 
+// Unpaid-bill safety net: a table whose bill still has a balance owing and
+// hasn't had a new order in this long gets flagged on the floor view, purely
+// as a notification for staff to go check on it. Deliberately NOT an
+// auto-charge, auto-close, or anything that touches the bill itself —
+// server-computed from timestamps already on Bill/Order every time this page
+// loads, so it needs no background job or scheduler to exist.
+const UNPAID_ALERT_MINUTES = 20;
+
 export default async function StaffHomePage({
   params,
 }: {
@@ -38,7 +46,14 @@ export default async function StaffHomePage({
         where: { status: { in: ["OPEN", "PARTIALLY_PAID"] } },
         orderBy: { createdAt: "desc" },
         take: 1,
-        include: { _count: { select: { items: true } } },
+        include: {
+          _count: { select: { items: true } },
+          orders: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { createdAt: true },
+          },
+        },
       },
     },
   });
@@ -150,12 +165,24 @@ export default async function StaffHomePage({
                     const needsHelp = assistanceTableIds.has(t.id);
                     const itemCount = bill?._count?.items ?? 0;
 
-                    // Priority: assistance > open > empty. Colour tells the story.
+                    // Last order time (falls back to when the bill itself was
+                    // opened if it somehow has no orders yet) — the clock this
+                    // safety net runs off, never the customer's own device.
+                    const lastActivityAt = bill?.orders[0]?.createdAt ?? bill?.createdAt;
+                    const minutesSinceActivity = lastActivityAt
+                      ? Math.floor((now - new Date(lastActivityAt).getTime()) / 60000)
+                      : 0;
+                    const unpaidTooLong =
+                      !!bill && remaining > 0 && minutesSinceActivity >= UNPAID_ALERT_MINUTES;
+
+                    // Priority: assistance > unpaid-too-long > open > empty.
                     const cls = needsHelp
                       ? "border-amber-300 bg-amber-50 hover:border-amber-400"
-                      : bill
-                        ? "border-pine/30 bg-pine-soft/40 hover:border-pine/50"
-                        : "border-line bg-surface hover:border-line";
+                      : unpaidTooLong
+                        ? "border-danger/40 bg-danger-soft hover:border-danger/60"
+                        : bill
+                          ? "border-pine/30 bg-pine-soft/40 hover:border-pine/50"
+                          : "border-line bg-surface hover:border-line";
 
                     return (
                       <Link
@@ -170,6 +197,10 @@ export default async function StaffHomePage({
                           {needsHelp ? (
                             <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
                               Help
+                            </span>
+                          ) : unpaidTooLong ? (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-danger">
+                              Unpaid
                             </span>
                           ) : bill ? (
                             <span className="text-[10px] uppercase tracking-wide text-pine-deep">
@@ -186,6 +217,11 @@ export default async function StaffHomePage({
                           {needsHelp && (
                             <p className="text-xs font-medium text-amber-700 mb-1">
                               ● Needs assistance
+                            </p>
+                          )}
+                          {!needsHelp && unpaidTooLong && (
+                            <p className="text-xs font-medium text-danger mb-1">
+                              ● Unpaid {minutesSinceActivity}m
                             </p>
                           )}
                           {bill ? (
