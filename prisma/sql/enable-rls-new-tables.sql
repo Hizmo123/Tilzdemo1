@@ -9,11 +9,6 @@
 --   the anon/authenticated roles access to new tables in `public` automatically.
 --
 --   Found live on this database:
---     - OtpChallenge   — phone numbers, OTP hashes, attempt counters. Publicly
---                        readable AND writable: an attacker could reset the
---                        attempts counter to defeat the brute-force lockout,
---                        or read every phone number that ever requested
---                        verification.
 --     - OnboardingDraft — in-progress venue setup, keyed by user id. Lower
 --                        severity, but publicly readable/deletable all the same.
 --
@@ -28,10 +23,8 @@
 --   Safe to run more than once.
 -- ============================================================================
 
-alter table "OtpChallenge"    enable row level security;
 alter table "OnboardingDraft" enable row level security;
 
-revoke all on "OtpChallenge"    from anon, authenticated;
 revoke all on "OnboardingDraft" from anon, authenticated;
 
 -- Added when the Refund model landed (Delivery 1, monetization layer):

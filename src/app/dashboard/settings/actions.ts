@@ -18,7 +18,6 @@ import {
 import { parseHours } from "@/lib/hours";
 import { log } from "@/lib/log";
 import { normalizeAuPhone } from "@/lib/phone";
-import { sendOtp, verifyOtp } from "@/lib/otp";
 // Constants live in a plain module — a "use server" file may only export async
 // functions, so exporting these arrays from here breaks them at runtime.
 import {
@@ -401,35 +400,6 @@ export async function uploadBackground(
   });
   revalidatePath("/dashboard/settings/branding");
   return res;
-}
-
-// ---- Owner phone verification ----------------------------------------------
-
-export async function sendOwnerVerification(phone: string) {
-  const { authz, restaurant } = await currentRestaurant();
-  if (!authz.can("settings:manage")) return { error: "Not permitted." };
-  if (!restaurant) return { error: "Create your restaurant first." };
-  const e164 = normalizeAuPhone(phone);
-  if (!e164) return { error: "Enter a valid Australian mobile (e.g. 04xx xxx xxx)." };
-  const res = await sendOtp(e164, "owner_verify");
-  if ("error" in res) return res;
-  return { ok: true as const, devCode: res.devCode };
-}
-
-export async function verifyOwnerVerification(phone: string, code: string) {
-  const { authz, restaurant } = await currentRestaurant();
-  if (!authz.can("settings:manage")) return { error: "Not permitted." };
-  if (!restaurant) return { error: "Create your restaurant first." };
-  const e164 = normalizeAuPhone(phone);
-  if (!e164) return { error: "Enter a valid Australian mobile." };
-  const res = await verifyOtp(e164, code, "owner_verify");
-  if ("error" in res) return res;
-  await prisma.restaurant.update({
-    where: { id: restaurant.id },
-    data: { ownerPhone: e164 },
-  });
-  revalidatePath("/dashboard/settings");
-  return { ok: true as const };
 }
 
 export async function removeBackground(): Promise<SettingsState> {
