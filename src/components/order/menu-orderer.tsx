@@ -747,6 +747,7 @@ function ModifierSheet({
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState("");
 
   function toggle(group: OrderGroup, optionId: string) {
     setError(null);
@@ -793,6 +794,7 @@ function ModifierSheet({
       optionIds: allOptionIds,
       optionLabel: labelParts.join(", "),
       unitCents: unit,
+      note: note.trim() || undefined,
     });
   }
 
@@ -870,6 +872,19 @@ function ModifierSheet({
                 +
               </button>
             </div>
+          </div>
+
+          <div>
+            <label className="text-sm text-muted mb-1.5 block">
+              Special requests (optional)
+            </label>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. no onion, extra spicy"
+              rows={2}
+              className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm focus:border-pine focus:outline-none resize-none"
+            />
           </div>
 
           <button
