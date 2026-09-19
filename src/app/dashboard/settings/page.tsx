@@ -29,7 +29,7 @@ const CARDS: {
   {
     href: "/dashboard/settings/notifications",
     label: "Notifications",
-    description: "Kitchen chime and order-ready texts.",
+    description: "Kitchen chime.",
   },
   {
     href: "/dashboard/billing",

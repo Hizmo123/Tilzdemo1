@@ -50,8 +50,7 @@ export default async function CustomerAnalyticsPage({
         <p className="text-muted mt-1 max-w-2xl">
           Tillz doesn&apos;t have customer accounts — guests are anonymous QR
           sessions. What&apos;s below is table visits, and real repeat-visit
-          tracking for anyone who&apos;s left a phone number for an
-          &quot;order ready&quot; text.
+          tracking for anyone who&apos;s left a phone number on a bill.
         </p>
       </div>
 

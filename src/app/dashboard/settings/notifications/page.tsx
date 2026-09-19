@@ -23,7 +23,7 @@ export default async function NotificationsSettingsPage() {
         <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">
           Notifications
         </h1>
-        <p className="text-muted mt-1">Kitchen chime and order-ready texts.</p>
+        <p className="text-muted mt-1">Kitchen chime.</p>
       </div>
 
       <SettingsForm section="notifications" initial={buildSettingsInitial(restaurant)} />

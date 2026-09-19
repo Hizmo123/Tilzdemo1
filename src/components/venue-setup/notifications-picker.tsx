@@ -2,11 +2,8 @@
 
 // Only offers what the product actually does: a kitchen chime toggle, and an
 // info row for dashboard live refresh, which is unconditional today and has
-// no setting to attach to. The "text me when it's ready" capture used to
-// have its own on/off toggle here — removed as a confusing extra setup
-// decision; it's simply always offered to customers now (who opt in or not
-// per-order just by choosing to leave a number, which was always the real
-// privacy control point, not this venue-level setting).
+// no setting to attach to. SMS ("text me when it's ready") has been removed
+// from the product entirely — there's no venue-level setting for it anymore.
 export function NotificationsPicker({
   kitchenChime,
   onKitchenChimeChange,
@@ -28,16 +25,6 @@ export function NotificationsPicker({
         </div>
         <p className="text-xs text-muted mt-1.5">
           Chimes on the kitchen board when a new ticket comes in.
-        </p>
-      </div>
-
-      <div className="rounded-lg bg-paper px-3.5 py-2.5">
-        <p className="text-sm text-ink-soft">
-          &ldquo;Text me when it&apos;s ready&rdquo; for customers
-        </p>
-        <p className="text-xs text-muted mt-0.5">
-          Always offered to guests after ordering — needs Twilio configured to
-          actually send; otherwise the number is just collected, unused.
         </p>
       </div>
 
