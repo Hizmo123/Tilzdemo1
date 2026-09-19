@@ -41,6 +41,12 @@ export default async function AdminLayout({
           >
             Fulfilment
           </Link>
+          <Link
+            href="/admin/products"
+            className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+          >
+            Products
+          </Link>
         </nav>
         <div className="border-t border-line px-5 py-4">
           <Link href="/dashboard" className="text-xs text-muted hover:text-ink">

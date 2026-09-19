@@ -208,6 +208,18 @@ export async function listFulfilmentOrders() {
   });
 }
 
+// ---- Stand product catalog ------------------------------------------------
+
+export async function listStandProducts() {
+  return prisma.standProduct.findMany({
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+}
+
+export async function getStandProduct(id: string) {
+  return prisma.standProduct.findUnique({ where: { id } });
+}
+
 export async function getFulfilmentOrder(orderId: string) {
   return prisma.standOrder.findUnique({
     where: { id: orderId },
