@@ -6,17 +6,18 @@ import { usePathname } from "next/navigation";
 import { signOut } from "../(auth)/actions";
 
 type NavItem = { label: string; href: string };
+type NavSection = { label: string; items: NavItem[] };
 
 // Mobile top bar + slide-over drawer. The desktop sidebar is hidden below `md`,
 // so without this a phone has no way to reach Tables/Orders/Team/etc. The nav
-// items are computed server-side (permission-filtered) in the layout and passed
-// in, so this component never decides who can see what.
+// sections are computed server-side (permission-filtered, grouped) in the
+// layout and passed in, so this component never decides who can see what.
 export function MobileNav({
-  items,
+  sections,
   restaurantName,
   userEmail,
 }: {
-  items: NavItem[];
+  sections: NavSection[];
   restaurantName: string;
   userEmail: string;
 }) {
@@ -111,31 +112,58 @@ export function MobileNav({
               </button>
             </div>
 
-            <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-              {items.map((item) => {
-                const active =
-                  item.href === "/dashboard"
-                    ? pathname === "/dashboard"
-                    : pathname.startsWith(item.href);
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    prefetch={false}
-                    onClick={() => setOpen(false)}
-                    className={`flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                      active
-                        ? "bg-pine-soft text-pine-deep font-medium"
-                        : "text-ink hover:bg-paper"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
+            <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-4">
+              {sections.map((section) => (
+                <div key={section.label}>
+                  <p className="px-3 mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+                    {section.label}
+                  </p>
+                  <div className="space-y-0.5">
+                    {section.items.map((item) => {
+                      const active =
+                        item.href === "/dashboard"
+                          ? pathname === "/dashboard"
+                          : pathname.startsWith(item.href);
+                      return (
+                        <Link
+                          key={item.label}
+                          href={item.href}
+                          prefetch={false}
+                          onClick={() => setOpen(false)}
+                          className={`flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                            active
+                              ? "bg-pine-soft text-pine-deep font-medium"
+                              : "text-ink hover:bg-paper"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
 
             <div className="border-t border-line px-5 py-4 pb-6 space-y-2">
+              <div className="flex items-center gap-3 text-sm">
+                <Link
+                  href="/dashboard/help"
+                  prefetch={false}
+                  onClick={() => setOpen(false)}
+                  className="text-ink-soft hover:text-ink transition-colors"
+                >
+                  Help
+                </Link>
+                <Link
+                  href="/support"
+                  prefetch={false}
+                  onClick={() => setOpen(false)}
+                  className="text-ink-soft hover:text-ink transition-colors"
+                >
+                  Support
+                </Link>
+              </div>
               <p className="text-xs text-muted truncate">{userEmail}</p>
               <form action={signOut}>
                 <button

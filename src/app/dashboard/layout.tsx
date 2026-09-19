@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAuthz } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { roleCan, type Permission } from "@/lib/rbac";
+import type { Role } from "@prisma/client";
 import { getEntitlements } from "@/lib/entitlements";
 import { signOut } from "../(auth)/actions";
 import { MobileNav } from "./mobile-nav";
@@ -10,47 +11,78 @@ import { MobileNav } from "./mobile-nav";
 // Each nav item declares the permission needed to see it. Overview and Bills are
 // visible to every role (all roles have bills:view). This only hides controls —
 // the actions themselves re-check permission server-side.
-const nav: { label: string; href: string; perm: Permission | null }[] = [
-  { label: "Overview", href: "/dashboard", perm: null },
-  { label: "Tables", href: "/dashboard/tables", perm: "tables:manage" },
-  { label: "Order Tillz stands", href: "/dashboard/stands", perm: "tables:manage" },
-  { label: "Orders", href: "/dashboard/orders", perm: "kitchen:manage" },
-  { label: "Kitchen screen", href: "/dashboard/kitchen", perm: "kitchen:manage" },
-  { label: "Menu", href: "/dashboard/menu", perm: "menu:availability" },
-  { label: "Bills", href: "/dashboard/bills", perm: "bills:view" },
-  { label: "Invoices", href: "/dashboard/invoices", perm: "bills:view" },
-  { label: "Analytics", href: "/dashboard/analytics", perm: "bills:view" },
-  { label: "Team", href: "/dashboard/staff", perm: "staff:manage" },
-  { label: "Staff logins", href: "/dashboard/staff-logins", perm: "staff:manage" },
-  { label: "Activity", href: "/dashboard/activity", perm: "audit:view" },
-  { label: "Billing", href: "/dashboard/billing", perm: "settings:manage" },
-  { label: "Settings", href: "/dashboard/settings", perm: "settings:manage" },
-  { label: "Security", href: "/dashboard/security", perm: null },
-  { label: "Help", href: "/dashboard/help", perm: null },
-  { label: "Support", href: "/support", perm: null },
+type NavEntry = { label: string; href: string; perm: Permission | null };
+type NavSection = { label: string; items: NavEntry[] };
+
+const navSections: NavSection[] = [
+  {
+    label: "Operations",
+    items: [
+      { label: "Overview", href: "/dashboard", perm: null },
+      { label: "Orders", href: "/dashboard/orders", perm: "kitchen:manage" },
+      { label: "Tables", href: "/dashboard/tables", perm: "tables:manage" },
+      { label: "Kitchen screen", href: "/dashboard/kitchen", perm: "kitchen:manage" },
+    ],
+  },
+  {
+    label: "Menu & hardware",
+    items: [
+      { label: "Menu", href: "/dashboard/menu", perm: "menu:availability" },
+      { label: "Order Tillz stands", href: "/dashboard/stands", perm: "tables:manage" },
+    ],
+  },
+  {
+    label: "Money",
+    items: [
+      { label: "Bills", href: "/dashboard/bills", perm: "bills:view" },
+      { label: "Invoices", href: "/dashboard/invoices", perm: "bills:view" },
+      { label: "Analytics", href: "/dashboard/analytics", perm: "bills:view" },
+    ],
+  },
+  {
+    label: "Team",
+    items: [
+      { label: "Team", href: "/dashboard/staff", perm: "staff:manage" },
+      { label: "Staff logins", href: "/dashboard/staff-logins", perm: "staff:manage" },
+      { label: "Activity", href: "/dashboard/activity", perm: "audit:view" },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { label: "Billing", href: "/dashboard/billing", perm: "settings:manage" },
+      { label: "Settings", href: "/dashboard/settings", perm: "settings:manage" },
+      { label: "Security", href: "/dashboard/security", perm: null },
+    ],
+  },
 ];
 
 // Which of the day-to-day items (Tables/Orders/Menu/Bills/Analytics) matter
 // most for a given onboarding experienceMode. "Overview" always leads; the
 // admin/config items (Team, Billing, Settings, ...) always stay put at the
-// end — only the day-to-day ones get reprioritised. Everything stays a full
-// click away either way; this only changes what's fastest to reach.
+// end — only the day-to-day ones get reprioritised.
+//
+// Reordering is applied WITHIN each section, never across sections — the
+// fixed section order (Operations / Menu & hardware / Money / Team / Account)
+// takes precedence over emphasis. Previously (flat-list days) emphasis could
+// pull an item like Bills all the way to the top of the ENTIRE nav, ahead of
+// un-emphasized items from other groups — that specific cross-group jump is
+// no longer possible once items are grouped under fixed section headers, so
+// this only reorders items relative to their section-mates now. Everything
+// stays a full click away either way; this only changes what's fastest to
+// reach within its own group.
 const EMPHASIS: Record<string, string[]> = {
   digital_menu: ["/dashboard/menu", "/dashboard/tables"],
   order_and_pay: ["/dashboard/orders", "/dashboard/tables", "/dashboard/menu", "/dashboard/bills"],
   payment_only: ["/dashboard/bills", "/dashboard/tables", "/dashboard/analytics"],
 };
 
-function reorderNav(
-  items: typeof nav,
-  experienceMode: string | null,
-): typeof nav {
-  const emphasis = experienceMode ? EMPHASIS[experienceMode] : undefined;
-  if (!emphasis) return items;
-  const rank = new Map(emphasis.map((href, i) => [href, i]));
+function reorderSection(
+  items: NavEntry[],
+  rank: Map<string, number> | null,
+): NavEntry[] {
+  if (!rank) return items;
   return [...items].sort((a, b) => {
-    if (a.href === "/dashboard") return -1;
-    if (b.href === "/dashboard") return 1;
     const ra = rank.get(a.href);
     const rb = rank.get(b.href);
     if (ra !== undefined && rb !== undefined) return ra - rb;
@@ -58,6 +90,23 @@ function reorderNav(
     if (rb !== undefined) return 1;
     return 0; // keep original relative order for everything else
   });
+}
+
+function buildVisibleSections(
+  experienceMode: string | null,
+  role: Role | null,
+): NavSection[] {
+  const emphasis = experienceMode ? EMPHASIS[experienceMode] : undefined;
+  const rank = emphasis ? new Map(emphasis.map((href, i) => [href, i])) : null;
+
+  return navSections
+    .map((section) => ({
+      label: section.label,
+      items: reorderSection(section.items, rank).filter(
+        (item) => item.perm === null || (role && roleCan(role, item.perm)),
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 
 export default async function DashboardLayout({
@@ -110,8 +159,9 @@ export default async function DashboardLayout({
 
   const restaurant = membership?.organization.restaurants[0];
 
-  const visible = reorderNav(nav, restaurant?.experienceMode ?? null).filter(
-    (item) => item.perm === null || (role && roleCan(role, item.perm)),
+  const visibleSections = buildVisibleSections(
+    restaurant?.experienceMode ?? null,
+    role,
   );
 
   // Lapsed-subscription grace period (spec B4): a warning here, never a
@@ -132,20 +182,45 @@ export default async function DashboardLayout({
           </p>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {visible.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              prefetch={false}
-              className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
-            >
-              {item.label}
-            </Link>
+        <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-4">
+          {visibleSections.map((section) => (
+            <div key={section.label}>
+              <p className="px-3 mb-1 text-xs font-medium uppercase tracking-wide text-muted">
+                {section.label}
+              </p>
+              <div className="space-y-0.5">
+                {section.items.map((item) => (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    prefetch={false}
+                    className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
         <div className="border-t border-line px-5 py-4 pb-6 space-y-2">
+          <div className="flex items-center gap-3 text-sm">
+            <Link
+              href="/dashboard/help"
+              prefetch={false}
+              className="text-ink-soft hover:text-ink transition-colors"
+            >
+              Help
+            </Link>
+            <Link
+              href="/support"
+              prefetch={false}
+              className="text-ink-soft hover:text-ink transition-colors"
+            >
+              Support
+            </Link>
+          </div>
           <p className="text-xs text-muted truncate">{user.email}</p>
           <form action={signOut}>
             <button
@@ -160,7 +235,10 @@ export default async function DashboardLayout({
 
       <div className="flex-1 min-w-0">
         <MobileNav
-          items={visible.map(({ label, href }) => ({ label, href }))}
+          sections={visibleSections.map((section) => ({
+            label: section.label,
+            items: section.items.map(({ label, href }) => ({ label, href })),
+          }))}
           restaurantName={restaurant?.name ?? "No restaurant yet"}
           userEmail={user.email ?? ""}
         />
