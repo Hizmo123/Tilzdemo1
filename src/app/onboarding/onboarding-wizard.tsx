@@ -26,7 +26,6 @@ import { SplitMethodsPicker } from "@/components/venue-setup/split-methods-picke
 import { CornerStylePicker } from "@/components/venue-setup/corner-style-picker";
 import { CustomerPreview } from "@/components/venue-setup/customer-preview";
 import { NotificationsPicker } from "@/components/venue-setup/notifications-picker";
-import { PosPicker } from "@/components/venue-setup/pos-picker";
 
 type StepId =
   | "location"
@@ -39,8 +38,7 @@ type StepId =
   | "tipping"
   | "branding"
   | "tax"
-  | "alerts"
-  | "pos";
+  | "alerts";
 
 const STEP_TITLES: Record<StepId, string> = {
   location: "Location",
@@ -54,7 +52,6 @@ const STEP_TITLES: Record<StepId, string> = {
   branding: "Branding",
   tax: "Tax",
   alerts: "Alerts",
-  pos: "POS",
 };
 
 function activeSteps(a: OnboardingAnswers): StepId[] {
@@ -67,7 +64,7 @@ function activeSteps(a: OnboardingAnswers): StepId[] {
     "menu",
   ];
   if (a.customerPayment) steps.push("split");
-  steps.push("tipping", "branding", "tax", "alerts", "pos");
+  steps.push("tipping", "branding", "tax", "alerts");
   return steps;
 }
 
@@ -486,28 +483,6 @@ export function OnboardingWizard({
               />
             </Step>
           )}
-
-          {stepId === "pos" && (
-            <Step title="Do you use Square?" subtitle="Square is the only POS with a real connection on our roadmap, so it's the only one we ask about.">
-              <PosPicker
-                usesSquare={
-                  answers.posProvider === "square"
-                    ? true
-                    : answers.posProvider === "none"
-                      ? false
-                      : null
-                }
-                wantsConnect={answers.squareConnectInterest}
-                onUsesSquareChange={(usesSquare) =>
-                  update({
-                    posProvider: usesSquare ? "square" : "none",
-                    squareConnectInterest: usesSquare ? answers.squareConnectInterest : false,
-                  })
-                }
-                onWantsConnectChange={(squareConnectInterest) => update({ squareConnectInterest })}
-              />
-            </Step>
-          )}
         </div>
 
         {error && (
@@ -526,7 +501,7 @@ export function OnboardingWizard({
               Back
             </button>
           )}
-          {stepId === "pos" && (
+          {clampedStep === last && (
             <button
               onClick={finish}
               disabled={pending}

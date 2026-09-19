@@ -160,17 +160,6 @@ export type OnboardingAnswers = {
   timezone: string;
   kitchenChime: boolean;
   orderReadySmsEnabled: boolean;
-  // "square" | "none" | null (unanswered). Square is the only POS asked
-  // about — it's the only one on the roadmap (see PaymentConnection /
-  // Delivery 1b); asking about brands with no integration plan would only
-  // collect hope. posProviderOther is legacy from the old multi-brand
-  // picker and is no longer written, kept only so existing rows still parse.
-  posProvider: string | null;
-  posProviderOther: string;
-  // True only when posProvider === "square" and the owner opted in to a
-  // future connection. Captured now, acted on once Square OAuth (Delivery 1b)
-  // actually lands — see Restaurant.squareConnectInterest.
-  squareConnectInterest: boolean;
 };
 
 // What actually gets persisted mid-wizard — the answers so far plus which
@@ -211,8 +200,5 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     timezone: "Australia/Sydney",
     kitchenChime: true,
     orderReadySmsEnabled: true,
-    posProvider: null,
-    posProviderOther: "",
-    squareConnectInterest: false,
   };
 }

@@ -79,9 +79,6 @@ const schema = z.object({
   timezone: z.enum(TIMEZONES),
   kitchenChime: z.boolean(),
   orderReadySmsEnabled: z.boolean(),
-  posProvider: z.enum(["square", "none"]).nullable(),
-  posProviderOther: z.string().trim().max(60).optional().or(z.literal("")),
-  squareConnectInterest: z.boolean(),
 });
 
 function slugify(input: string): string {
@@ -258,9 +255,6 @@ export async function completeOnboarding(
         country: a.country,
         language: a.language,
         hours: hours === null ? Prisma.JsonNull : (hours as Prisma.InputJsonValue),
-        posProvider: a.posProvider,
-        posProviderOther: a.posProviderOther ? a.posProviderOther : null,
-        squareConnectInterest: a.squareConnectInterest,
         onboardingCompletedAt: new Date(),
         locations: { create: { name: "Main" } },
       },

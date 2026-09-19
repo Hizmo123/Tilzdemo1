@@ -19,13 +19,10 @@ const schema = z.object({
   paymentTiming: z.enum(["before", "after"]),
   staffApproval: z.boolean(),
   splitMethods: z.array(z.enum(SPLIT_METHOD_VALUES)).min(1),
-  posProvider: z.enum(["square", "none"]).nullable(),
-  posProviderOther: z.string().trim().max(60).optional().or(z.literal("")),
-  squareConnectInterest: z.boolean(),
 });
 
 // Revisits the onboarding-only questions (venue type, experience mode + its
-// toggles, split methods, POS) from Settings, reusing the exact same picker
+// toggles, split methods) from Settings, reusing the exact same picker
 // components the wizard uses.
 export async function updateVenueSetup(
   input: z.infer<typeof schema>,
@@ -51,9 +48,6 @@ export async function updateVenueSetup(
       paymentTiming: a.paymentTiming,
       staffApproval: a.staffApproval,
       splitMethods: a.splitMethods,
-      posProvider: a.posProvider,
-      posProviderOther: a.posProviderOther ? a.posProviderOther : null,
-      squareConnectInterest: a.squareConnectInterest,
     },
   });
 

@@ -7,7 +7,6 @@ import type { ExperienceModeKey, SplitMethod } from "@/lib/onboarding-options";
 import { VenueTypePicker } from "@/components/venue-setup/venue-type-picker";
 import { ExperienceModePicker } from "@/components/venue-setup/experience-mode-picker";
 import { SplitMethodsPicker } from "@/components/venue-setup/split-methods-picker";
-import { PosPicker } from "@/components/venue-setup/pos-picker";
 
 type Initial = {
   venueType: string;
@@ -17,9 +16,6 @@ type Initial = {
   paymentTiming: "before" | "after";
   staffApproval: boolean;
   splitMethods: string[];
-  posProvider: string | null;
-  posProviderOther: string;
-  squareConnectInterest: boolean;
 };
 
 export function VenueSetupForm({ initial }: { initial: Initial }) {
@@ -37,13 +33,6 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
   const [splitMethods, setSplitMethods] = useState<SplitMethod[]>(
     initial.splitMethods as SplitMethod[],
   );
-  const [posProvider, setPosProvider] = useState<"square" | "none" | null>(
-    initial.posProvider === "square" ? "square" : initial.posProvider === "none" ? "none" : null,
-  );
-  const [posProviderOther, setPosProviderOther] = useState(initial.posProviderOther);
-  const [squareConnectInterest, setSquareConnectInterest] = useState(
-    initial.squareConnectInterest,
-  );
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,9 +46,6 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
         experienceMode,
         ...settings,
         splitMethods,
-        posProvider,
-        posProviderOther,
-        squareConnectInterest,
       });
       if (res.error) setError(res.error);
       else {
@@ -98,23 +84,6 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
           <SplitMethodsPicker value={splitMethods} onChange={setSplitMethods} />
         </section>
       )}
-
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          Do you use Square?
-        </h2>
-        <PosPicker
-          usesSquare={
-            posProvider === "square" ? true : posProvider === "none" ? false : null
-          }
-          wantsConnect={squareConnectInterest}
-          onUsesSquareChange={(usesSquare) => {
-            setPosProvider(usesSquare ? "square" : "none");
-            if (!usesSquare) setSquareConnectInterest(false);
-          }}
-          onWantsConnectChange={setSquareConnectInterest}
-        />
-      </section>
 
       <div className="sticky bottom-4 flex items-center gap-3">
         <button

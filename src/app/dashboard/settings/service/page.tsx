@@ -31,7 +31,7 @@ export default async function ServiceModelPage() {
 
       <SettingsForm section="service" initial={buildSettingsInitial(restaurant)} />
 
-      {/* Venue type / service style / experience mode / split methods / Square —
+      {/* Venue type / service style / experience mode / split methods —
           the onboarding questions, kept as their own form (own save button,
           own action) exactly as before; just relocated onto this page instead
           of a separate hidden /dashboard/settings/venue-setup route. */}
@@ -45,9 +45,6 @@ export default async function ServiceModelPage() {
             paymentTiming: restaurant.paymentTiming as "before" | "after",
             staffApproval: restaurant.staffApproval,
             splitMethods: restaurant.splitMethods,
-            posProvider: restaurant.posProvider,
-            posProviderOther: restaurant.posProviderOther ?? "",
-            squareConnectInterest: restaurant.squareConnectInterest,
           }}
         />
       </div>

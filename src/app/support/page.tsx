@@ -13,8 +13,8 @@ export default function SupportPage() {
   return (
     <main className="min-h-dvh bg-paper text-ink">
       <div className="max-w-2xl mx-auto px-5 sm:px-8 py-12">
-        <Link href="/" className="text-sm text-muted hover:text-ink">
-          ← Tillz
+        <Link href="/dashboard" className="text-sm text-muted hover:text-ink">
+          ← Back to dashboard
         </Link>
         <h1 className="font-display text-3xl font-semibold tracking-tight mt-4 mb-1">
           Support
