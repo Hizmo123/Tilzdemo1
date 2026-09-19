@@ -167,7 +167,6 @@ export default async function VisitPage({
       surchargeBasisPoints={visit.surchargeBasisPoints}
       showTillzBranding={visit.showTillzBranding}
       splitMethods={visit.splitMethods}
-      orderReadySmsEnabled={visit.orderReadySmsEnabled}
       open={open}
       canOrder={visit.customerOrdering && open}
       canPay={visit.customerPayment}

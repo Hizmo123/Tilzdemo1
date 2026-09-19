@@ -5,7 +5,6 @@ import {
   payBillAmount,
   payBillItems,
   cancelCustomerOrder,
-  setBillContact,
   resolveVisit,
   type AddItem,
   type ItemSelection,
@@ -53,11 +52,6 @@ export async function payItems(
 // Cancel an order placed by mistake, while the kitchen hasn't started it.
 export async function cancelOrder(token: string, orderId: string) {
   return cancelCustomerOrder(token, orderId);
-}
-
-// Save a mobile for an "order ready" text.
-export async function saveContact(token: string, phone: string) {
-  return setBillContact(token, phone);
 }
 
 // Emails a copy of the table's most recent bill (same bill the receipt page

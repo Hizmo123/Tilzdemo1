@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addItems, cancelOrder, saveContact, emailMyReceipt } from "./actions";
+import { addItems, cancelOrder, emailMyReceipt } from "./actions";
 import { PaySheet, type Mode as PayMode } from "./pay-sheet";
 import { EmailReceiptForm } from "@/components/receipt/email-receipt-form";
 import { CallStaff } from "./call-staff";
@@ -72,7 +72,6 @@ export function CustomerExperience({
   surchargeBasisPoints,
   showTillzBranding,
   splitMethods,
-  orderReadySmsEnabled,
   open,
   canOrder,
   canPay,
@@ -113,7 +112,6 @@ export function CustomerExperience({
   surchargeBasisPoints: number;
   showTillzBranding: boolean;
   splitMethods: string[];
-  orderReadySmsEnabled: boolean;
   open: boolean;
   canOrder: boolean;
   canPay: boolean;
@@ -244,7 +242,6 @@ export function CustomerExperience({
                 </li>
               ))}
             </ul>
-            {!strictHold && orderReadySmsEnabled && <NotifyWhenReady token={token} />}
 
             <p className="text-xs text-muted mt-4">
               {strictHold
@@ -734,50 +731,3 @@ function OrderStatusBadge({ status }: { status: string }) {
   );
 }
 
-// Optional "text me when it's ready" capture on the order-placed screen.
-function NotifyWhenReady({ token }: { token: string }) {
-  const [phone, setPhone] = useState("");
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
-
-  if (saved) {
-    return (
-      <p className="mt-4 text-sm text-pine-deep">
-        ✓ We&apos;ll text you when it&apos;s ready.
-      </p>
-    );
-  }
-
-  return (
-    <div className="mt-5 border-t border-line pt-4 text-left">
-      <label className="text-sm font-medium block mb-1">
-        Text me when it&apos;s ready
-      </label>
-      <div className="flex gap-2">
-        <input
-          inputMode="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="04xx xxx xxx"
-          className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
-        />
-        <button
-          disabled={pending || phone.trim().length < 6}
-          onClick={() =>
-            start(async () => {
-              setError(null);
-              const res = await saveContact(token, phone.trim());
-              if (res && "error" in res) setError(res.error ?? "Couldn't save that number.");
-              else setSaved(true);
-            })
-          }
-          className="rounded-lg bg-ink text-surface px-4 py-2 text-sm font-medium disabled:opacity-50"
-        >
-          {pending ? "…" : "Notify me"}
-        </button>
-      </div>
-      {error && <p className="text-xs text-danger mt-1">{error}</p>}
-    </div>
-  );
-}

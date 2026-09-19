@@ -2,8 +2,6 @@ import { randomBytes, randomUUID } from "crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
-import { sendSms } from "@/lib/sms";
-import { normalizeAuPhone } from "@/lib/phone";
 import { notifyRestaurant } from "@/lib/realtime";
 import { formatCents } from "@/lib/money";
 import { log } from "@/lib/log";
@@ -50,7 +48,6 @@ export type ResolvedVisit = {
   // skip payment" moment — see requirePaymentBeforeOrder's schema comment.
   requirePaymentBeforeOrder: boolean;
   splitMethods: string[];
-  orderReadySmsEnabled: boolean;
   surchargeEnabled: boolean;
   surchargeBasisPoints: number;
   // Plan entitlements (see lib/entitlements.ts), resolved here so the
@@ -137,7 +134,6 @@ export async function resolveVisit(
       paymentTiming: r.paymentTiming,
       requirePaymentBeforeOrder: r.requirePaymentBeforeOrder,
       splitMethods: r.splitMethods,
-      orderReadySmsEnabled: r.orderReadySmsEnabled,
       surchargeEnabled: r.surchargeEnabled,
       surchargeBasisPoints: r.surchargeBasisPoints,
       showTillzBranding: ent.showTillzBranding,
@@ -621,27 +617,6 @@ export async function advanceOrderStatus(
     data: { status: to, servedAt: to === "SERVED" ? new Date() : order.servedAt },
   });
 
-  // "Order ready" SMS — once per bill, only when a phone was left.
-  if (
-    to === "READY" &&
-    order.bill.customerPhone &&
-    !order.bill.readyNotifiedAt
-  ) {
-    const r = await prisma.restaurant.findUnique({
-      where: { id: restaurantId },
-      select: { name: true },
-    });
-    const num = order.orderNumber != null ? `#${order.orderNumber}` : "your order";
-    await sendSms(
-      order.bill.customerPhone,
-      `${r?.name ?? "Your order"}: order ${num} is ready to collect. Thanks!`,
-    );
-    await prisma.bill.update({
-      where: { id: order.billId },
-      data: { readyNotifiedAt: new Date() },
-    });
-  }
-
   await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
@@ -1122,21 +1097,6 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
   });
 
   await notifyRestaurant(resolved.visit.restaurantId);
-  return { ok: true as const };
-}
-
-// Saves a customer's mobile on the open bill so they get an "order ready" SMS.
-export async function setBillContact(token: string, phone: string) {
-  const resolved = await resolveVisit(token);
-  if (!resolved.ok) return { error: "This table is no longer available." };
-  const e164 = normalizeAuPhone(phone);
-  if (!e164) return { error: "Enter a valid mobile number." };
-  const bill = await getOpenBillWithItems(resolved.visit.tableId);
-  if (!bill) return { error: "There's no open bill yet." };
-  await prisma.bill.update({
-    where: { id: bill.id },
-    data: { customerPhone: e164 },
-  });
   return { ok: true as const };
 }
 
