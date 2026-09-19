@@ -34,9 +34,8 @@ export default function PrivacyPage() {
               <li>
                 <strong className="text-ink">Guest ordering a table's bill:</strong>{" "}
                 nothing that identifies you is required to order or pay. If you
-                choose to add a mobile number for an "order ready" text, or an
-                email to receive a copy of your receipt, that's stored against
-                the bill.
+                choose to add an email to receive a copy of your receipt,
+                that's stored against the bill.
               </li>
               <li>
                 <strong className="text-ink">Guest requesting assistance</strong>{" "}
@@ -75,20 +74,17 @@ export default function PrivacyPage() {
               to be closed.
             </p>
             <p>
-              Everything else (an assistance request, an unpaid draft order, a
-              phone verification code) is only kept as long as it's useful for
-              running the venue, and TODO: a scheduled cleanup job to actually
-              purge expired verification codes doesn't exist yet — today
-              they're just left to expire in place.
+              Everything else (an assistance request, an unpaid draft order)
+              is only kept as long as it's useful for running the venue.
             </p>
           </Section>
 
           <Section title="Where it's stored">
             Tillz's database and file storage run on Supabase, hosted in
             Australia (ap-southeast-2). TODO: confirm and state this precisely
-            once infrastructure is finalised, including any subprocessor (SMS,
-            email, payment providers) that sees a slice of this data to do its
-            job (Twilio for SMS, Resend for email, Stripe/Square for payments).
+            once infrastructure is finalised, including any subprocessor
+            (email, payment providers) that sees a slice of this data to do
+            its job (Resend for email, Stripe/Square for payments).
           </Section>
 
           <Section title="Your rights">

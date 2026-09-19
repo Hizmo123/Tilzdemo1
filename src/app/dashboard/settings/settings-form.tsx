@@ -94,7 +94,6 @@ export function SettingsForm({
     paymentTiming: string;
     requirePaymentBeforeOrder: boolean;
     kitchenChime: boolean;
-    orderReadySmsEnabled: boolean;
     surchargeEnabled: boolean;
     surchargeBasisPoints: number;
     hours: unknown;
@@ -147,9 +146,6 @@ export function SettingsForm({
   const [instagramHandle, setInstagramHandle] = useState(initial.instagramHandle ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(initial.websiteUrl ?? "");
   const [kitchenChime, setKitchenChime] = useState(initial.kitchenChime);
-  const [orderReadySmsEnabled, setOrderReadySmsEnabled] = useState(
-    initial.orderReadySmsEnabled,
-  );
   const [tipEnabled, setTipEnabled] = useState(initial.tipEnabled);
   const [tipPresetsStr, setTipPresetsStr] = useState(
     initial.tipPresets.join(", "),
@@ -239,7 +235,6 @@ export function SettingsForm({
         paymentTiming,
         requirePaymentBeforeOrder,
         kitchenChime,
-        orderReadySmsEnabled,
         surchargeEnabled,
         surchargePercent: surchargePercentNum,
         hours,

@@ -78,7 +78,6 @@ const schema = z.object({
   currency: z.enum(CURRENCIES),
   timezone: z.enum(TIMEZONES),
   kitchenChime: z.boolean(),
-  orderReadySmsEnabled: z.boolean(),
 });
 
 function slugify(input: string): string {
@@ -249,7 +248,6 @@ export async function completeOnboarding(
         paymentTiming: a.paymentTiming,
         splitMethods: a.splitMethods,
         kitchenChime: a.kitchenChime,
-        orderReadySmsEnabled: a.orderReadySmsEnabled,
         currency: a.currency,
         timezone: a.timezone,
         country: a.country,

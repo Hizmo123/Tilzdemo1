@@ -5,8 +5,8 @@
 //
 // Getting your own GUID (needed for real lookups): register (free) at
 // https://abr.business.gov.au/Tools/WebServices — set it as ABR_GUID.
-// Without one, this runs in mock mode (same pattern as Twilio/Resend
-// elsewhere in this codebase): the ABN checksum is still validated for real,
+// Without one, this runs in mock mode (same pattern as Resend elsewhere in
+// this codebase): the ABN checksum is still validated for real,
 // but the "registered entity" details are a clearly-labelled placeholder so
 // the whole lookup -> confirm -> store flow is testable end to end.
 

@@ -251,10 +251,10 @@ export async function getOrderTracking(
 //
 // There are no customer accounts in Tillz — guests are anonymous QR
 // sessions. The only durable identity signal is a phone number, left
-// voluntarily for an "order ready" text. So "customer tracking" here means
-// exactly that, honestly: repeat-visit behaviour among guests who left a
-// number, plus a plain visit-count (not identity-count). The UI must not
-// imply this is a full CRM.
+// voluntarily on a bill. So "customer tracking" here means exactly that,
+// honestly: repeat-visit behaviour among guests who left a number, plus a
+// plain visit-count (not identity-count). The UI must not imply this is a
+// full CRM.
 
 export type CustomerTracking = {
   visits: number;

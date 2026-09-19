@@ -124,7 +124,6 @@ const schema = z.object({
   paymentTiming: z.enum(["before", "after"]),
   requirePaymentBeforeOrder: z.boolean(),
   kitchenChime: z.boolean(),
-  orderReadySmsEnabled: z.boolean(),
   surchargeEnabled: z.boolean(),
   // Whole or one-decimal percent, e.g. 1.7 — converted to basis points below.
   // Capped at 5% as a sanity bound against a fat-fingered entry; there's no
@@ -184,7 +183,6 @@ export async function updateSettings(input: {
   paymentTiming: string;
   requirePaymentBeforeOrder: boolean;
   kitchenChime: boolean;
-  orderReadySmsEnabled: boolean;
   surchargeEnabled: boolean;
   surchargePercent: number;
   hours: unknown;
@@ -259,7 +257,6 @@ export async function updateSettings(input: {
       paymentTiming: parsed.data.paymentTiming,
       requirePaymentBeforeOrder: parsed.data.requirePaymentBeforeOrder,
       kitchenChime: parsed.data.kitchenChime,
-      orderReadySmsEnabled: parsed.data.orderReadySmsEnabled,
       surchargeEnabled: parsed.data.surchargeEnabled,
       surchargeBasisPoints: Math.round(parsed.data.surchargePercent * 100),
       // Only overwrite hours when the form sent a valid 7-day set; otherwise

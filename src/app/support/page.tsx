@@ -3,7 +3,7 @@ import Link from "next/link";
 export const metadata = { title: "Support — Tillz" };
 
 // Contact details come from env so nothing fake ships by default — same
-// pattern as Twilio/Resend elsewhere (see .env.example): unset means "not
+// pattern as Resend elsewhere (see .env.example): unset means "not
 // configured yet", shown plainly rather than inventing a placeholder address.
 export default function SupportPage() {
   const email = process.env.SUPPORT_EMAIL?.trim();

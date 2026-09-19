@@ -47,7 +47,6 @@ export function buildSettingsInitial(restaurant: Restaurant) {
     paymentTiming: restaurant.paymentTiming,
     requirePaymentBeforeOrder: restaurant.requirePaymentBeforeOrder,
     kitchenChime: restaurant.kitchenChime,
-    orderReadySmsEnabled: restaurant.orderReadySmsEnabled,
     surchargeEnabled: restaurant.surchargeEnabled,
     surchargeBasisPoints: restaurant.surchargeBasisPoints,
     hours: restaurant.hours,

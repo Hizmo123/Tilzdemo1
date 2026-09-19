@@ -1,5 +1,6 @@
-// Normalise a phone number to E.164 for SMS. Defaults to Australian numbers,
-// but accepts anything already in +<country> form.
+// Normalise a phone number to E.164 for storage/display as a plain contact
+// field. Defaults to Australian numbers, but accepts anything already in
+// +<country> form.
 //
 //   0412 345 678   -> +61412345678
 //   0412345678     -> +61412345678

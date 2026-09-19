@@ -1,8 +1,8 @@
 import type { EmailProvider, EmailResult, SendEmailInput } from "./provider";
 
-// Resend's REST API (no SDK needed — a single authenticated POST, same style
-// as the Twilio SMS provider). Requires RESEND_API_KEY and RESEND_FROM (a
-// verified sender address, e.g. "Tillz <receipts@yourdomain.com>").
+// Resend's REST API (no SDK needed — a single authenticated POST). Requires
+// RESEND_API_KEY and RESEND_FROM (a verified sender address, e.g.
+// "Tillz <receipts@yourdomain.com>").
 export class ResendEmailProvider implements EmailProvider {
   readonly name = "resend";
   readonly isTest = false;

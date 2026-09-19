@@ -2,8 +2,9 @@
 
 // Only offers what the product actually does: a kitchen chime toggle, and an
 // info row for dashboard live refresh, which is unconditional today and has
-// no setting to attach to. SMS ("text me when it's ready") has been removed
-// from the product entirely — there's no venue-level setting for it anymore.
+// no setting to attach to. The old "text me when it's ready" text-message
+// feature has been removed from the product entirely — there's no
+// venue-level setting for it anymore.
 export function NotificationsPicker({
   kitchenChime,
   onKitchenChimeChange,

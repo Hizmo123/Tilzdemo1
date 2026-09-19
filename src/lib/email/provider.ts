@@ -1,5 +1,5 @@
-// Provider-agnostic email abstraction — same shape as the SMS/payments
-// abstractions. The app depends only on this interface; a mock runs until a
+// Provider-agnostic email abstraction — same shape as the payments
+// abstraction. The app depends only on this interface; a mock runs until a
 // real provider is configured, and drops in behind it without touching call
 // sites.
 

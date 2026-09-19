@@ -159,7 +159,6 @@ export type OnboardingAnswers = {
   currency: string;
   timezone: string;
   kitchenChime: boolean;
-  orderReadySmsEnabled: boolean;
 };
 
 // What actually gets persisted mid-wizard — the answers so far plus which
@@ -199,6 +198,5 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     currency: "AUD",
     timezone: "Australia/Sydney",
     kitchenChime: true,
-    orderReadySmsEnabled: true,
   };
 }

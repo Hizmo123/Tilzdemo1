@@ -207,9 +207,6 @@ model Restaurant {
   // doesn't match one of these (e.g. legacy data, or a station since
   // renamed) — this list is just what the pickers suggest, not a foreign key.
   kitchenStations  String[]      @default(["Kitchen"])
-  // Whether the "text me when it's ready" capture appears on the customer's
-  // order-placed screen. Independent of whether Twilio is actually configured.
-  orderReadySmsEnabled Boolean   @default(true)
   // Card/button corner rounding for the customer ordering page: sharp/soft/round.
   cornerStyle      String        @default("soft")
   // Optional short line shown under the venue name on the customer page.
@@ -559,10 +556,11 @@ model Bill {
   // one-open-bill-per-table index).
   refundedCents  Int        @default(0)
   customerName   String?
-  // Optional mobile for an "order ready" SMS. E.164 (+61...).
+  // Historical contact field, E.164 (+61...). Nothing writes this anymore —
+  // it used to be captured for a customer notification feature that has
+  // since been removed entirely; existing rows are kept read-only for
+  // analytics/invoice history (see lib/analytics.ts, lib/invoices.ts).
   customerPhone  String?
-  // Set once the "order ready" SMS has gone out, so it fires only once.
-  readyNotifiedAt DateTime?
   // Last email address a receipt was sent to, and when — lets the venue see
   // whether/where a copy went out, and pre-fills the "email me a copy" form
   // on repeat requests. Never required; a bill can be paid with no email.
