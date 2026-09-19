@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getActiveLocation } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { STAND_UNIT_PRICE_CENTS } from "@/lib/plans";
 import { OrderStandsForm } from "./order-stands-form";
 
 export default async function StandsPage() {
@@ -24,7 +23,7 @@ export default async function StandsPage() {
     );
   }
 
-  const [tables, activeStands, orders] = await Promise.all([
+  const [tables, activeStands, orders, products] = await Promise.all([
     prisma.table.findMany({
       where: { locationId: ctx.location.id },
       orderBy: [{ section: "asc" }, { createdAt: "asc" }],
@@ -37,6 +36,10 @@ export default async function StandsPage() {
       where: { restaurantId: ctx.restaurant.id },
       orderBy: { createdAt: "desc" },
       take: 10,
+    }),
+    prisma.standProduct.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     }),
   ]);
 
@@ -51,19 +54,32 @@ export default async function StandsPage() {
           Order Tillz stands
         </h1>
         <p className="text-muted mt-1">
-          A physical table-top card with a QR code, mailed to you. $
-          {(STAND_UNIT_PRICE_CENTS / 100).toFixed(2)} per stand.
+          A physical table-top card, mailed to you.
         </p>
       </div>
 
-      <OrderStandsForm
-        tables={tables.map((t) => ({
-          id: t.id,
-          label: t.label,
-          section: t.section,
-          hasStand: tablesWithStand.has(t.id),
-        }))}
-      />
+      {products.length === 0 ? (
+        <div className="rounded-[var(--radius-card)] border border-dashed border-line bg-surface p-8 text-center">
+          <p className="text-muted">No stands available to order yet.</p>
+        </div>
+      ) : (
+        <OrderStandsForm
+          products={products.map((p) => ({
+            id: p.id,
+            title: p.title,
+            description: p.description,
+            imageUrl: p.imageUrl,
+            type: p.type,
+            priceCents: p.priceCents,
+          }))}
+          tables={tables.map((t) => ({
+            id: t.id,
+            label: t.label,
+            section: t.section,
+            hasStand: tablesWithStand.has(t.id),
+          }))}
+        />
+      )}
 
       {orders.length > 0 && (
         <div>
