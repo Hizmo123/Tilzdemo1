@@ -17,7 +17,12 @@ type BillItem = {
 
 export type Mode = "full" | "equal" | "items" | "custom";
 
+// "custom" is a real server capability (payBillAmount still accepts it, see
+// FIX 1's defensive guard there) but is no longer offered in this UI per the
+// owner's decision — filtered out of allowedModes below regardless of what a
+// venue's splitMethods setting contains, not just left out of ALL_MODES.
 const ALL_MODES: Mode[] = ["full", "equal", "items", "custom"];
+const CUSTOMER_VISIBLE_MODES: Mode[] = ["full", "equal", "items"];
 
 export function PaySheet({
   token,
@@ -52,8 +57,11 @@ export function PaySheet({
   onPaid: (amountCents: number, fullyPaid: boolean) => void;
 }) {
   const router = useRouter();
+  // "custom" is hidden from the customer sheet regardless of what a venue's
+  // splitMethods setting exposes — see CUSTOMER_VISIBLE_MODES above.
+  const visibleModes = allowedModes.filter((m) => CUSTOMER_VISIBLE_MODES.includes(m));
   const [mode, setMode] = useState<Mode>(
-    allowedModes.includes(initialMode) ? initialMode : allowedModes[0] ?? "full",
+    visibleModes.includes(initialMode) ? initialMode : visibleModes[0] ?? "full",
   );
   const [people, setPeople] = useState(2);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -179,17 +187,16 @@ export function PaySheet({
           {/* Mode tabs — only the split methods this venue actually offers */}
           <div
             className="grid gap-1 rounded-lg bg-paper p-1 mb-4 text-sm"
-            style={{ gridTemplateColumns: `repeat(${allowedModes.length}, minmax(0, 1fr))` }}
+            style={{ gridTemplateColumns: `repeat(${visibleModes.length}, minmax(0, 1fr))` }}
           >
             {(
               [
                 ["full", "Full"],
                 ["equal", "Equally"],
                 ["items", "Items"],
-                ["custom", "Custom"],
               ] as [Mode, string][]
             )
-              .filter(([m]) => allowedModes.includes(m))
+              .filter(([m]) => visibleModes.includes(m))
               .map(([m, label]) => (
               <button
                 key={m}
@@ -293,26 +300,6 @@ export function PaySheet({
                   {formatCents(itemsTotal, currency)}
                 </span>
               </p>
-            </div>
-          )}
-
-          {mode === "custom" && (
-            <div className="mb-4">
-              <label className="text-sm text-muted mb-1 block">
-                Amount to pay
-              </label>
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
-                  $
-                </span>
-                <input
-                  inputMode="decimal"
-                  value={customValue}
-                  onChange={(e) => setCustomValue(e.target.value)}
-                  placeholder="20.00"
-                  className="w-full rounded-lg border border-line bg-surface pl-7 pr-3.5 py-2.5 focus:border-pine focus:outline-none"
-                />
-              </div>
             </div>
           )}
 
