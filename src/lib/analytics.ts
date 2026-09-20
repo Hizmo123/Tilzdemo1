@@ -39,8 +39,15 @@ export async function getRevenueOverview(
   timezone: string,
   range: ResolvedRange,
 ): Promise<RevenueOverview> {
-  const hasTables = (await prisma.table.count({ where: { location: { restaurantId } } })) > 0;
-  if (!hasTables) {
+  // "Has this venue done anything at all yet" gate, cheap enough to run
+  // before the heavier aggregates below — checked via tables (dine-in) OR
+  // bills directly (a counter-only venue can have zero tables and still
+  // have real revenue; Bill.restaurantId now exists independent of tableId,
+  // see prisma schema's Bill.restaurantId comment).
+  const hasActivity =
+    (await prisma.table.count({ where: { location: { restaurantId } } })) > 0 ||
+    (await prisma.bill.count({ where: { restaurantId } })) > 0;
+  if (!hasActivity) {
     return {
       empty: true,
       totalRevenueCents: 0,
@@ -54,12 +61,11 @@ export async function getRevenueOverview(
     };
   }
 
-  const tableFilter = { location: { restaurantId } };
   const prev = priorRange(range);
 
   const [current, previous, bills, topItemsRaw] = await Promise.all([
     prisma.bill.aggregate({
-      where: { table: tableFilter, status: "PAID", paidAt: { gte: range.from, lt: range.to } },
+      where: { restaurantId, status: "PAID", paidAt: { gte: range.from, lt: range.to } },
       // Revenue is amountPaidCents, not totalCents: for a PAID bill the two
       // start out equal, but a later refund only ever decrements
       // amountPaidCents (never totalCents/status — see refundBillPayment in
@@ -69,18 +75,18 @@ export async function getRevenueOverview(
       _count: true,
     }),
     prisma.bill.aggregate({
-      where: { table: tableFilter, status: "PAID", paidAt: { gte: prev.from, lt: prev.to } },
+      where: { restaurantId, status: "PAID", paidAt: { gte: prev.from, lt: prev.to } },
       _sum: { amountPaidCents: true },
       _count: true,
     }),
     prisma.bill.findMany({
-      where: { table: tableFilter, status: "PAID", paidAt: { gte: range.from, lt: range.to } },
+      where: { restaurantId, status: "PAID", paidAt: { gte: range.from, lt: range.to } },
       select: { amountPaidCents: true, paidAt: true },
     }),
     prisma.billItem.groupBy({
       by: ["nameSnapshot"],
       where: {
-        bill: { table: tableFilter, status: "PAID", paidAt: { gte: range.from, lt: range.to } },
+        bill: { restaurantId, status: "PAID", paidAt: { gte: range.from, lt: range.to } },
       },
       _sum: { quantity: true, lineTotalCents: true },
       orderBy: { _sum: { quantity: "desc" } },
@@ -140,7 +146,7 @@ export type ProductRow = {
 // most wants to find.
 export async function getProductPerformance(restaurantId: string, range: ResolvedRange) {
   const paidWhere = {
-    table: { location: { restaurantId } },
+    restaurantId,
     status: "PAID" as const,
     paidAt: { gte: range.from, lt: range.to },
   };
@@ -268,12 +274,10 @@ export async function getCustomerTracking(
   restaurantId: string,
   range: ResolvedRange,
 ): Promise<CustomerTracking> {
-  const tableFilter = { location: { restaurantId } };
-
   const [visits, inRangeGroups] = await Promise.all([
     prisma.bill.count({
       where: {
-        table: tableFilter,
+        restaurantId,
         status: "PAID",
         paidAt: { gte: range.from, lt: range.to },
       },
@@ -281,7 +285,7 @@ export async function getCustomerTracking(
     prisma.bill.groupBy({
       by: ["customerPhone"],
       where: {
-        table: tableFilter,
+        restaurantId,
         status: "PAID",
         customerPhone: { not: null },
         paidAt: { gte: range.from, lt: range.to },
@@ -298,7 +302,7 @@ export async function getCustomerTracking(
       ? await prisma.bill.groupBy({
           by: ["customerPhone"],
           where: {
-            table: tableFilter,
+            restaurantId,
             status: "PAID",
             customerPhone: { in: phones },
             paidAt: { lt: range.from },
@@ -316,7 +320,7 @@ export async function getCustomerTracking(
   const latestNames =
     topPhones.length > 0
       ? await prisma.bill.findMany({
-          where: { customerPhone: { in: topPhones }, status: "PAID", table: tableFilter },
+          where: { customerPhone: { in: topPhones }, status: "PAID", restaurantId },
           orderBy: { createdAt: "desc" },
           select: { customerPhone: true, customerName: true },
           distinct: ["customerPhone"],
