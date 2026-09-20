@@ -261,13 +261,15 @@ export async function completeOnboarding(
     const location = restaurant.locations[0];
 
     // Tables 1..N with QR tokens, in two round trips instead of N. A brand
-    // new organisation always starts on FREE (Organization.plan's default),
-    // so its table cap applies from the very first setup — the wizard's own
-    // table-count step doesn't reflect this cap in its UI yet (a real
-    // follow-up), but the account can't silently end up over the limit it's
-    // about to be told it has.
-    const freeTableLimit = entitlementsForTier("FREE").tableLimit ?? a.tableCount;
-    const tableCount = Math.min(a.tableCount, freeTableLimit);
+    // new organisation always starts on LITE (Organization.plan's default),
+    // whose tableLimit is 0 — LITE is menu-only, no live ordering at all —
+    // so a fresh signup gets no tables created here regardless of what was
+    // picked in the wizard's table-count step, until the org upgrades past
+    // Lite. The wizard's own UI doesn't reflect this yet (a real follow-up),
+    // but the account can't silently end up with tables its plan doesn't
+    // include.
+    const liteTableLimit = entitlementsForTier("LITE").tableLimit ?? a.tableCount;
+    const tableCount = Math.min(a.tableCount, liteTableLimit);
     if (tableCount > 0) {
       const created = await tx.table.createManyAndReturn({
         data: Array.from({ length: tableCount }, (_, i) => ({

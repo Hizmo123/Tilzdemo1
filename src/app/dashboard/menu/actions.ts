@@ -8,6 +8,7 @@ import { dollarsToCents } from "@/lib/money";
 import { audit } from "@/lib/audit";
 import { ALLERGEN_SET } from "@/lib/allergens";
 import { BADGE_VALUES } from "@/lib/menu-badges";
+import { canCreateStation } from "@/lib/entitlements";
 
 const BADGE_SET = new Set<string>(BADGE_VALUES);
 
@@ -393,8 +394,22 @@ export async function updateKitchenStations(
         .map((n) => n.trim().slice(0, 24))
         .filter((n) => n.length > 0),
     ),
-  ).slice(0, 10);
+  );
   if (clean.length === 0) clean.push("Kitchen");
+
+  // Plan-gated, not a hardcoded cap — but only enforced when this save
+  // actually GROWS the station count (a new station being added). Renaming
+  // or removing stations, or simply re-saving the same set, never gets
+  // blocked here — same "never take away what already works" rule as
+  // canCreateTable (see lib/entitlements.ts).
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { kitchenStations: true },
+  });
+  if (clean.length > (restaurant?.kitchenStations.length ?? 0)) {
+    const check = await canCreateStation(authz.membership!.organizationId);
+    if (!check.allowed) return { error: check.reason };
+  }
 
   await prisma.restaurant.update({
     where: { id: restaurantId },

@@ -50,8 +50,9 @@ enum InviteStatus {
 }
 
 enum PlanTier {
-  FREE
-  STANDARD
+  LITE
+  BASIC
+  GROWTH
   PRO
 }
 
@@ -87,7 +88,7 @@ enum RequestStatus {
 model Organization {
   id          String       @id @default(cuid())
   name        String
-  plan        PlanTier     @default(FREE)
+  plan        PlanTier     @default(LITE)
   planStatus  String       @default("none")
   cardLast4   String?
   subscribedAt DateTime?

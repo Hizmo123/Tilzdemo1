@@ -152,12 +152,12 @@ export default async function DashboardHome() {
 
       {tables.length === 0 && <LoadSampleButton />}
 
-      {ctx.membership.organization.plan === "FREE" && (
+      {ctx.membership.organization.plan === "LITE" && (
         <div className="rounded-[var(--radius-card)] border border-pine/30 bg-pine-soft p-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="font-medium text-pine-deep">You&apos;re on the free Starter plan</p>
+            <p className="font-medium text-pine-deep">You&apos;re on the free Lite plan</p>
             <p className="text-sm text-pine-deep/80">
-              Upgrade to Venue to take live payments across your tables.
+              Upgrade to Basic to take live orders and payments at your tables.
             </p>
           </div>
           <Link

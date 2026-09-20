@@ -27,15 +27,15 @@ export function Billing({
       <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
         <p className="text-sm text-muted">Current plan</p>
         <p className="font-display text-2xl font-semibold tracking-tight mt-1">
-          {PLANS.find((p) => p.tier === currentPlan)?.name ?? "Starter"}
-          {active && currentPlan !== "FREE" && (
+          {PLANS.find((p) => p.tier === currentPlan)?.name ?? "Lite"}
+          {active && currentPlan !== "LITE" && (
             <span className="text-sm font-normal text-pine-deep"> · active</span>
           )}
         </p>
         {cardLast4 && (
           <p className="text-sm text-muted mt-1">Card on file ending {cardLast4}</p>
         )}
-        {active && currentPlan !== "FREE" && (
+        {active && currentPlan !== "LITE" && (
           <button
             onClick={() =>
               start(async () => {
@@ -45,19 +45,19 @@ export function Billing({
             }
             className="text-sm text-muted hover:text-danger mt-3"
           >
-            Cancel and return to Starter
+            Cancel and return to Lite
           </button>
         )}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
         {PLANS.map((p) => {
           const isCurrent = p.tier === currentPlan && active;
           return (
             <div
               key={p.tier}
               className={`rounded-2xl border bg-surface p-6 flex flex-col ${
-                p.tier === "STANDARD" ? "border-2 border-pine" : "border-line"
+                p.tier === "GROWTH" ? "border-2 border-pine" : "border-line"
               }`}
             >
               <h3 className="font-display text-xl font-semibold tracking-tight">
@@ -83,7 +83,7 @@ export function Billing({
                 onClick={() =>
                   p.priceCents === 0
                     ? start(async () => {
-                        await subscribe("FREE", { number: "", exp: "", cvc: "" });
+                        await subscribe("LITE", { number: "", exp: "", cvc: "" });
                         router.refresh();
                       })
                     : setCheckoutTier(p.tier)
@@ -91,12 +91,12 @@ export function Billing({
                 className={`mt-6 rounded-xl py-3 font-medium ${
                   isCurrent
                     ? "bg-paper text-muted cursor-default"
-                    : p.tier === "STANDARD"
+                    : p.tier === "GROWTH"
                       ? "bg-pine text-white hover:bg-pine-deep"
                       : "border border-line hover:border-ink/30"
                 }`}
               >
-                {isCurrent ? "Current plan" : p.priceCents === 0 ? "Switch to Free" : "Choose"}
+                {isCurrent ? "Current plan" : p.priceCents === 0 ? "Switch to Lite" : "Choose"}
               </button>
             </div>
           );

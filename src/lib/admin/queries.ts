@@ -51,7 +51,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     const ent = entitlementsForTier(org.plan, { lapsedAt: org.subscriptionLapsedAt });
     if (ent.venueLimit !== null && org._count.restaurants > ent.venueLimit) orgsOverVenueLimit++;
 
-    if (org.plan === "FREE") {
+    if (org.plan === "LITE") {
       free++;
       continue;
     }
@@ -73,7 +73,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     mrrByTierMap.set(org.plan, bucket);
   }
 
-  const mrrByTier = PLANS.filter((p) => p.tier !== "FREE").map((p) => ({
+  const mrrByTier = PLANS.filter((p) => p.tier !== "LITE").map((p) => ({
     tier: p.tier,
     orgs: mrrByTierMap.get(p.tier)?.orgs ?? 0,
     mrrCents: mrrByTierMap.get(p.tier)?.mrrCents ?? 0,

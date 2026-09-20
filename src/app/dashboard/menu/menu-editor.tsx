@@ -93,11 +93,23 @@ function StationsEditor({ stations }: { stations: string[] }) {
   const [list, setList] = useState(stations);
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function save(next: string[]) {
+  // No client-side cap — the server is the authority on how many stations
+  // this plan allows (see updateKitchenStations -> canCreateStation in
+  // lib/entitlements.ts). Optimistically shows the new list, then rolls
+  // back and surfaces the reason if the server refuses it (e.g. plan limit
+  // reached).
+  function save(next: string[], previous: string[]) {
     setSaved(false);
+    setError(null);
     start(async () => {
-      await updateKitchenStations(next);
+      const res = await updateKitchenStations(next);
+      if (res?.error) {
+        setList(previous);
+        setError(res.error);
+        return;
+      }
       router.refresh();
       setSaved(true);
     });
@@ -105,17 +117,19 @@ function StationsEditor({ stations }: { stations: string[] }) {
 
   function add() {
     const name = draft.trim();
-    if (!name || list.includes(name) || list.length >= 10) return;
+    if (!name || list.includes(name)) return;
+    const previous = list;
     const next = [...list, name];
     setList(next);
     setDraft("");
-    save(next);
+    save(next, previous);
   }
 
   function remove(name: string) {
+    const previous = list;
     const next = list.filter((s) => s !== name);
     setList(next);
-    save(next);
+    save(next, previous);
   }
 
   return (
@@ -146,35 +160,32 @@ function StationsEditor({ stations }: { stations: string[] }) {
           </span>
         ))}
       </div>
-      {list.length >= 10 ? (
-        <p className="text-xs text-muted">Up to 10 stations — remove one to add another.</p>
-      ) : (
-        <div className="flex items-end gap-3">
-          <div className="flex-1 max-w-xs">
-            <Label htmlFor="new-station">Add a station</Label>
-            <Input
-              id="new-station"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  add();
-                }
-              }}
-              placeholder="e.g. Barista"
-            />
-          </div>
-          <button
-            disabled={pending || !draft.trim()}
-            onClick={add}
-            className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-ink/30 disabled:opacity-50"
-          >
-            Add
-          </button>
-          {saved && <span className="text-xs text-muted">Saved</span>}
+      <div className="flex items-end gap-3">
+        <div className="flex-1 max-w-xs">
+          <Label htmlFor="new-station">Add a station</Label>
+          <Input
+            id="new-station"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add();
+              }
+            }}
+            placeholder="e.g. Barista"
+          />
         </div>
-      )}
+        <button
+          disabled={pending || !draft.trim()}
+          onClick={add}
+          className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-ink/30 disabled:opacity-50"
+        >
+          Add
+        </button>
+        {saved && <span className="text-xs text-muted">Saved</span>}
+      </div>
+      {error && <p className="text-xs text-danger mt-2">{error}</p>}
     </div>
   );
 }

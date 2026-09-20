@@ -28,7 +28,7 @@ export async function subscribe(
   if (plan.priceCents === 0) {
     await prisma.organization.update({
       where: { id: org.id },
-      data: { plan: "FREE", planStatus: "active", cardLast4: null, subscribedAt: new Date() },
+      data: { plan: "LITE", planStatus: "active", cardLast4: null, subscribedAt: new Date() },
     });
     revalidatePath("/dashboard/billing");
     revalidatePath("/dashboard");
@@ -77,7 +77,7 @@ export async function cancelSubscription(): Promise<BillingState> {
 
   await prisma.organization.update({
     where: { id: org.id },
-    data: { plan: "FREE", planStatus: "canceled", cardLast4: null },
+    data: { plan: "LITE", planStatus: "canceled", cardLast4: null },
   });
 
   await audit({

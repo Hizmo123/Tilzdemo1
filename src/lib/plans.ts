@@ -2,18 +2,14 @@ import type { PlanTier } from "@prisma/client";
 
 // The subscription catalog (AUD, excluding GST). Prices are wired through the
 // mock billing flow so the whole signup -> choose plan -> pay journey works
-// end to end today; real Stripe Billing (Delivery 2) replaces the checkout
-// behind the same PLANS/planByTier surface, not the catalog itself.
+// end to end today; real Stripe Billing replaces the checkout behind the
+// same PLANS/planByTier surface, not the catalog itself.
 //
-// Feature copy below intentionally does NOT list full analytics as
-// Standard/Pro-only, even though the original spec described it that way —
-// it already works, unrestricted, on every tier today, and tier limits are
-// only allowed to be about scale/polish, never about disabling something
-// that currently works (see lib/entitlements.ts). Gating it would be a real
-// product regression for existing Free-tier usage, so this was flagged back
-// rather than silently built either way — the actual enforced differences
-// are table count, venue count, and the Tillz branding mark, which is what
-// this copy reflects.
+// 4-tier model (see lib/entitlements.ts for the enforced rules this copy
+// describes): LITE is deliberately menu-only, no live ordering at all —
+// unlike the old 3-tier model, restricting the core loop on the entry tier
+// is now an intentional part of the product, not something this module's
+// "never disable what works" rule would flag back.
 export type PlanDef = {
   tier: PlanTier;
   name: string;
@@ -26,28 +22,41 @@ export type PlanDef = {
 
 export const PLANS: PlanDef[] = [
   {
-    tier: "FREE",
-    name: "Free",
+    tier: "LITE",
+    name: "Lite",
     priceCents: 0,
     cadence: "free",
-    blurb: "One venue, up to 5 tables — everything works, try it for real.",
+    blurb: "One venue, a view-only digital menu — no live ordering.",
     features: [
-      "Full menu, ordering, kitchen screen and bill splitting",
-      "Up to 5 tables",
+      "Full menu with photos, prices and dietary badges",
+      "One QR/NFC code for every table",
+      "\"Powered by Tillz\" shown on your menu page",
+    ],
+  },
+  {
+    tier: "BASIC",
+    name: "Basic",
+    priceCents: 4900,
+    cadence: "per month",
+    blurb: "One venue, live ordering for smaller floors.",
+    features: [
+      "Full ordering, kitchen screen and bill splitting",
+      "Up to 25 tables, 2 kitchen stations",
+      "Last 14 days of analytics",
       "\"Powered by Tillz\" shown on your ordering page",
     ],
   },
   {
-    tier: "STANDARD",
-    name: "Standard",
-    priceCents: 7900,
+    tier: "GROWTH",
+    name: "Growth",
+    priceCents: 9900,
     cadence: "per month",
     blurb: "One venue, unlimited tables, your own brand.",
     features: [
-      "Everything in Free",
-      "Unlimited tables",
+      "Everything in Basic",
+      "Unlimited tables and kitchen stations",
       "Tillz branding removed",
-      "Full analytics",
+      "Full analytics history",
     ],
   },
   {
@@ -55,11 +64,10 @@ export const PLANS: PlanDef[] = [
     name: "Pro",
     priceCents: 14900,
     cadence: "per month",
-    blurb: "Multiple venues from one dashboard.",
+    blurb: "Up to 3 venues from one dashboard, more as you grow.",
     features: [
-      "Everything in Standard",
-      "Multiple venues",
-      "Deeper analytics",
+      "Everything in Growth",
+      "3 venues included — extra venues $49.99/mo each",
       "Priority support",
     ],
   },
@@ -72,3 +80,9 @@ export function planByTier(tier: PlanTier): PlanDef {
 // Price for one physical Tillz stand, ordered from the dashboard (spec: the
 // order/fulfilment addendum). Flat, regardless of plan tier or quantity.
 export const STAND_UNIT_PRICE_CENTS = 2900;
+
+// Price for each Pro venue beyond the 3 included — see
+// lib/entitlements.ts#canCreateVenue's requiresPayment result. Mock billing
+// only today; no charge is ever actually made.
+// TODO(stripe): wire this into a real per-venue subscription line item.
+export const EXTRA_VENUE_PRICE_CENTS = 4999;
