@@ -108,6 +108,14 @@ export default async function StaffHomePage({
               Counter
             </Link>
           )}
+          {roleCan(staff.role, "orders:manage") && (
+            <Link
+              href={`/staff/${slug}/register`}
+              className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+            >
+              Register
+            </Link>
+          )}
           {roleCan(staff.role, "kitchen:manage") && (
             <Link
               href={`/staff/${slug}/kitchen`}
