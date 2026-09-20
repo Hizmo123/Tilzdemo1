@@ -286,6 +286,7 @@ model Restaurant {
   tillzStands    TillzStand[]
   standOrders    StandOrder[]
   bills          Bill[]
+  cashSessions   CashDrawerSession[]
 
   @@index([organizationId])
 }
@@ -316,6 +317,7 @@ model Location {
   updatedAt    DateTime   @updatedAt
   tables       Table[]
   bills        Bill[]
+  cashSessions CashDrawerSession[]
 
   @@index([restaurantId])
 }
@@ -762,11 +764,23 @@ model Payment {
   // null under the mock provider.
   payoutStatus   String?
   test           Boolean       @default(true)
+  // Cash/card/other split for a counter payment — nullable since an online/
+  // customer payment (payBillAmount, payBillItems) never sets this; only the
+  // staff counter path (staffCloseBill, staffCloseBillById) does. See
+  // lib/cash-drawer.ts.
+  tenderType     TenderType?
+  // Which open drawer session this payment landed in, if any was open at the
+  // time — a CASH tender requires one (see lib/bills.ts's tender check);
+  // CARD/OTHER attach one when present but don't require it. Nullable so
+  // existing rows and non-counter payments stay unaffected.
+  cashSessionId  String?
+  cashSession    CashDrawerSession? @relation(fields: [cashSessionId], references: [id], onDelete: SetNull)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   refunds        Refund[]
 
   @@index([billId])
+  @@index([cashSessionId])
 }
 
 // A refund against a specific payment (never against the bill in aggregate —
@@ -789,6 +803,74 @@ model Refund {
   createdAt      DateTime     @default(now())
 
   @@index([paymentId])
+}
+
+enum TenderType {
+  CASH
+  CARD
+  OTHER
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  PAID_IN
+  PAID_OUT
+}
+
+// One shift's cash drawer at one location — opened with a starting float,
+// closed with a physical cash count reconciled against what the system
+// expected (see lib/cash-drawer.ts#getZReport). At most one OPEN session per
+// location at a time (enforced in application code by openSession, not a DB
+// constraint — a partial unique index on (locationId) WHERE status = 'OPEN'
+// would be the stronger guard if this ever needs the same race-proofing as
+// one-open-bill-per-table.sql).
+model CashDrawerSession {
+  id                String            @id @default(cuid())
+  restaurantId      String
+  restaurant        Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  locationId        String
+  location          Location          @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  openedByStaffId   String
+  openedByName      String
+  openedAt          DateTime          @default(now())
+  openingFloatCents Int
+  status            CashSessionStatus @default(OPEN)
+  closedByStaffId   String?
+  closedByName      String?
+  closedAt          DateTime?
+  // The physical cash count staff entered at close — compared against
+  // getZReport's expectedCashCents to produce the over/short variance.
+  // Null while the session is still open.
+  countedCashCents  Int?
+  note              String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  payments          Payment[]
+  movements         CashMovement[]
+
+  @@index([restaurantId, status])
+  @@index([locationId, status])
+}
+
+// A paid-in (e.g. petty cash added to the drawer) or paid-out (e.g. a safe
+// drop, or cash paid out for a small supply run) adjustment against an open
+// drawer — folded into getZReport's expectedCashCents alongside sales/refunds.
+model CashMovement {
+  id            String            @id @default(cuid())
+  cashSessionId String
+  cashSession   CashDrawerSession @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+  type          CashMovementType
+  amountCents   Int
+  reason        String
+  staffId       String
+  staffName     String
+  createdAt     DateTime          @default(now())
+
+  @@index([cashSessionId])
 }
 
 // A pending invitation for someone to join an organization with a role. The
