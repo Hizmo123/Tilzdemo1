@@ -125,6 +125,17 @@ export async function requireActiveLocation() {
   return ctx;
 }
 
+// Where to send someone right after they authenticate (task F). A brand new
+// signup has no membership yet — /dashboard itself already redirects that
+// case to /onboarding, so this only needs to special-case an EXISTING
+// member: skip the picker entirely when there's nothing to pick between
+// (0 or 1 restaurant), otherwise send them to /venues to choose.
+export async function resolvePostLoginPath(): Promise<string> {
+  const { membership } = await getTenantContext();
+  if (!membership) return "/dashboard";
+  return membership.organization.restaurants.length > 1 ? "/venues" : "/dashboard";
+}
+
 // HARD guard for every owner-side route that only makes sense when the org
 // actually has live service to run — LITE (entitlements.ordering === false)
 // is menu-only and must not be able to reach these by typing the URL

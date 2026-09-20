@@ -16,10 +16,12 @@ export function MobileNav({
   sections,
   restaurantName,
   userEmail,
+  showVenueSwitcher = false,
 }: {
   sections: NavSection[];
   restaurantName: string;
   userEmail: string;
+  showVenueSwitcher?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -89,6 +91,16 @@ export function MobileNav({
                 <p className="text-xs text-muted mt-0.5 truncate">
                   {restaurantName}
                 </p>
+                {showVenueSwitcher && (
+                  <Link
+                    href="/venues"
+                    prefetch={false}
+                    onClick={() => setOpen(false)}
+                    className="text-xs text-pine hover:underline mt-0.5 inline-block"
+                  >
+                    Switch venue
+                  </Link>
+                )}
               </div>
               <button
                 type="button"

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { appBaseUrl } from "@/lib/urls";
+import { resolvePostLoginPath } from "@/lib/auth";
 
 const credentials = z.object({
   email: z.string().email("Enter a valid email address."),
@@ -43,7 +44,7 @@ export async function signIn(
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect(await resolvePostLoginPath());
 }
 
 export async function signUp(

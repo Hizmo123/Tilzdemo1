@@ -197,6 +197,15 @@ export default async function DashboardLayout({
           <p className="text-xs text-muted mt-0.5 truncate">
             {restaurant?.name ?? "No restaurant yet"}
           </p>
+          {(membership?.organization.restaurants.length ?? 0) > 1 && (
+            <Link
+              href="/venues"
+              prefetch={false}
+              className="text-xs text-pine hover:underline mt-0.5 inline-block"
+            >
+              Switch venue
+            </Link>
+          )}
         </div>
 
         <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-4">
@@ -258,6 +267,7 @@ export default async function DashboardLayout({
           }))}
           restaurantName={restaurant?.name ?? "No restaurant yet"}
           userEmail={user.email ?? ""}
+          showVenueSwitcher={(membership?.organization.restaurants.length ?? 0) > 1}
         />
         {entitlements?.lapsed && (
           <div
