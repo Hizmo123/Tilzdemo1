@@ -1,9 +1,18 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { roleCan, type Permission } from "@/lib/rbac";
 import { getEntitlements } from "@/lib/entitlements";
+
+// Which restaurant is "active" for this browser — see setActiveVenue below.
+// httpOnly: this is a server-only routing decision, never read/written from
+// client JS. Not signed/scoped beyond ownership-checking on write
+// (setActiveVenue) and re-validating on every read (getTenantContext) — a
+// stale or tampered value just falls back to the org's first restaurant,
+// it can never grant access to another org's data.
+export const ACTIVE_VENUE_COOKIE = "tillz_active_venue";
 
 // Returns the current Supabase user or null. Uses getUser() (not getSession())
 // so the token is verified against Supabase — a real network round trip, not
@@ -28,10 +37,22 @@ export async function requireUser() {
 }
 
 // The tenant context for the signed-in user: their membership, organization,
-// and (for M1) the first restaurant. Everything server-side scopes to this —
-// never to an id sent from the browser. Cached per request: getAuthz(),
-// getActiveLocation() and any page that also calls this directly all resolve
-// to the same in-flight/resolved promise instead of re-querying Prisma.
+// and every restaurant they belong to. Everything server-side scopes to
+// this — never to an id sent from the browser. Cached per request:
+// getAuthz(), getActiveLocation() and any page that also calls this
+// directly all resolve to the same in-flight/resolved promise instead of
+// re-querying Prisma.
+//
+// Active-venue selection (task E) lives HERE, not as a separate lookup:
+// `restaurants[0]` is what getActiveLocation() and a large number of
+// existing dashboard pages/actions already read directly (a pre-existing
+// single-venue assumption, not something this task introduces) — reordering
+// this ONE shared array so the cookie-selected restaurant is always first
+// makes every one of those call sites respect the active venue with no
+// changes of their own, which is the only way "every existing route keeps
+// working unchanged" is actually true for this codebase. A cookie that
+// doesn't match any restaurant in this org (unset, stale, or tampered) just
+// leaves the default creation-order first restaurant in place.
 export const getTenantContext = cache(async () => {
   const user = await requireUser();
 
@@ -51,6 +72,22 @@ export const getTenantContext = cache(async () => {
       },
     },
   });
+
+  if (membership && membership.organization.restaurants.length > 1) {
+    const jar = await cookies();
+    const activeId = jar.get(ACTIVE_VENUE_COOKIE)?.value;
+    if (activeId) {
+      const restaurants = membership.organization.restaurants;
+      const idx = restaurants.findIndex((r) => r.id === activeId);
+      if (idx > 0) {
+        membership.organization.restaurants = [
+          restaurants[idx],
+          ...restaurants.slice(0, idx),
+          ...restaurants.slice(idx + 1),
+        ];
+      }
+    }
+  }
 
   return { user, membership };
 });
