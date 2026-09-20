@@ -2,9 +2,9 @@ import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { listAccountLifecycle } from "@/lib/admin/queries";
 import { planByTier } from "@/lib/plans";
-import { ReactivateButton } from "./reactivate-button";
-import { SuspendButton } from "./suspend-button";
-import { ClearRequestButton } from "./clear-request-button";
+import { ReactivateButton } from "@/components/admin/reactivate-button";
+import { SuspendButton } from "@/components/admin/suspend-button";
+import { ClearRequestButton } from "@/components/admin/clear-request-button";
 
 export default async function AccountsPage() {
   await requirePlatformAdmin();
