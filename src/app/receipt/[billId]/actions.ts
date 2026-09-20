@@ -15,13 +15,25 @@ export async function emailReceiptCopy(billId: string, email: string) {
   const bill = await prisma.bill.findFirst({
     where: {
       id: billId,
-      table: {
-        location: {
+      // OR: a dine-in bill reaches its org via table -> location -> restaurant;
+      // a counter bill has no table, so it's scoped via Bill.restaurantId
+      // directly instead (see prisma schema's Bill.restaurantId comment).
+      OR: [
+        {
+          table: {
+            location: {
+              restaurant: {
+                organization: { memberships: { some: { userId: user.id } } },
+              },
+            },
+          },
+        },
+        {
           restaurant: {
             organization: { memberships: { some: { userId: user.id } } },
           },
         },
-      },
+      ],
     },
     select: { id: true },
   });
@@ -45,19 +57,32 @@ export async function refundPaymentAction(
   const bill = await prisma.bill.findFirst({
     where: {
       id: billId,
-      table: {
-        location: {
+      OR: [
+        {
+          table: {
+            location: {
+              restaurant: {
+                organization: { memberships: { some: { userId: authz.user.id } } },
+              },
+            },
+          },
+        },
+        {
           restaurant: {
             organization: { memberships: { some: { userId: authz.user.id } } },
           },
         },
-      },
+      ],
     },
-    include: { table: { include: { location: { include: { restaurant: true } } } } },
+    include: {
+      table: { include: { location: { include: { restaurant: true } } } },
+      restaurant: true,
+    },
   });
   if (!bill) return { error: "Bill not found." };
 
-  const restaurant = bill.table.location.restaurant;
+  const restaurant = bill.table?.location.restaurant ?? bill.restaurant;
+  if (!restaurant) return { error: "Bill not found." };
   const res = await refundBillPayment(paymentId, restaurant.id, amountCents, reason, {
     userId: authz.user.id,
     email: authz.user.email ?? "",

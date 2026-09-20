@@ -285,6 +285,7 @@ model Restaurant {
   staffAccounts  StaffAccount[]
   tillzStands    TillzStand[]
   standOrders    StandOrder[]
+  bills          Bill[]
 
   @@index([organizationId])
 }
@@ -314,6 +315,7 @@ model Location {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   tables       Table[]
+  bills        Bill[]
 
   @@index([restaurantId])
 }
@@ -572,10 +574,33 @@ model ModifierOption {
 // A table's running tab. At most one OPEN bill per table at a time (enforced in
 // the bill service). Totals are always recomputed server-side from BillItem
 // rows — the client is never trusted with an amount (spec §15, §145).
+// DINE_IN is a table order (customer or staff-placed); COUNTER is a
+// staff-run cashier sale with no table (see lib/bills.ts#createCounterBill);
+// TAKEAWAY is reserved for future use — not created anywhere yet.
+enum BillChannel {
+  DINE_IN
+  COUNTER
+  TAKEAWAY
+}
+
 model Bill {
   id             String     @id @default(cuid())
-  tableId        String
-  table          Table      @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  // Nullable: a COUNTER bill has no table at all. DINE_IN bills always have
+  // one — enforced by application code (createCounterBill vs. the table
+  // order flow), not a DB constraint, since Prisma can't express "required
+  // unless channel = X".
+  tableId        String?
+  table          Table?     @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  // Direct restaurant/location scoping so revenue queries (analytics,
+  // invoices) don't have to go through the (now-optional) table relation to
+  // find a counter bill's venue — see lib/analytics.ts, lib/invoices.ts.
+  // Nullable only because this column landed after existing rows; every
+  // bill created from here on always sets both (see lib/bills.ts).
+  restaurantId   String?
+  restaurant     Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  locationId     String?
+  location       Location?   @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  channel        BillChannel @default(DINE_IN)
   status         BillStatus @default(OPEN)
   currency       String     @default("AUD")
   subtotalCents  Int        @default(0)
@@ -619,6 +644,11 @@ model Bill {
   // PAID AND paidAt BETWEEN ? AND ? — replaces the standalone `status` index
   // (a strict prefix of this one, so nothing that used it loses coverage).
   @@index([status, paidAt])
+  // Revenue queries rerouted to scope by Bill.restaurantId/locationId
+  // directly (counter bills have no table to reach a restaurant through) —
+  // see lib/analytics.ts, lib/invoices.ts.
+  @@index([restaurantId, status, paidAt])
+  @@index([locationId, status])
 }
 
 // A line on a bill. name and unitPriceCents are SNAPSHOTS taken when the item
@@ -664,7 +694,11 @@ model Order {
   id           String      @id @default(cuid())
   billId       String
   bill         Bill        @relation(fields: [billId], references: [id], onDelete: Cascade)
-  tableId      String
+  // Nullable: a counter sale has no table. Plain scalar, no Prisma relation
+  // (Order never declared a `table` relation field to begin with) — see
+  // lib/bills.ts#addItemsToCounterBill (tableId: null) vs. the table order
+  // flow (always sets it).
+  tableId      String?
   restaurantId String
   status       OrderStatus @default(SUBMITTED)
   source       OrderSource @default(CUSTOMER)

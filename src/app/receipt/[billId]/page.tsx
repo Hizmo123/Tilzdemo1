@@ -25,25 +25,37 @@ export default async function OwnerReceiptPage({
   const bill = await prisma.bill.findFirst({
     where: {
       id: billId,
-      table: {
-        location: {
+      OR: [
+        {
+          table: {
+            location: {
+              restaurant: {
+                organization: { memberships: { some: { userId: user.id } } },
+              },
+            },
+          },
+        },
+        {
           restaurant: {
             organization: { memberships: { some: { userId: user.id } } },
           },
         },
-      },
+      ],
     },
     include: {
       items: { orderBy: { createdAt: "asc" } },
       payments: { orderBy: { createdAt: "asc" } },
       table: { include: { location: { include: { restaurant: true } } } },
+      restaurant: true,
+      location: true,
     },
   });
 
   if (!bill) notFound();
 
-  const restaurant = bill.table.location.restaurant;
-  const location = bill.table.location;
+  const restaurant = bill.table?.location.restaurant ?? bill.restaurant;
+  const location = bill.table?.location ?? bill.location;
+  if (!restaurant || !location) notFound();
 
   const data = buildReceiptData({
     restaurantName: restaurant.name,
@@ -53,7 +65,7 @@ export default async function OwnerReceiptPage({
     suburb: location.suburb,
     state: location.state,
     postcode: location.postcode,
-    tableLabel: bill.table.label,
+    tableLabel: bill.table?.label ?? "Counter",
     currency: bill.currency,
     createdAt: bill.createdAt,
     paidAt: bill.paidAt,

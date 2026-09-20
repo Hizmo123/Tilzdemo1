@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     lines.push(
       [
         b.paidAt ? new Date(b.paidAt).toISOString() : "",
-        b.table.label,
+        b.table?.label ?? "Counter",
         b.customerName ?? "",
         b.customerPhone ?? "",
         formatCents(b.subtotalCents, b.currency),

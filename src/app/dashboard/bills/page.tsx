@@ -71,7 +71,7 @@ export default async function BillsPage() {
                   className="rounded-[var(--radius-card)] border border-line bg-surface p-4 flex items-center justify-between"
                 >
                   <div>
-                    <p className="font-medium">Table {b.table.label}</p>
+                    <p className="font-medium">{b.table ? `Table ${b.table.label}` : "Counter"}</p>
                     <p className="text-sm text-muted">
                       {b.items.length} {b.items.length === 1 ? "item" : "items"}
                       {b.amountPaidCents > 0
@@ -108,7 +108,7 @@ export default async function BillsPage() {
                 className="rounded-[var(--radius-card)] border border-line bg-surface p-4 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
-                  <p className="font-medium">Table {b.table.label}</p>
+                  <p className="font-medium">{b.table ? `Table ${b.table.label}` : "Counter"}</p>
                   <p className="text-sm text-muted">
                     {b.paidAt
                       ? new Date(b.paidAt).toLocaleString("en-AU")

@@ -46,7 +46,7 @@ export default async function HistoryPage({
     { id: string; orderNumber: number | null; status: string; createdAt: Date; source: string; note: string | null; items: { id: string; nameSnapshot: string; quantity: number }[] }[]
   >();
   for (const o of orders) {
-    const label = o.bill.table.label;
+    const label = o.bill.table?.label ?? "Counter";
     if (!byTable.has(label)) byTable.set(label, []);
     byTable.get(label)!.push({
       id: o.id,

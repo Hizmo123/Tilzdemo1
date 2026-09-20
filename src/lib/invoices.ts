@@ -58,7 +58,7 @@ export async function getInvoices(
     rows: bills.slice(0, MAX_ROWS).map((b) => ({
       id: b.id,
       paidAt: b.paidAt,
-      tableLabel: b.table.label,
+      tableLabel: b.table?.label ?? "Counter",
       customerName: b.customerName,
       totalCents: b.totalCents,
       tipCents: b.tipCents,

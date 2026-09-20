@@ -65,7 +65,7 @@ export default async function StaffHomePage({
   const readyOrders = readyOrderRows.map((o) => ({
     id: o.id,
     orderNumber: o.orderNumber,
-    tableLabel: o.bill.table.label,
+    tableLabel: o.bill.table?.label ?? "Counter",
   }));
 
   const now = Date.now();
