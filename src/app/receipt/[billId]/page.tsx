@@ -65,7 +65,7 @@ export default async function OwnerReceiptPage({
     suburb: location.suburb,
     state: location.state,
     postcode: location.postcode,
-    tableLabel: bill.table?.label ?? "Counter",
+    tableLabel: bill.table?.label ?? null,
     currency: bill.currency,
     createdAt: bill.createdAt,
     paidAt: bill.paidAt,

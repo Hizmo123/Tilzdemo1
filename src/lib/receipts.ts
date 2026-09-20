@@ -28,7 +28,9 @@ export type ReceiptData = {
   restaurantName: string;
   abn: string | null;
   addressLines: string[];
-  tableLabel: string;
+  // null for a counter sale — the component renders "Counter" alone rather
+  // than prefixing a table label that doesn't exist.
+  tableLabel: string | null;
   currency: string;
   issuedAt: string; // ISO string; formatted in the component
   status: string;
@@ -65,7 +67,7 @@ export function buildReceiptData(input: {
   suburb: string | null;
   state: string | null;
   postcode: string | null;
-  tableLabel: string;
+  tableLabel: string | null;
   currency: string;
   createdAt: Date;
   paidAt: Date | null;

@@ -34,7 +34,7 @@ export function TaxInvoice({ data }: { data: ReceiptData }) {
       </div>
 
       <div className="flex justify-between text-xs text-[#3a4147] mt-4">
-        <span>Table {data.tableLabel}</span>
+        <span>{data.tableLabel ? `Table ${data.tableLabel}` : "Counter"}</span>
         <span>
           {issued.toLocaleString("en-AU", {
             dateStyle: "medium",
