@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   completeOnboarding,
+  completeOnboardingForExistingOrg,
   saveOnboardingDraft,
   uploadOnboardingLogo,
 } from "./actions";
@@ -73,8 +74,15 @@ const FONT_KEYS = Object.keys(FONT_THEMES) as FontKey[];
 
 export function OnboardingWizard({
   initialDraft,
+  organizationId,
 }: {
   initialDraft: OnboardingDraftPayload | null;
+  // Set only by task G's "+ Add venue" flow (/venues/new) — when present,
+  // finish() attaches the new restaurant to THIS existing organisation
+  // instead of creating a brand-new org + membership. The wizard's steps,
+  // draft-resume, and UI are otherwise completely unchanged between the two
+  // modes; only which server action completes it differs.
+  organizationId?: string;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(initialDraft?.step ?? 0);
@@ -137,7 +145,10 @@ export function OnboardingWizard({
   function finish() {
     setError(null);
     setPending(true);
-    completeOnboarding(answers)
+    const complete = organizationId
+      ? completeOnboardingForExistingOrg(organizationId, answers)
+      : completeOnboarding(answers);
+    complete
       .then((res) => {
         setPending(false);
         if (res.error) setError(res.error);

@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTenantContext } from "@/lib/auth";
+import { canCreateVenue } from "@/lib/entitlements";
 import { signOut } from "@/app/(auth)/actions";
 import { VenueCard } from "./venue-card";
 
@@ -11,10 +13,14 @@ export default async function VenuesPage() {
 
   const restaurants = membership.organization.restaurants;
 
-  // Nothing to pick between — go straight to the dashboard rather than
-  // showing a picker with one option (same rule resolvePostLoginPath uses
-  // right after sign-in; this covers reaching /venues directly by URL too).
-  if (restaurants.length <= 1) redirect("/dashboard");
+  // Deliberately NOT skipped for a single-venue org: resolvePostLoginPath
+  // (lib/auth.ts) is what auto-skips straight to /dashboard right after
+  // sign-in when there's only one venue — that's a post-login routing
+  // shortcut, not a reason this page itself should refuse to render. A
+  // single-venue PRO org needs to be able to reach THIS page to find
+  // "+ Add venue" below; redirecting it away entirely (as an earlier
+  // version of this page did) would make that button unreachable.
+  const canAdd = await canCreateVenue(membership.organizationId);
 
   return (
     <main className="min-h-dvh bg-paper px-5 py-10">
@@ -40,7 +46,23 @@ export default async function VenuesPage() {
           {restaurants.map((r) => (
             <VenueCard key={r.id} id={r.id} name={r.name} published={r.published} />
           ))}
+          <Link
+            href="/venues/new"
+            className="flex flex-col items-center justify-center gap-1.5 rounded-[var(--radius-card)] border border-dashed border-line bg-surface p-5 text-muted hover:border-pine/40 hover:text-ink transition-colors min-h-[76px]"
+          >
+            <span className="text-2xl leading-none">+</span>
+            <span className="text-sm font-medium">Add venue</span>
+          </Link>
         </div>
+        {!canAdd.allowed && (
+          <p className="text-xs text-muted mt-3">
+            Adding another venue needs Pro —{" "}
+            <Link href="/dashboard/billing" className="text-pine hover:underline">
+              see plans
+            </Link>
+            .
+          </p>
+        )}
       </div>
     </main>
   );

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { PlanTier } from "@prisma/client";
 import { subscribe, cancelSubscription } from "./actions";
 import { PLANS } from "@/lib/plans";
@@ -47,6 +48,14 @@ export function Billing({
           >
             Cancel and return to Lite
           </button>
+        )}
+        {active && currentPlan === "PRO" && (
+          <Link
+            href="/venues/new"
+            className="text-sm text-pine hover:underline mt-3 inline-block"
+          >
+            + Add another venue
+          </Link>
         )}
       </div>
 

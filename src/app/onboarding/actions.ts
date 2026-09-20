@@ -1,17 +1,18 @@
 "use server";
 
 import { randomBytes, randomUUID } from "crypto";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { requireUser, ACTIVE_VENUE_COOKIE } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateToken } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
 import { SAMPLE_MENU } from "@/lib/sample-data";
 import { sameEveryDayHours, weekdayWeekendHours } from "@/lib/hours";
 import { getSetupChecklist, type ChecklistItem } from "@/lib/setup-checklist";
-import { entitlementsForTier } from "@/lib/entitlements";
+import { entitlementsForTier, getEntitlements, canCreateVenue } from "@/lib/entitlements";
 import { log } from "@/lib/log";
 import {
   createServiceClient,
@@ -170,6 +171,179 @@ export async function uploadOnboardingLogo(
   return { url: pub.publicUrl };
 }
 
+// Shared by completeOnboarding (new org) and completeOnboardingForExistingOrg
+// (task G's "+ Add venue" flow, attaching to an ALREADY-existing org): builds
+// the restaurant (every service/appearance setting from the wizard) + its
+// location + N tables with QR codes + an optional sample menu, inside the
+// caller's transaction. Not itself exported — a "use server" file may only
+// export async functions meant to be called as server actions, and this is
+// an internal helper, not a directly-invokable one.
+//
+// tableLimit is passed in rather than computed here because the two callers
+// need genuinely different tiers: a brand-new org always starts on LITE
+// (tableLimit 0), but an ADDED venue lives under an org that's already on
+// whatever tier let it add a second venue at all (PRO, per
+// canCreateVenue — see completeOnboardingForExistingOrg), which has its own,
+// much higher table limit. Hardcoding LITE here would have wrongly capped
+// an added Pro venue at zero tables.
+async function createRestaurantAndSeedFromAnswers(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  userId: string,
+  a: z.infer<typeof schema>,
+  hours: ReturnType<typeof sameEveryDayHours> | null,
+  slug: string,
+  tableLimit: number | null,
+) {
+  const restaurant = await tx.restaurant.create({
+    data: {
+      organizationId,
+      name: a.restaurantName,
+      slug,
+      abn: a.abn ? a.abn : null,
+      venueType: a.venueType,
+      experienceMode: a.experienceMode,
+      theme: a.theme,
+      themeMode: a.themeMode,
+      fontTheme: a.fontTheme,
+      cornerStyle: a.cornerStyle,
+      brandColor: a.brandColor ? a.brandColor : null,
+      tagline: a.tagline ? a.tagline : null,
+      logoUrl: a.logoUrl ?? null,
+      tipEnabled: a.tipEnabled,
+      tipPresets: a.tipPresets.length ? a.tipPresets : [5, 10, 15],
+      customerOrdering: a.customerOrdering,
+      customerPayment: a.customerPayment,
+      staffApproval: a.staffApproval,
+      paymentTiming: a.paymentTiming,
+      splitMethods: a.splitMethods,
+      kitchenChime: a.kitchenChime,
+      currency: a.currency,
+      timezone: a.timezone,
+      country: a.country,
+      language: a.language,
+      hours: hours === null ? Prisma.JsonNull : (hours as Prisma.InputJsonValue),
+      onboardingCompletedAt: new Date(),
+      locations: { create: { name: "Main" } },
+    },
+    include: { locations: true },
+  });
+  const location = restaurant.locations[0];
+
+  // Tables 1..N with QR tokens, in two round trips instead of N. Clamped to
+  // this org's actual table limit so the account can't silently end up with
+  // more tables than its plan includes.
+  const cappedTableLimit = tableLimit ?? a.tableCount;
+  const tableCount = Math.min(a.tableCount, cappedTableLimit);
+  if (tableCount > 0) {
+    const created = await tx.table.createManyAndReturn({
+      data: Array.from({ length: tableCount }, (_, i) => ({
+        locationId: location.id,
+        label: String(i + 1),
+      })),
+    });
+    await tx.qrToken.createMany({
+      data: created.map((t) => ({ token: generateToken(), tableId: t.id })),
+    });
+  }
+
+  // Optional starter menu the owner can then edit, seeded per step 6.
+  //
+  // This used to be one `await tx.X.create()` per category/item/group/option
+  // — ~39 sequential round trips for the default sample menu alone, all
+  // inside one interactive transaction. Against a database that isn't
+  // co-located with the app server (see the region note elsewhere in this
+  // codebase — every round trip here costs ~150-250ms), that regularly blew
+  // past Prisma's 5s transaction timeout and failed the ENTIRE onboarding
+  // transaction, surfacing as "Something went wrong creating your venue"
+  // with no indication why. IDs are generated client-side so every level
+  // can be inserted with one `createMany` instead of one round trip per row
+  // — 4 batched calls total, regardless of menu size.
+  if (a.sampleMenu) {
+    const categoryRows = SAMPLE_MENU.map((cat, ci) => {
+      const win = a.menuPeriods ? windowFor(cat.name) : { from: null, to: null };
+      return {
+        id: randomUUID(),
+        restaurantId: restaurant.id,
+        name: cat.name,
+        sortOrder: ci,
+        availableFrom: win.from,
+        availableTo: win.to,
+        station: a.menuStations ? stationFor(cat.name) : null,
+      };
+    });
+
+    const itemRows: {
+      id: string;
+      categoryId: string;
+      name: string;
+      description: string | null;
+      priceCents: number;
+      sortOrder: number;
+    }[] = [];
+    const groupRows: {
+      id: string;
+      menuItemId: string;
+      name: string;
+      required: boolean;
+      maxSelect: number;
+      sortOrder: number;
+    }[] = [];
+    const optionRows: {
+      id: string;
+      groupId: string;
+      name: string;
+      priceDeltaCents: number;
+      sortOrder: number;
+    }[] = [];
+
+    SAMPLE_MENU.forEach((cat, ci) => {
+      const categoryId = categoryRows[ci].id;
+      cat.items.forEach((item, ii) => {
+        const itemId = randomUUID();
+        itemRows.push({
+          id: itemId,
+          categoryId,
+          name: item.name,
+          description: item.description ?? null,
+          priceCents: item.priceCents,
+          sortOrder: ii,
+        });
+        (item.groups ?? []).forEach((g, gi) => {
+          const groupId = randomUUID();
+          groupRows.push({
+            id: groupId,
+            menuItemId: itemId,
+            name: g.name,
+            required: g.required ?? false,
+            maxSelect: g.maxSelect ?? 1,
+            sortOrder: gi,
+          });
+          g.options.forEach((o, oi) => {
+            optionRows.push({
+              id: randomUUID(),
+              groupId,
+              name: o.name,
+              priceDeltaCents: o.deltaCents ?? 0,
+              sortOrder: oi,
+            });
+          });
+        });
+      });
+    });
+
+    await tx.menuCategory.createMany({ data: categoryRows });
+    if (itemRows.length) await tx.menuItem.createMany({ data: itemRows });
+    if (groupRows.length) await tx.modifierGroup.createMany({ data: groupRows });
+    if (optionRows.length) await tx.modifierOption.createMany({ data: optionRows });
+  }
+
+  // The draft's only job was surviving a mid-wizard refresh — done now.
+  await tx.onboardingDraft.deleteMany({ where: { userId } });
+
+  return restaurant;
+}
+
 // Creates the whole venue from the wizard's answers in one transaction:
 // organization + owner membership + restaurant (with every service/appearance
 // setting) + a location + N tables with QR codes + an optional sample menu —
@@ -225,156 +399,21 @@ export async function completeOnboarding(
       },
     });
 
-    const restaurant = await tx.restaurant.create({
-      data: {
-        organizationId: org.id,
-        name: a.restaurantName,
-        slug,
-        abn: a.abn ? a.abn : null,
-        venueType: a.venueType,
-        experienceMode: a.experienceMode,
-        theme: a.theme,
-        themeMode: a.themeMode,
-        fontTheme: a.fontTheme,
-        cornerStyle: a.cornerStyle,
-        brandColor: a.brandColor ? a.brandColor : null,
-        tagline: a.tagline ? a.tagline : null,
-        logoUrl: a.logoUrl ?? null,
-        tipEnabled: a.tipEnabled,
-        tipPresets: a.tipPresets.length ? a.tipPresets : [5, 10, 15],
-        customerOrdering: a.customerOrdering,
-        customerPayment: a.customerPayment,
-        staffApproval: a.staffApproval,
-        paymentTiming: a.paymentTiming,
-        splitMethods: a.splitMethods,
-        kitchenChime: a.kitchenChime,
-        currency: a.currency,
-        timezone: a.timezone,
-        country: a.country,
-        language: a.language,
-        hours: hours === null ? Prisma.JsonNull : (hours as Prisma.InputJsonValue),
-        onboardingCompletedAt: new Date(),
-        locations: { create: { name: "Main" } },
-      },
-      include: { locations: true },
-    });
-    const location = restaurant.locations[0];
-
-    // Tables 1..N with QR tokens, in two round trips instead of N. A brand
-    // new organisation always starts on LITE (Organization.plan's default),
-    // whose tableLimit is 0 — LITE is menu-only, no live ordering at all —
-    // so a fresh signup gets no tables created here regardless of what was
-    // picked in the wizard's table-count step, until the org upgrades past
-    // Lite. The wizard's own UI doesn't reflect this yet (a real follow-up),
-    // but the account can't silently end up with tables its plan doesn't
-    // include.
-    const liteTableLimit = entitlementsForTier("LITE").tableLimit ?? a.tableCount;
-    const tableCount = Math.min(a.tableCount, liteTableLimit);
-    if (tableCount > 0) {
-      const created = await tx.table.createManyAndReturn({
-        data: Array.from({ length: tableCount }, (_, i) => ({
-          locationId: location.id,
-          label: String(i + 1),
-        })),
-      });
-      await tx.qrToken.createMany({
-        data: created.map((t) => ({ token: generateToken(), tableId: t.id })),
-      });
-    }
-
-    // Optional starter menu the owner can then edit, seeded per step 6.
-    //
-    // This used to be one `await tx.X.create()` per category/item/group/option
-    // — ~39 sequential round trips for the default sample menu alone, all
-    // inside one interactive transaction. Against a database that isn't
-    // co-located with the app server (see the region note elsewhere in this
-    // codebase — every round trip here costs ~150-250ms), that regularly blew
-    // past Prisma's 5s transaction timeout and failed the ENTIRE onboarding
-    // transaction, surfacing as "Something went wrong creating your venue"
-    // with no indication why. IDs are generated client-side so every level
-    // can be inserted with one `createMany` instead of one round trip per row
-    // — 4 batched calls total, regardless of menu size.
-    if (a.sampleMenu) {
-      const categoryRows = SAMPLE_MENU.map((cat, ci) => {
-        const win = a.menuPeriods ? windowFor(cat.name) : { from: null, to: null };
-        return {
-          id: randomUUID(),
-          restaurantId: restaurant.id,
-          name: cat.name,
-          sortOrder: ci,
-          availableFrom: win.from,
-          availableTo: win.to,
-          station: a.menuStations ? stationFor(cat.name) : null,
-        };
-      });
-
-      const itemRows: {
-        id: string;
-        categoryId: string;
-        name: string;
-        description: string | null;
-        priceCents: number;
-        sortOrder: number;
-      }[] = [];
-      const groupRows: {
-        id: string;
-        menuItemId: string;
-        name: string;
-        required: boolean;
-        maxSelect: number;
-        sortOrder: number;
-      }[] = [];
-      const optionRows: {
-        id: string;
-        groupId: string;
-        name: string;
-        priceDeltaCents: number;
-        sortOrder: number;
-      }[] = [];
-
-      SAMPLE_MENU.forEach((cat, ci) => {
-        const categoryId = categoryRows[ci].id;
-        cat.items.forEach((item, ii) => {
-          const itemId = randomUUID();
-          itemRows.push({
-            id: itemId,
-            categoryId,
-            name: item.name,
-            description: item.description ?? null,
-            priceCents: item.priceCents,
-            sortOrder: ii,
-          });
-          (item.groups ?? []).forEach((g, gi) => {
-            const groupId = randomUUID();
-            groupRows.push({
-              id: groupId,
-              menuItemId: itemId,
-              name: g.name,
-              required: g.required ?? false,
-              maxSelect: g.maxSelect ?? 1,
-              sortOrder: gi,
-            });
-            g.options.forEach((o, oi) => {
-              optionRows.push({
-                id: randomUUID(),
-                groupId,
-                name: o.name,
-                priceDeltaCents: o.deltaCents ?? 0,
-                sortOrder: oi,
-              });
-            });
-          });
-        });
-      });
-
-      await tx.menuCategory.createMany({ data: categoryRows });
-      if (itemRows.length) await tx.menuItem.createMany({ data: itemRows });
-      if (groupRows.length) await tx.modifierGroup.createMany({ data: groupRows });
-      if (optionRows.length) await tx.modifierOption.createMany({ data: optionRows });
-    }
-
-    // The draft's only job was surviving a mid-wizard refresh — done now.
-    await tx.onboardingDraft.deleteMany({ where: { userId: user.id } });
+    // A brand new organisation always starts on LITE (Organization.plan's
+    // default), whose tableLimit is 0 — LITE is menu-only, no live ordering
+    // at all — so this clamp uses LITE's limit specifically, not whatever
+    // tier happens to exist (there isn't one yet). See
+    // completeOnboardingForExistingOrg for why an ADDED venue clamps
+    // against the org's actual current tier instead.
+    const restaurant = await createRestaurantAndSeedFromAnswers(
+      tx,
+      org.id,
+      user.id,
+      a,
+      hours,
+      slug,
+      entitlementsForTier("LITE").tableLimit,
+    );
 
     return { organizationId: org.id, restaurant };
   }, { timeout: 15000 });
@@ -410,5 +449,109 @@ export async function completeOnboarding(
   const checklist = await getSetupChecklist(restaurant);
 
   revalidatePath("/dashboard");
+  return { ok: true, checklist };
+}
+
+// Task G's "+ Add venue" flow: reuses the SAME wizard UI/answers shape as
+// completeOnboarding, but attaches the new restaurant to an EXISTING
+// organisation instead of creating a new org + membership. Called from
+// OnboardingWizard when it's rendered with an organizationId prop (see
+// onboarding-wizard.tsx) — /venues/new is the only page that does that.
+export async function completeOnboardingForExistingOrg(
+  organizationId: string,
+  answers: OnboardingAnswers,
+): Promise<OnboardingState> {
+  const user = await requireUser();
+
+  // Ownership check: never trust an organizationId handed back from the
+  // client without confirming the caller actually belongs to it.
+  const membership = await prisma.membership.findFirst({
+    where: { userId: user.id, organizationId },
+  });
+  if (!membership) return { error: "You don't have access to that organisation." };
+
+  // The real gate for this whole task: re-checked here, server-side,
+  // regardless of what confirmation screen the client showed —
+  // canCreateVenue is the single source of truth (lib/entitlements.ts).
+  const check = await canCreateVenue(organizationId);
+  if (!check.allowed) return { error: check.reason };
+
+  const parsed = schema.safeParse(answers);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const a = parsed.data;
+
+  const hours =
+    a.hoursMode === "later"
+      ? null
+      : a.hoursMode === "same"
+        ? sameEveryDayHours(a.hoursWeekday.open, a.hoursWeekday.close)
+        : weekdayWeekendHours(
+            a.hoursWeekday.open,
+            a.hoursWeekday.close,
+            a.hoursWeekend.open,
+            a.hoursWeekend.close,
+          );
+
+  const base = slugify(a.restaurantName) || "venue";
+  let slug = base;
+  for (let i = 0; i < 5; i++) {
+    const clash = await prisma.restaurant.findUnique({ where: { slug } });
+    if (!clash) break;
+    slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+  }
+
+  // Unlike a brand-new org (always LITE), this org is already on whatever
+  // tier let it reach canCreateVenue's allowed:true past its first venue —
+  // in practice always PRO today, since every other tier hard-blocks a 2nd
+  // venue outright. Its table limit, not LITE's, is what a newly ADDED
+  // venue should be clamped to.
+  const ent = await getEntitlements(organizationId);
+
+  let restaurant;
+  try {
+    restaurant = await prisma.$transaction(
+      (tx) =>
+        createRestaurantAndSeedFromAnswers(tx, organizationId, user.id, a, hours, slug, ent.tableLimit),
+      { timeout: 15000 },
+    );
+  } catch (e) {
+    log.error("onboarding.add_venue_failed", {
+      userId: user.id,
+      organizationId,
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return { error: "Something went wrong creating your venue. Please try again." };
+  }
+
+  await audit({
+    organizationId,
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "restaurant.added",
+    resourceType: "Restaurant",
+    resourceId: restaurant.id,
+    metadata: {
+      venueType: a.venueType,
+      tables: a.tableCount,
+      requiresPayment: "requiresPayment" in check ? check.requiresPayment : false,
+    },
+  });
+
+  // Make the just-created venue the active one immediately (task G.2) —
+  // same cookie lib/auth.ts#getTenantContext reads, set directly here
+  // rather than via a second setActiveVenue call, since we already know
+  // this id is valid (we just created it under this exact org).
+  const jar = await cookies();
+  jar.set(ACTIVE_VENUE_COOKIE, restaurant.id, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  });
+
+  const checklist = await getSetupChecklist(restaurant);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/venues");
   return { ok: true, checklist };
 }
