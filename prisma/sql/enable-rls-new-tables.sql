@@ -52,3 +52,12 @@ revoke all on "StandOrderItem" from anon, authenticated;
 -- (admin CRUD, venue buy screen), never the anon/authenticated API surface.
 alter table "StandProduct" enable row level security;
 revoke all on "StandProduct" from anon, authenticated;
+
+-- Added with the cash drawer / shift sessions build: CashDrawerSession and
+-- CashMovement carry cash-handling financial records — same blanket policy,
+-- all access goes through Prisma (lib/cash-drawer.ts), never the anon/
+-- authenticated API surface.
+alter table "CashDrawerSession" enable row level security;
+alter table "CashMovement" enable row level security;
+revoke all on "CashDrawerSession" from anon, authenticated;
+revoke all on "CashMovement" from anon, authenticated;

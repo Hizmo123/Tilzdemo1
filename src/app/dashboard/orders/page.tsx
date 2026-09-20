@@ -41,7 +41,7 @@ export default async function OrdersPage() {
 
   const tickets = orders.map((o) => ({
     id: o.id,
-    tableLabel: o.bill.table.label,
+    tableLabel: o.bill.table?.label ?? "Counter",
     status: o.status as OrderStatusName,
     source: o.source,
     minutesAgo: Math.floor((now - new Date(o.createdAt).getTime()) / 60000),

@@ -48,7 +48,7 @@ export function buildReceiptEmail(data: ReceiptData): {
 
       <table style="width:100%;font-size:12px;color:#3a4147;margin-top:16px;">
         <tr>
-          <td>Table ${escapeHtml(data.tableLabel)}</td>
+          <td>${data.tableLabel ? `Table ${escapeHtml(data.tableLabel)}` : "Counter"}</td>
           <td style="text-align:right;">${issuedLabel}</td>
         </tr>
       </table>
@@ -81,7 +81,7 @@ export function buildReceiptEmail(data: ReceiptData): {
     data.abn ? `ABN ${formatAbn(data.abn)}` : null,
     ...data.addressLines,
     "",
-    `Table ${data.tableLabel} · ${issuedLabel}`,
+    `${data.tableLabel ? `Table ${data.tableLabel}` : "Counter"} · ${issuedLabel}`,
     "",
     ...data.items.map(
       (it) =>

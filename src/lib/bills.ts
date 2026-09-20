@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type TenderType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
 import { notifyRestaurant } from "@/lib/realtime";
@@ -313,9 +313,148 @@ function uniqueTargetIncludes(e: unknown, field: string): boolean {
   return false;
 }
 
-// Shared core: adds menu items to a table's open bill, priced from the DB. Used
-// by both the customer flow (resolved from a QR token) and staff taking an order
-// at the table (resolved from a staff session). The caller must have already
+// Shared core: creates one order ticket + its priced bill items against an
+// ALREADY-RESOLVED bill (table order or counter sale alike — the caller has
+// already found-or-created the bill and decided its tableId). Split out of
+// addItemsForTable so a counter sale (addItemsToCounterBill) can drive the
+// exact same pricing/modifier/order-number logic against a billId directly,
+// with no table and no "find or create by tableId" race to handle. Must run
+// inside the caller's transaction (so a partial write always rolls back with
+// the rest of the send) and throws LineError/EmptySend on failure, same as
+// before this was extracted.
+async function createOrderWithItems(
+  tx: Prisma.TransactionClient,
+  args: {
+    billId: string;
+    tableId: string | null;
+    restaurantId: string;
+    lines: AddItem[];
+    source: "CUSTOMER" | "STAFF";
+    cleanNote: string | null;
+    idemKey: string | null;
+  },
+): Promise<{ orderId: string; added: number }> {
+  const { billId, tableId, restaurantId, lines, source, cleanNote, idemKey } = args;
+
+  // Allocate a human order number (atomic per-venue counter) and read the
+  // service settings in the same row update.
+  const rest = await tx.restaurant.update({
+    where: { id: restaurantId },
+    data: { orderSeq: { increment: 1 } },
+    select: {
+      orderSeq: true,
+      staffApproval: true,
+      paymentTiming: true,
+      requirePaymentBeforeOrder: true,
+    },
+  });
+  // Release gates for CUSTOMER orders (a waiter's own order — and a counter
+  // sale, always STAFF — is never held):
+  //  - approval: staff must accept before the kitchen sees it.
+  //  - payment: prepay venue (paymentTiming "before"), or the stricter
+  //    opt-in requirePaymentBeforeOrder — either way the kitchen never
+  //    sees it until it's paid. The two are independent switches: a
+  //    venue can have "before" without the strict variant (today's
+  //    behaviour, unchanged) or turn on the strict variant on top of it
+  //    for a harder "no submitting without paying" customer flow.
+  const awaitingApproval = source === "CUSTOMER" && rest.staffApproval;
+  const awaitingPayment =
+    source === "CUSTOMER" &&
+    (rest.paymentTiming === "before" || rest.requirePaymentBeforeOrder);
+  const held = awaitingApproval || awaitingPayment;
+
+  // One order ticket per send.
+  const order = await tx.order.create({
+    data: {
+      billId,
+      tableId,
+      restaurantId,
+      source,
+      note: cleanNote,
+      clientRequestId: idemKey,
+      orderNumber: rest.orderSeq,
+      status: held ? "PENDING" : "SUBMITTED",
+      awaitingApproval,
+      awaitingPayment,
+    },
+  });
+
+  // One batched lookup for every distinct item in the cart instead of a
+  // findFirst-then-create round trip per line — a 6-item order used to
+  // be 12+ sequential DB round trips inside this transaction (at this
+  // project's ~150-250ms per round trip, several real seconds), which
+  // is exactly the kind of delay that tripped the client's "couldn't
+  // send, retrying" fallback on a perfectly working connection.
+  const uniqueIds = [...new Set(lines.map((l) => l.menuItemId))];
+  const foundItems = await tx.menuItem.findMany({
+    where: {
+      id: { in: uniqueIds },
+      available: true,
+      category: { restaurantId },
+    },
+    include: {
+      category: { select: { station: true } },
+      modifierGroups: { include: { options: true } },
+    },
+  });
+  const itemById = new Map(foundItems.map((it) => [it.id, it]));
+
+  const billItemRows: {
+    id: string;
+    billId: string;
+    orderId: string;
+    menuItemId: string;
+    nameSnapshot: string;
+    unitPriceCents: number;
+    modifiers: object[] | undefined;
+    quantity: number;
+    lineTotalCents: number;
+    station: string | null;
+    note: string | null;
+  }[] = [];
+
+  for (const line of lines) {
+    const item = itemById.get(line.menuItemId);
+    if (!item) continue; // silently skip unavailable/foreign items
+
+    const resolved = resolveModifiers(item, line.optionIds ?? []);
+    if ("error" in resolved) throw new LineError(resolved.error); // rolls back the whole send
+
+    const qty = Math.min(line.quantity, 99);
+
+    billItemRows.push({
+      id: randomUUID(),
+      billId,
+      orderId: order.id,
+      menuItemId: item.id,
+      nameSnapshot: item.name,
+      unitPriceCents: resolved.unitPriceCents,
+      modifiers: resolved.modifiers.length
+        ? (resolved.modifiers as object[])
+        : undefined,
+      quantity: qty,
+      lineTotalCents: resolved.unitPriceCents * qty,
+      station: item.station ?? item.category?.station ?? null,
+      note: line.note?.trim().slice(0, 140) || null,
+    });
+  }
+
+  if (billItemRows.length) {
+    await tx.billItem.createMany({ data: billItemRows });
+  }
+  const added = billItemRows.length;
+
+  // Nothing landed — throw so the order (and a just-created bill) roll
+  // back rather than leaving an empty ticket behind.
+  if (added === 0) throw new EmptySend();
+
+  await recompute(tx, billId);
+  return { orderId: order.id, added };
+}
+
+// Adds menu items to a table's open bill, priced from the DB. Used by both
+// the customer flow (resolved from a QR token) and staff taking an order at
+// the table (resolved from a staff session). The caller must have already
 // established that tableId belongs to restaurantId.
 export async function addItemsForTable(
   target: { tableId: string; restaurantId: string; currency: string },
@@ -361,123 +500,37 @@ export async function addItemsForTable(
           orderBy: { createdAt: "desc" },
         });
         if (!bill) {
-          bill = await tx.bill.create({ data: { tableId, currency } });
-        }
-
-        // Allocate a human order number (atomic per-venue counter) and read the
-        // service settings in the same row update.
-        const rest = await tx.restaurant.update({
-          where: { id: restaurantId },
-          data: { orderSeq: { increment: 1 } },
-          select: {
-            orderSeq: true,
-            staffApproval: true,
-            paymentTiming: true,
-            requirePaymentBeforeOrder: true,
-          },
-        });
-        // Release gates for CUSTOMER orders (a waiter's own order is never held):
-        //  - approval: staff must accept before the kitchen sees it.
-        //  - payment: prepay venue (paymentTiming "before"), or the stricter
-        //    opt-in requirePaymentBeforeOrder — either way the kitchen never
-        //    sees it until it's paid. The two are independent switches: a
-        //    venue can have "before" without the strict variant (today's
-        //    behaviour, unchanged) or turn on the strict variant on top of it
-        //    for a harder "no submitting without paying" customer flow.
-        const awaitingApproval = source === "CUSTOMER" && rest.staffApproval;
-        const awaitingPayment =
-          source === "CUSTOMER" &&
-          (rest.paymentTiming === "before" || rest.requirePaymentBeforeOrder);
-        const held = awaitingApproval || awaitingPayment;
-
-        // One order ticket per send.
-        const order = await tx.order.create({
-          data: {
-            billId: bill.id,
-            tableId,
-            restaurantId,
-            source,
-            note: cleanNote,
-            clientRequestId: idemKey,
-            orderNumber: rest.orderSeq,
-            status: held ? "PENDING" : "SUBMITTED",
-            awaitingApproval,
-            awaitingPayment,
-          },
-        });
-
-        // One batched lookup for every distinct item in the cart instead of a
-        // findFirst-then-create round trip per line — a 6-item order used to
-        // be 12+ sequential DB round trips inside this transaction (at this
-        // project's ~150-250ms per round trip, several real seconds), which
-        // is exactly the kind of delay that tripped the client's "couldn't
-        // send, retrying" fallback on a perfectly working connection.
-        const uniqueIds = [...new Set(lines.map((l) => l.menuItemId))];
-        const foundItems = await tx.menuItem.findMany({
-          where: {
-            id: { in: uniqueIds },
-            available: true,
-            category: { restaurantId },
-          },
-          include: {
-            category: { select: { station: true } },
-            modifierGroups: { include: { options: true } },
-          },
-        });
-        const itemById = new Map(foundItems.map((it) => [it.id, it]));
-
-        const billItemRows: {
-          id: string;
-          billId: string;
-          orderId: string;
-          menuItemId: string;
-          nameSnapshot: string;
-          unitPriceCents: number;
-          modifiers: object[] | undefined;
-          quantity: number;
-          lineTotalCents: number;
-          station: string | null;
-          note: string | null;
-        }[] = [];
-
-        for (const line of lines) {
-          const item = itemById.get(line.menuItemId);
-          if (!item) continue; // silently skip unavailable/foreign items
-
-          const resolved = resolveModifiers(item, line.optionIds ?? []);
-          if ("error" in resolved) throw new LineError(resolved.error); // rolls back the whole send
-
-          const qty = Math.min(line.quantity, 99);
-
-          billItemRows.push({
-            id: randomUUID(),
-            billId: bill.id,
-            orderId: order.id,
-            menuItemId: item.id,
-            nameSnapshot: item.name,
-            unitPriceCents: resolved.unitPriceCents,
-            modifiers: resolved.modifiers.length
-              ? (resolved.modifiers as object[])
-              : undefined,
-            quantity: qty,
-            lineTotalCents: resolved.unitPriceCents * qty,
-            station: item.station ?? item.category?.station ?? null,
-            note: line.note?.trim().slice(0, 140) || null,
+          // A new dine-in bill sets restaurantId/locationId directly too
+          // (not just tableId) — analytics/invoices now scope revenue via
+          // these columns (see lib/analytics.ts, lib/invoices.ts), so every
+          // bill created from here on needs them populated, not just
+          // counter bills.
+          const table = await tx.table.findUniqueOrThrow({
+            where: { id: tableId },
+            select: { locationId: true },
+          });
+          bill = await tx.bill.create({
+            data: {
+              tableId,
+              currency,
+              restaurantId,
+              locationId: table.locationId,
+              channel: "DINE_IN",
+            },
           });
         }
 
-        if (billItemRows.length) {
-          await tx.billItem.createMany({ data: billItemRows });
-        }
-        const added = billItemRows.length;
-
-        // Nothing landed — throw so the order (and a just-created bill) roll
-        // back rather than leaving an empty ticket behind.
-        if (added === 0) throw new EmptySend();
-
-        await recompute(tx, bill.id);
-        orderIdForLog = order.id;
-        addedForLog = added;
+        const result = await createOrderWithItems(tx, {
+          billId: bill.id,
+          tableId,
+          restaurantId,
+          lines,
+          source,
+          cleanNote,
+          idemKey,
+        });
+        orderIdForLog = result.orderId;
+        addedForLog = result.added;
       });
 
       await notifyRestaurant(restaurantId);
@@ -510,6 +563,144 @@ export async function addItemsForTable(
 
   log.warn("order.create_contended", { restaurantId, tableId });
   return { error: "This table is busy right now. Please try again." };
+}
+
+// ---- Counter (cashier) sales -------------------------------------------------
+
+// Starts a new counter tab — never reused, unlike a table's bill (which is
+// find-or-create). Counter sales are independent and unlimited: staff can
+// have several open at once (e.g. multiple registers, or one customer
+// waiting on a drink while another is rung up), so this always creates a
+// fresh Bill rather than looking for an existing open one.
+export async function createCounterBill(
+  restaurantId: string,
+  locationId: string,
+): Promise<{ ok: true; billId: string } | { error: string }> {
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { currency: true },
+  });
+  if (!restaurant) return { error: "Restaurant not found." };
+
+  const location = await prisma.location.findFirst({
+    where: { id: locationId, restaurantId },
+  });
+  if (!location) return { error: "Location not found." };
+
+  const bill = await prisma.bill.create({
+    data: {
+      tableId: null,
+      restaurantId,
+      locationId,
+      channel: "COUNTER",
+      currency: restaurant.currency,
+    },
+  });
+
+  return { ok: true, billId: bill.id };
+}
+
+// Adds items to an existing counter bill. Reuses the exact same pricing/
+// modifier/order-number core addItemsForTable uses (createOrderWithItems) —
+// no duplicated logic. Always source "STAFF" (a counter sale is never
+// customer-initiated) and tableId null throughout.
+export async function addItemsToCounterBill(
+  billId: string,
+  restaurantId: string,
+  items: AddItem[],
+  note?: string,
+) {
+  const cleanNote = note?.trim().slice(0, 200) || null;
+
+  const lines = items.filter(
+    (i) => i.menuItemId && Number.isInteger(i.quantity) && i.quantity > 0,
+  );
+  if (lines.length === 0) return { error: "Nothing to add." };
+
+  try {
+    let orderIdForLog = "";
+    let addedForLog = 0;
+    await prisma.$transaction(async (tx) => {
+      const bill = await tx.bill.findFirst({
+        where: {
+          id: billId,
+          restaurantId,
+          channel: "COUNTER",
+          status: { in: ["OPEN", "PARTIALLY_PAID"] },
+        },
+      });
+      if (!bill) throw new LineError("This sale is no longer open.");
+
+      const result = await createOrderWithItems(tx, {
+        billId: bill.id,
+        tableId: null,
+        restaurantId,
+        lines,
+        source: "STAFF",
+        cleanNote,
+        idemKey: null,
+      });
+      orderIdForLog = result.orderId;
+      addedForLog = result.added;
+    });
+
+    await notifyRestaurant(restaurantId);
+    log.info("order.created", {
+      restaurantId,
+      billId,
+      orderId: orderIdForLog,
+      source: "STAFF",
+      lineCount: addedForLog,
+    });
+    return { ok: true as const };
+  } catch (e) {
+    if (e instanceof LineError) return { error: e.reason };
+    if (e instanceof EmptySend) return { error: "Those items aren't available." };
+    log.error("order.create_failed", {
+      restaurantId,
+      billId,
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
+}
+
+// Open counter bill + its items/orders, scoped to restaurantId — the counter
+// sale screen's main read.
+export async function getCounterBillWithOrders(billId: string, restaurantId: string) {
+  return prisma.bill.findFirst({
+    where: { id: billId, restaurantId, channel: "COUNTER" },
+    include: {
+      items: { orderBy: { createdAt: "asc" } },
+      orders: {
+        where: { status: { not: "CANCELLED" } },
+        orderBy: { createdAt: "asc" },
+        include: { items: { select: { nameSnapshot: true, quantity: true } } },
+      },
+    },
+  });
+}
+
+// All open counter sales for the restaurant, newest first — the counter
+// landing screen's list.
+export async function listOpenCounterBills(restaurantId: string) {
+  const bills = await prisma.bill.findMany({
+    where: {
+      restaurantId,
+      channel: "COUNTER",
+      status: { in: ["OPEN", "PARTIALLY_PAID"] },
+    },
+    orderBy: { createdAt: "desc" },
+    include: { _count: { select: { items: true } } },
+  });
+  return bills.map((b) => ({
+    id: b.id,
+    status: b.status,
+    itemCount: b._count.items,
+    totalCents: b.totalCents,
+    amountPaidCents: b.amountPaidCents,
+    createdAt: b.createdAt,
+  }));
 }
 
 // Validates a line's modifier selection against the item's groups and returns
@@ -1543,22 +1734,45 @@ export async function setMenuItemAvailable(
 // balance — used when a customer pays at the counter or a waiter takes payment
 // (i.e. self-serve payment is off). Same concurrency-safe compare-and-swap as
 // the customer pay flow, scoped to the staff member's restaurant.
-export async function staffCloseBill(tableId: string, restaurantId: string) {
+// Shared core behind staffCloseBill and staffCloseBillById: read → CAS the
+// remaining balance to PAID → record a mock "counter" Payment → release any
+// payment-held orders → notify. `findBill` re-reads fresh on every retry
+// attempt (a lost CAS means someone else settled it between our read and
+// write), so it must not be memoised by the caller.
+async function settleOpenBillAsPaid(
+  findBill: () => Promise<{
+    id: string;
+    totalCents: number;
+    amountPaidCents: number;
+    currency: string;
+    locationId: string | null;
+  } | null>,
+  restaurantId: string,
+  notFoundError: string,
+  tenderType: TenderType,
+): Promise<{ paid: true } | { error: string }> {
   const provider = getPaymentProvider();
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    const bill = await prisma.bill.findFirst({
-      where: {
-        tableId,
-        status: { in: ["OPEN", "PARTIALLY_PAID"] },
-        table: { location: { restaurantId } },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    if (!bill) return { error: "No open bill on this table." };
+    const bill = await findBill();
+    if (!bill) return { error: notFoundError };
 
     const remaining = bill.totalCents - bill.amountPaidCents;
     if (remaining <= 0) return { paid: true as const };
+
+    // Resolve any open drawer session for this bill's location. CASH
+    // requires one — cash must land in a drawer, so staff can't take a cash
+    // payment with nowhere to reconcile it against (see
+    // lib/cash-drawer.ts#getZReport). CARD/OTHER attach one when present
+    // (so it still shows on that shift's Z-report) but don't require it.
+    const session = bill.locationId
+      ? await prisma.cashDrawerSession.findFirst({
+          where: { locationId: bill.locationId, restaurantId, status: "OPEN" },
+        })
+      : null;
+    if (tenderType === "CASH" && !session) {
+      return { error: "Open the drawer before taking cash." };
+    }
 
     const expectedPaid = bill.amountPaidCents;
     const cas = await prisma.bill.updateMany({
@@ -1592,6 +1806,8 @@ export async function staffCloseBill(tableId: string, restaurantId: string) {
         providerRef: result.providerRef,
         idempotencyKey,
         test: result.test,
+        tenderType,
+        cashSessionId: session?.id ?? null,
       },
     });
     // Prepay: staff taking payment also releases any payment-held orders.
@@ -1600,4 +1816,65 @@ export async function staffCloseBill(tableId: string, restaurantId: string) {
     return { paid: true as const };
   }
   return { error: "The bill is busy. Please try again." };
+}
+
+// tenderType defaults to "OTHER" for the dine-in table flow (this function's
+// only caller today is the table page's "Mark as paid (counter / cash)"
+// button, which has no tender-choice UI of its own — task 4 only builds that
+// for the counter sale screen). "OTHER" rather than "CASH" deliberately: it
+// means closing a dine-in table's bill never suddenly starts requiring an
+// open drawer, which would be a real, undiscussed behaviour change for a
+// flow this build wasn't asked to touch.
+export async function staffCloseBill(
+  tableId: string,
+  restaurantId: string,
+  tenderType: TenderType = "OTHER",
+) {
+  return settleOpenBillAsPaid(
+    () =>
+      prisma.bill.findFirst({
+        where: {
+          tableId,
+          status: { in: ["OPEN", "PARTIALLY_PAID"] },
+          table: { location: { restaurantId } },
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          totalCents: true,
+          amountPaidCents: true,
+          currency: true,
+          locationId: true,
+        },
+      }),
+    restaurantId,
+    "No open bill on this table.",
+    tenderType,
+  );
+}
+
+// Same as staffCloseBill, but for a counter bill — no table to key off, so
+// this is scoped directly by billId + restaurantId instead. The counter
+// sale screen (task 4) always passes an explicit tenderType chosen by staff.
+export async function staffCloseBillById(
+  billId: string,
+  restaurantId: string,
+  tenderType: TenderType,
+) {
+  return settleOpenBillAsPaid(
+    () =>
+      prisma.bill.findFirst({
+        where: { id: billId, restaurantId, status: { in: ["OPEN", "PARTIALLY_PAID"] } },
+        select: {
+          id: true,
+          totalCents: true,
+          amountPaidCents: true,
+          currency: true,
+          locationId: true,
+        },
+      }),
+    restaurantId,
+    "This sale is no longer open.",
+    tenderType,
+  );
 }

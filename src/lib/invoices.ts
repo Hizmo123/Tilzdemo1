@@ -1,6 +1,20 @@
 import { prisma } from "@/lib/prisma";
 import { addDays } from "@/lib/time";
 import type { ResolvedRange } from "@/lib/date-range";
+import type { BillChannel } from "@prisma/client";
+
+// Loose "does this search term look like it's asking for a channel" match —
+// e.g. typing "counter" in the invoices search box should surface counter
+// sales alongside any table/name/email match, not just an exact enum value.
+function matchingChannels(search: string): BillChannel[] {
+  const q = search.trim().toLowerCase();
+  if (!q) return [];
+  const out: BillChannel[] = [];
+  if (q.includes("counter") || "counter".includes(q)) out.push("COUNTER");
+  if (q.includes("dine") || q.includes("table") || "dine in".includes(q)) out.push("DINE_IN");
+  if (q.includes("takeaway") || q.includes("take away") || "takeaway".includes(q)) out.push("TAKEAWAY");
+  return out;
+}
 
 export type InvoiceRow = {
   id: string;
@@ -23,9 +37,10 @@ export async function getInvoices(
   range: ResolvedRange,
   search?: string,
 ): Promise<{ rows: InvoiceRow[]; truncated: boolean }> {
+  const channelMatches = search ? matchingChannels(search) : [];
   const bills = await prisma.bill.findMany({
     where: {
-      table: { locationId },
+      locationId,
       status: "PAID",
       paidAt: { gte: range.from, lt: range.to },
       ...(search
@@ -34,6 +49,7 @@ export async function getInvoices(
               { table: { label: { contains: search, mode: "insensitive" } } },
               { customerName: { contains: search, mode: "insensitive" } },
               { receiptEmail: { contains: search, mode: "insensitive" } },
+              ...(channelMatches.length ? [{ channel: { in: channelMatches } }] : []),
             ],
           }
         : {}),
@@ -58,7 +74,7 @@ export async function getInvoices(
     rows: bills.slice(0, MAX_ROWS).map((b) => ({
       id: b.id,
       paidAt: b.paidAt,
-      tableLabel: b.table.label,
+      tableLabel: b.table?.label ?? "Counter",
       customerName: b.customerName,
       totalCents: b.totalCents,
       tipCents: b.tipCents,
@@ -83,7 +99,7 @@ export function recentInvoicesRange(): ResolvedRange {
 // this is the actual record-keeping export, not the on-screen review list.
 export async function getInvoicesForExport(locationId: string, range: ResolvedRange) {
   return prisma.bill.findMany({
-    where: { table: { locationId }, status: "PAID", paidAt: { gte: range.from, lt: range.to } },
+    where: { locationId, status: "PAID", paidAt: { gte: range.from, lt: range.to } },
     orderBy: { paidAt: "asc" },
     select: {
       id: true,

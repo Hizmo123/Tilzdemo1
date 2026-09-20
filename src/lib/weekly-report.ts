@@ -28,12 +28,10 @@ export async function getWeeklyReport(
   const weekEnd = addDays(weekStart, 7);
   const prevWeekStart = addDays(weekStart, -7);
 
-  const tableFilter = { location: { restaurantId } };
-
   const [current, prevTotal, bills] = await Promise.all([
     prisma.bill.aggregate({
       where: {
-        table: tableFilter,
+        restaurantId,
         status: "PAID",
         paidAt: { gte: weekStart, lt: weekEnd },
       },
@@ -41,11 +39,11 @@ export async function getWeeklyReport(
       _count: true,
     }),
     prisma.bill.aggregate({
-      where: { table: tableFilter, status: "PAID", paidAt: { gte: prevWeekStart, lt: weekStart } },
+      where: { restaurantId, status: "PAID", paidAt: { gte: prevWeekStart, lt: weekStart } },
       _sum: { totalCents: true },
     }),
     prisma.bill.findMany({
-      where: { table: tableFilter, status: "PAID", paidAt: { gte: weekStart, lt: weekEnd } },
+      where: { restaurantId, status: "PAID", paidAt: { gte: weekStart, lt: weekEnd } },
       select: { totalCents: true, paidAt: true },
     }),
   ]);

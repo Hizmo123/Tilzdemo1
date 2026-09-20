@@ -57,7 +57,8 @@ export async function KitchenBoardData({
   const stations = [...stationSet].sort();
   const active = lockedStation ?? (stationFilter && stations.includes(stationFilter) ? stationFilter : null);
 
-  const label = (o: { bill: { table: { label: string } } }) => `Table ${o.bill.table.label}`;
+  const label = (o: { bill: { table: { label: string } | null } }) =>
+    o.bill.table ? `Table ${o.bill.table.label}` : "Counter";
 
   // Board view: filtered to the active station (or everything), one card per
   // ticket, items trimmed to what this screen cares about.

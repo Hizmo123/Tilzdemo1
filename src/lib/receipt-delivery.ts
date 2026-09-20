@@ -22,13 +22,16 @@ export async function emailBillReceipt(
       items: { orderBy: { createdAt: "asc" } },
       payments: { orderBy: { createdAt: "asc" } },
       table: { include: { location: { include: { restaurant: true } } } },
+      restaurant: true,
+      location: true,
     },
   });
   if (!bill) return { error: "Bill not found." };
   if (bill.items.length === 0) return { error: "Nothing to send yet." };
 
-  const restaurant = bill.table.location.restaurant;
-  const location = bill.table.location;
+  const restaurant = bill.table?.location.restaurant ?? bill.restaurant;
+  const location = bill.table?.location ?? bill.location;
+  if (!restaurant || !location) return { error: "Bill not found." };
 
   const data = buildReceiptData({
     restaurantName: restaurant.name,
@@ -38,7 +41,7 @@ export async function emailBillReceipt(
     suburb: location.suburb,
     state: location.state,
     postcode: location.postcode,
-    tableLabel: bill.table.label,
+    tableLabel: bill.table?.label ?? null,
     currency: bill.currency,
     createdAt: bill.createdAt,
     paidAt: bill.paidAt,
