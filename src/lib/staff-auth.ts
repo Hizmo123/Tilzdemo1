@@ -7,7 +7,9 @@ import {
 } from "crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { getEntitlements } from "@/lib/entitlements";
 
 // Staff PIN authentication. This is a SECOND, lighter identity type that lives
 // alongside Supabase email/password accounts (used by owners/admins/managers).
@@ -197,4 +199,25 @@ export async function requireStaffForSlug(slug: string) {
   const session = await getStaffSession();
   if (!session || session.restaurant.slug !== slug) return null;
   return session;
+}
+
+// HARD guard for the staff terminal's owner-operated pages (home, kitchen,
+// menu editor, table service, counter, register) on a LITE org — menu-only,
+// no live service to run a staff terminal against. Deliberately NOT reused
+// from lib/auth.ts#requireOrdering: that helper resolves the ORG via the
+// owner's Supabase session (requireUser/getTenantContext), which staff never
+// have — they authenticate with a PIN via this file's own session, not a
+// dashboard login. Calling the owner-side helper here would incorrectly
+// bounce every staff member, on every venue, to /login. This resolves
+// entitlements via the STAFF session's own restaurant instead, and — since
+// there is no staff-side "/dashboard" to fall back to — redirects to this
+// venue's own staff landing/login page. Never call this from the PIN login
+// page itself (src/app/staff/[slug]/page.tsx) or from anything under
+// /v/[token] (the customer flow this build never touches).
+export async function requireStaffOrdering(
+  organizationId: string,
+  slug: string,
+) {
+  const ent = await getEntitlements(organizationId);
+  if (!ent.ordering) redirect(`/staff/${slug}`);
 }

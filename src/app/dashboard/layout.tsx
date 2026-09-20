@@ -95,9 +95,19 @@ function reorderSection(
   });
 }
 
+// On LITE (entitlements.ordering === false) the org gets ONLY these — Menu
+// and Settings/Billing to run the venue's info and plan, nothing tied to
+// live service (Tables/Orders/Kitchen/Bills/Analytics/Team), since there is
+// no live service to run. This is nav-level hiding only; the actual security
+// boundary is requireOrdering()'s hard redirect on each of those routes
+// (see lib/auth.ts) — a Lite user typing the URL directly must still be
+// bounced back, not just kept from seeing the link.
+const ORDERING_FREE_HREFS = new Set(["/dashboard", "/dashboard/menu", "/dashboard/billing", "/dashboard/settings"]);
+
 function buildVisibleSections(
   experienceMode: string | null,
   role: Role | null,
+  ordering: boolean,
 ): NavSection[] {
   const emphasis = experienceMode ? EMPHASIS[experienceMode] : undefined;
   const rank = emphasis ? new Map(emphasis.map((href, i) => [href, i])) : null;
@@ -106,7 +116,9 @@ function buildVisibleSections(
     .map((section) => ({
       label: section.label,
       items: reorderSection(section.items, rank).filter(
-        (item) => item.perm === null || (role && roleCan(role, item.perm)),
+        (item) =>
+          (item.perm === null || (role && roleCan(role, item.perm))) &&
+          (ordering || ORDERING_FREE_HREFS.has(item.href)),
       ),
     }))
     .filter((section) => section.items.length > 0);
@@ -162,16 +174,18 @@ export default async function DashboardLayout({
 
   const restaurant = membership?.organization.restaurants[0];
 
-  const visibleSections = buildVisibleSections(
-    restaurant?.experienceMode ?? null,
-    role,
-  );
-
   // Lapsed-subscription grace period (spec B4): a warning here, never a
   // lockout. Existing service, every dashboard page and read access all keep
   // working through the grace period regardless of what this shows —
-  // nothing in this layout blocks rendering `children`.
+  // nothing in this layout blocks rendering `children`. Also drives the nav
+  // filtering below (LITE hides everything tied to live service).
   const entitlements = membership ? await getEntitlements(membership.organizationId) : null;
+
+  const visibleSections = buildVisibleSections(
+    restaurant?.experienceMode ?? null,
+    role,
+    entitlements?.ordering ?? true,
+  );
 
   return (
     <div className="min-h-dvh flex">

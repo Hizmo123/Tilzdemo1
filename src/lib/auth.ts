@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { roleCan, type Permission } from "@/lib/rbac";
+import { getEntitlements } from "@/lib/entitlements";
 
 // Returns the current Supabase user or null. Uses getUser() (not getSession())
 // so the token is verified against Supabase — a real network round trip, not
@@ -85,6 +86,22 @@ export async function requireActiveLocation() {
   const ctx = await getActiveLocation();
   if (!ctx) redirect("/dashboard");
   return ctx;
+}
+
+// HARD guard for every owner-side route that only makes sense when the org
+// actually has live service to run — LITE (entitlements.ordering === false)
+// is menu-only and must not be able to reach these by typing the URL
+// directly, not just have the nav link hidden (see dashboard/layout.tsx's
+// nav filtering, which is cosmetic only). Call at the very top of the
+// Server Component for: dashboard/tables, dashboard/orders,
+// dashboard/bills, dashboard/analytics, and the whole /staff/[slug] owner-
+// operated area — never the customer-facing /v/[token] flow, which this
+// deliberately does not touch.
+export async function requireOrdering() {
+  const { membership } = await getTenantContext();
+  if (!membership) return; // no org yet — onboarding/dashboard handles this case
+  const ent = await getEntitlements(membership.organizationId);
+  if (!ent.ordering) redirect("/dashboard");
 }
 
 // Tenant-isolation guard for table-scoped operations. Loads a table ONLY if it

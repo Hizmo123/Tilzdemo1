@@ -6,6 +6,7 @@ import { formatCents } from "@/lib/money";
 import { startOfTodayInTz } from "@/lib/time";
 import { countOpenRequests } from "@/lib/requests";
 import { getSetupChecklist } from "@/lib/setup-checklist";
+import { getEntitlements } from "@/lib/entitlements";
 import { CreateRestaurantForm } from "./create-restaurant-form";
 import { LiveRefresh } from "./live-refresh";
 import { LoadSampleButton } from "./sample/load-sample-button";
@@ -45,6 +46,57 @@ export default async function DashboardHome() {
 
   const { restaurant, location } = ctx;
   const currency = restaurant.currency;
+
+  // LITE is menu-only — no tables, no bills, no live orders — so this never
+  // runs the ordering-only queries below (they'd just be querying tables/
+  // bills that structurally can't exist for this org's plan). Task C adds
+  // the actual public-menu QR/URL section to this branch.
+  const entLite = await getEntitlements(restaurant.organizationId);
+  if (!entLite.ordering) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">
+            {restaurant.name}
+          </h1>
+          <p className="text-muted mt-1">
+            {location.name} · {currency} · {restaurant.timezone}
+          </p>
+        </div>
+
+        <div className="rounded-[var(--radius-card)] border border-pine/30 bg-pine-soft p-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-medium text-pine-deep">You&apos;re on the free Lite plan</p>
+            <p className="text-sm text-pine-deep/80">
+              Upgrade to Basic to take live orders and payments at your tables.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/billing"
+            className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep"
+          >
+            See plans
+          </Link>
+        </div>
+
+        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
+          <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
+            Your menu
+          </h2>
+          <p className="text-sm text-muted mb-4">
+            Lite gives every table the same view-only digital menu — no cart,
+            no ordering. Keep it up to date here.
+          </p>
+          <Link
+            href="/dashboard/menu"
+            className="inline-block rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
+          >
+            Edit menu
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // "Today" resets at the restaurant's local midnight, not the server's.
   const startOfToday = startOfTodayInTz(restaurant.timezone);
@@ -151,23 +203,6 @@ export default async function DashboardHome() {
       )}
 
       {tables.length === 0 && <LoadSampleButton />}
-
-      {ctx.membership.organization.plan === "LITE" && (
-        <div className="rounded-[var(--radius-card)] border border-pine/30 bg-pine-soft p-5 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="font-medium text-pine-deep">You&apos;re on the free Lite plan</p>
-            <p className="text-sm text-pine-deep/80">
-              Upgrade to Basic to take live orders and payments at your tables.
-            </p>
-          </div>
-          <Link
-            href="/dashboard/billing"
-            className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep"
-          >
-            See plans
-          </Link>
-        </div>
-      )}
 
       <div>
         <h2 className="font-display text-lg font-semibold tracking-tight mb-3">

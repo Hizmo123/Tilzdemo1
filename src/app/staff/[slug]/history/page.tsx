@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireStaffForSlug } from "@/lib/staff-auth";
+import { requireStaffForSlug, requireStaffOrdering } from "@/lib/staff-auth";
 import { roleCan } from "@/lib/rbac";
 import { getRecentOrders, HISTORY_DAYS } from "@/lib/bills";
 
@@ -24,6 +24,10 @@ export default async function HistoryPage({
   const { slug } = await params;
   const session = await requireStaffForSlug(slug);
   if (!session) redirect(`/staff/${slug}`);
+  // HARD guard: LITE has no live ordering to run any of this against — see
+  // lib/staff-auth.ts#requireStaffOrdering for why this is NOT
+  // lib/auth.ts#requireOrdering (owner Supabase session vs staff PIN session).
+  await requireStaffOrdering(session.restaurant.organizationId, slug);
   const { staff, restaurant } = session;
 
   if (!roleCan(staff.role, "bills:view")) {

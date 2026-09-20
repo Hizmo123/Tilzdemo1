@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireStaffForSlug } from "@/lib/staff-auth";
 import { roleCan } from "@/lib/rbac";
+import { getEntitlements } from "@/lib/entitlements";
 import { KitchenHeader } from "./kitchen-header";
 import { KitchenBoardData } from "./kitchen-board-data";
 
@@ -37,6 +38,27 @@ export default async function KitchenPage({
   if (!session) redirect(`/staff/${slug}`);
 
   const { staff, restaurant } = session;
+
+  // LITE has no live ordering, so no kitchen tickets ever exist — rendered
+  // inline rather than redirected: the PIN login page (staff/[slug]/page.tsx)
+  // sends a KITCHEN-role, station-locked account straight HERE on sign-in,
+  // so a redirect back to login would loop forever for that account.
+  const ent = await getEntitlements(restaurant.organizationId);
+  if (!ent.ordering) {
+    return (
+      <main className="min-h-dvh bg-paper flex items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <h1 className="font-display text-xl font-semibold tracking-tight">
+            No kitchen screen on this plan
+          </h1>
+          <p className="text-sm text-muted mt-2">
+            This venue&apos;s current plan doesn&apos;t include live ordering.
+            Ask an owner to upgrade from the dashboard.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   // A KITCHEN account assigned to one station (see StaffAccount.assignedStation)
   // is locked to it server-side — the URL's own ?station= is ignored rather

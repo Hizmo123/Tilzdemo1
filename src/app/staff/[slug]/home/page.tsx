@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getStaffSession } from "@/lib/staff-auth";
 import { roleCan, ROLE_META } from "@/lib/rbac";
+import { getEntitlements } from "@/lib/entitlements";
 import { formatCents } from "@/lib/money";
 import { getOpenRequests } from "@/lib/requests";
 import { getReadyOrders } from "@/lib/bills";
@@ -34,6 +35,27 @@ export default async function StaffHomePage({
   const { staff, restaurant } = session;
   const currency = restaurant.currency;
   const canSeeBills = roleCan(staff.role, "bills:view");
+
+  // LITE has no live ordering — no tables/bills/kitchen tickets ever exist.
+  // Rendered inline rather than redirected: this IS the page the PIN login
+  // screen (staff/[slug]/page.tsx) sends every non-station-locked account to
+  // on sign-in, so redirecting back to login would loop forever.
+  const ent = await getEntitlements(restaurant.organizationId);
+  if (!ent.ordering) {
+    return (
+      <main className="min-h-dvh bg-paper flex items-center justify-center px-6">
+        <div className="text-center max-w-sm">
+          <h1 className="font-display text-xl font-semibold tracking-tight">
+            No live service on this plan
+          </h1>
+          <p className="text-sm text-muted mt-2">
+            {restaurant.name}&apos;s current plan doesn&apos;t include live
+            ordering. Ask an owner to upgrade from the dashboard.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   // Filtering through the table -> location -> restaurant relation directly
   // (rather than pre-fetching location ids first) turns two sequential round
