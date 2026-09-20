@@ -26,6 +26,9 @@ export default async function ProductsPage() {
         <h2 className="font-display text-lg font-semibold tracking-tight mb-4">
           Add a product
         </h2>
+        <p className="text-xs text-muted mb-4">
+          Add the product first, then upload a photo from its card below.
+        </p>
         <ProductForm
           action={createStandProduct}
           defaults={{ title: "", description: "", type: "QR", priceDollars: "", sortOrder: products.length }}
