@@ -7,6 +7,7 @@ import { startOfTodayInTz } from "@/lib/time";
 import { countOpenRequests } from "@/lib/requests";
 import { getSetupChecklist } from "@/lib/setup-checklist";
 import { getEntitlements } from "@/lib/entitlements";
+import { PublicMenuLink } from "@/components/dashboard/public-menu-link";
 import { CreateRestaurantForm } from "./create-restaurant-form";
 import { LiveRefresh } from "./live-refresh";
 import { LoadSampleButton } from "./sample/load-sample-button";
@@ -94,6 +95,8 @@ export default async function DashboardHome() {
             Edit menu
           </Link>
         </div>
+
+        <PublicMenuLink slug={restaurant.slug} />
       </div>
     );
   }
