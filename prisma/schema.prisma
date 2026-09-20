@@ -279,6 +279,14 @@ model Restaurant {
   // Set once the onboarding wizard finishes. Backfilled to createdAt for rows
   // that predate the wizard so nobody is re-onboarded by this migration.
   onboardingCompletedAt DateTime?
+  // Whether this venue is actually serving customers — gates /v/[token] and
+  // /m/[slug] (see lib/entitlements.ts#isOrgSubscribed and
+  // dashboard/actions.ts#publishRestaurant). Distinct from
+  // onboardingCompletedAt: finishing setup doesn't mean the org has an
+  // active (mock) subscription yet, and publishRestaurant refuses to flip
+  // this to true until it does. Defaults false so no existing restaurant is
+  // silently "live" the moment this column lands.
+  published      Boolean         @default(false)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   locations      Location[]

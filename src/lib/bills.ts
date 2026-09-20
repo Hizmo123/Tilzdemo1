@@ -12,7 +12,8 @@ import { entitlementsForTier } from "@/lib/entitlements";
 export type VisitInvalid =
   | "not_found"
   | "code_revoked"
-  | "table_inactive";
+  | "table_inactive"
+  | "not_published";
 
 export type ResolvedVisit = {
   tableId: string;
@@ -97,6 +98,7 @@ export async function resolveVisit(
   if (!qr) return { ok: false, reason: "not_found" };
   if (!qr.active) return { ok: false, reason: "code_revoked" };
   if (!qr.table.active) return { ok: false, reason: "table_inactive" };
+  if (!qr.table.location.restaurant.published) return { ok: false, reason: "not_published" };
 
   const r = qr.table.location.restaurant;
   const ent = entitlementsForTier(r.organization.plan, {

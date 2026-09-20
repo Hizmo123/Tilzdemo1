@@ -216,6 +216,27 @@ export async function canCreateVenue(organizationId: string): Promise<CreateVenu
   return { allowed: true };
 }
 
+// The single source of truth for "is this org actually subscribed" under the
+// mock billing model — planStatus === "active" AND not lapsed past the
+// grace period (same grace-period math as entitlementsForTier's
+// orderingBlocked). Used by publishRestaurant (dashboard/actions.ts) to
+// decide whether a venue is allowed to go live, and by anything else that
+// needs the same yes/no answer.
+// TODO(stripe): once real billing lands, replace this body with an actual
+// subscription-status check against the payment provider — every caller
+// keeps working unchanged since they only ever see the boolean result.
+export async function isOrgSubscribed(organizationId: string): Promise<boolean> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { plan: true, planStatus: true, subscriptionLapsedAt: true },
+  });
+  if (!org) return false;
+  if (org.planStatus !== "active") return false;
+
+  const ent = entitlementsForTier(org.plan, { lapsedAt: org.subscriptionLapsedAt });
+  return !ent.orderingBlocked;
+}
+
 export function entitlementsLabel(tier: PlanTier): string {
   switch (tier) {
     case "LITE":

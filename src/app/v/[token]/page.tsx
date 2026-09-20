@@ -25,6 +25,10 @@ const INVALID_COPY: Record<string, { title: string; message: string }> = {
     title: "Table unavailable",
     message: "This table isn't taking orders right now.",
   },
+  not_published: {
+    title: "Not available yet",
+    message: "This venue isn't taking orders yet. Please check back later.",
+  },
 };
 
 function InvalidState({ reason }: { reason: string }) {

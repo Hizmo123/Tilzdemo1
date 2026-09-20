@@ -12,9 +12,6 @@ export const dynamic = "force-dynamic";
 // doc comment: "shown when customer self-ordering is turned off... no Add
 // buttons") rather than a stripped-down copy of the interactive menu.
 //
-// TODO(task D): gate this on restaurant.published once that field exists —
-// today this serves whenever the slug resolves, since "published" doesn't
-// exist yet in this build's sequence.
 export default async function PublicMenuPage({
   params,
 }: {
@@ -26,7 +23,7 @@ export default async function PublicMenuPage({
     where: { slug },
   });
 
-  if (!restaurant) {
+  if (!restaurant || !restaurant.published) {
     return <NotAvailable />;
   }
 

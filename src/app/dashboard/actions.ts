@@ -2,9 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireUser } from "@/lib/auth";
+import { getAuthz, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { isOrgSubscribed } from "@/lib/entitlements";
 
 const createRestaurantSchema = z.object({
   restaurantName: z.string().trim().min(2, "Enter a restaurant name.").max(80),
@@ -79,4 +80,71 @@ export async function createRestaurant(
 
   revalidatePath("/dashboard");
   return {};
+}
+
+export type PublishState = { error?: string; ok?: boolean };
+
+// Flips a restaurant live — gates /v/[token] and /m/[slug] (see
+// lib/entitlements.ts's Restaurant.published comment). Refuses outright if
+// the org isn't "subscribed" under the mock billing model
+// (isOrgSubscribed) — no payment provider is ever called here; this is the
+// mock path the whole plan model runs on until real billing lands.
+export async function publishRestaurant(): Promise<PublishState> {
+  const authz = await getAuthz();
+  if (!authz.can("settings:manage")) {
+    return { error: "Only an owner or admin can publish the venue." };
+  }
+  const restaurant = authz.membership?.organization.restaurants[0];
+  if (!restaurant) return { error: "Create your restaurant first." };
+
+  const subscribed = await isOrgSubscribed(authz.membership!.organizationId);
+  if (!subscribed) {
+    return {
+      error:
+        "This venue needs an active plan before it can go live. Confirm a plan on the Billing page first.",
+    };
+  }
+
+  await prisma.restaurant.update({
+    where: { id: restaurant.id },
+    data: { published: true },
+  });
+
+  await audit({
+    organizationId: authz.membership!.organizationId,
+    actorUserId: authz.user.id,
+    actorEmail: authz.user.email ?? "",
+    action: "restaurant.published",
+    resourceType: "Restaurant",
+    resourceId: restaurant.id,
+  });
+
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+// Takes a live venue back offline — the reverse of publishRestaurant. No
+// subscription check needed to go offline, only to go live.
+export async function unpublishRestaurant(): Promise<PublishState> {
+  const authz = await getAuthz();
+  if (!authz.can("settings:manage")) return { error: "Not permitted." };
+  const restaurant = authz.membership?.organization.restaurants[0];
+  if (!restaurant) return { error: "Create your restaurant first." };
+
+  await prisma.restaurant.update({
+    where: { id: restaurant.id },
+    data: { published: false },
+  });
+
+  await audit({
+    organizationId: authz.membership!.organizationId,
+    actorUserId: authz.user.id,
+    actorEmail: authz.user.email ?? "",
+    action: "restaurant.unpublished",
+    resourceType: "Restaurant",
+    resourceId: restaurant.id,
+  });
+
+  revalidatePath("/dashboard");
+  return { ok: true };
 }

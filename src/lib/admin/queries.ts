@@ -81,7 +81,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
 
   const [venues, publishedVenues, restaurantsWithOrders] = await Promise.all([
     prisma.restaurant.count(),
-    prisma.restaurant.count({ where: { onboardingCompletedAt: { not: null } } }),
+    prisma.restaurant.count({ where: { published: true } }),
     // Distinct restaurantIds with at least one Order — Order.restaurantId is
     // a plain denormalized field, so this is a direct query rather than a
     // deep menu -> item -> billItem traversal.
@@ -109,9 +109,9 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     // "Signed up" and "completed onboarding" are the same count here — no
     // Restaurant/Membership row exists until completeOnboarding runs (see
     // src/app/onboarding/actions.ts), so an Organization only ever exists
-    // post-onboarding. "Published" reuses onboardingCompletedAt as the best
-    // available proxy — there's no separate publish/unpublish flag in this
-    // codebase (see this file's Task 6 commit for the flag).
+    // post-onboarding. "Published" now reads the real Restaurant.published
+    // flag (dashboard/actions.ts#publishRestaurant) — this used to proxy off
+    // onboardingCompletedAt before that flag existed.
     funnel: {
       signedUp: orgs.length,
       completedOnboarding: orgs.length,

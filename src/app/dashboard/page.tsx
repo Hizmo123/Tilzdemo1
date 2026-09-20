@@ -6,8 +6,9 @@ import { formatCents } from "@/lib/money";
 import { startOfTodayInTz } from "@/lib/time";
 import { countOpenRequests } from "@/lib/requests";
 import { getSetupChecklist } from "@/lib/setup-checklist";
-import { getEntitlements } from "@/lib/entitlements";
+import { getEntitlements, isOrgSubscribed } from "@/lib/entitlements";
 import { PublicMenuLink } from "@/components/dashboard/public-menu-link";
+import { PublishControl } from "@/components/dashboard/publish-control";
 import { CreateRestaurantForm } from "./create-restaurant-form";
 import { LiveRefresh } from "./live-refresh";
 import { LoadSampleButton } from "./sample/load-sample-button";
@@ -54,6 +55,7 @@ export default async function DashboardHome() {
   // the actual public-menu QR/URL section to this branch.
   const entLite = await getEntitlements(restaurant.organizationId);
   if (!entLite.ordering) {
+    const subscribedLite = await isOrgSubscribed(restaurant.organizationId);
     return (
       <div className="space-y-8">
         <div>
@@ -64,6 +66,8 @@ export default async function DashboardHome() {
             {location.name} · {currency} · {restaurant.timezone}
           </p>
         </div>
+
+        <PublishControl published={restaurant.published} subscribed={subscribedLite} />
 
         <div className="rounded-[var(--radius-card)] border border-pine/30 bg-pine-soft p-5 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -152,6 +156,7 @@ export default async function DashboardHome() {
   const salesToday = paidToday._sum.totalCents ?? 0;
   const ordersToday = paidToday._count;
   const checklistRemaining = checklist.filter((c) => !c.done);
+  const subscribed = await isOrgSubscribed(restaurant.organizationId);
 
   return (
     <div className="space-y-8">
@@ -164,6 +169,8 @@ export default async function DashboardHome() {
           {location.name} · {currency} · {restaurant.timezone}
         </p>
       </div>
+
+      <PublishControl published={restaurant.published} subscribed={subscribed} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Today's sales" value={formatCents(salesToday, currency)} />
