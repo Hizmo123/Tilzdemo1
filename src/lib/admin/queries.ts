@@ -161,6 +161,12 @@ export async function getRecentActivity(limit = 25) {
   return rows.map((r) => ({ ...r, organizationName: nameById.get(r.organizationId) ?? "(deleted org)" }));
 }
 
+// No `select` on the top-level org, so every Organization scalar column
+// (plan, planStatus, subscriptionLapsedAt, deactivatedAt,
+// deactivatedByEmail, deletionRequestedAt, deletionRequestedByEmail,
+// cardLast4, subscribedAt, ...) is already present on the returned `org` —
+// the admin controls card (see orgs/[orgId]/page.tsx) reads these directly,
+// nothing further to add here.
 export async function getOrgDetail(organizationId: string) {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -172,6 +178,46 @@ export async function getOrgDetail(organizationId: string) {
   if (!org) return null;
 
   return { org };
+}
+
+// ---- Account lifecycle ---------------------------------------------------
+
+// Orgs an admin has suspended, and orgs whose owner has requested deletion —
+// the two lists the /admin/accounts screen surfaces. An org can appear in
+// both if a suspended org's owner also requested deletion afterwards.
+export async function listAccountLifecycle() {
+  const [suspended, deletionRequested] = await Promise.all([
+    prisma.organization.findMany({
+      where: { deactivatedAt: { not: null } },
+      orderBy: { deactivatedAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        plan: true,
+        planStatus: true,
+        deactivatedAt: true,
+        deactivatedByEmail: true,
+        deletionRequestedAt: true,
+        deletionRequestedByEmail: true,
+      },
+    }),
+    prisma.organization.findMany({
+      where: { deletionRequestedAt: { not: null } },
+      orderBy: { deletionRequestedAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        plan: true,
+        planStatus: true,
+        deactivatedAt: true,
+        deactivatedByEmail: true,
+        deletionRequestedAt: true,
+        deletionRequestedByEmail: true,
+      },
+    }),
+  ]);
+
+  return { suspended, deletionRequested };
 }
 
 // ---- Stand fulfilment ---------------------------------------------------
