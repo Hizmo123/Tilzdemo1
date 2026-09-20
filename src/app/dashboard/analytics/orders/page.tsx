@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
+import { getEntitlements } from "@/lib/entitlements";
 import { getOrderTracking } from "@/lib/analytics";
-import { parseRangeParams } from "@/lib/date-range";
+import { parseRangeParams, clampRangeToWindow } from "@/lib/date-range";
 import { AnalyticsTabs } from "@/components/dashboard/analytics-tabs";
 import { DateRangePicker } from "@/components/dashboard/date-range-picker";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { HourlyChart } from "@/components/dashboard/hourly-chart";
+import { HistoryWindowNote } from "@/components/dashboard/history-window-note";
 
 export default async function OrderAnalyticsPage({
   searchParams,
@@ -39,7 +41,13 @@ export default async function OrderAnalyticsPage({
   }
 
   const sp = await searchParams;
-  const { preset, resolved } = parseRangeParams(sp, restaurant.timezone);
+  const { preset, resolved: requested } = parseRangeParams(sp, restaurant.timezone);
+  const entitlements = await getEntitlements(restaurant.organizationId);
+  const { resolved, clamped } = clampRangeToWindow(
+    requested,
+    entitlements.analyticsWindowDays,
+    restaurant.timezone,
+  );
   const data = await getOrderTracking(restaurant.id, restaurant.timezone, resolved);
 
   return (
@@ -53,6 +61,7 @@ export default async function OrderAnalyticsPage({
 
       <AnalyticsTabs active="/dashboard/analytics/orders" />
       <DateRangePicker value={preset} customFrom={sp.from} customTo={sp.to} />
+      {clamped && <HistoryWindowNote />}
 
       {data.totalOrders === 0 ? (
         <p className="text-muted">No orders in this period yet.</p>

@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
+import { getEntitlements } from "@/lib/entitlements";
 import { getWeeklyReport } from "@/lib/weekly-report";
 import { formatCents } from "@/lib/money";
 import { AnalyticsTabs } from "@/components/dashboard/analytics-tabs";
 import { RevenueBarChart } from "@/components/dashboard/bar-chart";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { PrintButton } from "@/components/receipt/print-button";
+import { HistoryWindowNote } from "@/components/dashboard/history-window-note";
 
 export default async function WeeklyReportPage({
   searchParams,
@@ -44,7 +46,21 @@ export default async function WeeklyReportPage({
   }
 
   const { week } = await searchParams;
-  const weekOffset = Number.isFinite(Number(week)) ? Math.trunc(Number(week)) : 0;
+  const requestedOffset = Number.isFinite(Number(week)) ? Math.trunc(Number(week)) : 0;
+
+  // No date-range picker here — navigation is by whole week (weekOffset),
+  // so the plan's day-based history window (entitlements.analyticsWindowDays)
+  // is translated into a minimum (most-negative) weekOffset instead of a
+  // clamped `from` date. Weeks are ~7 days, so this is an approximation,
+  // not an exact day cutoff.
+  const entitlements = await getEntitlements(restaurant.organizationId);
+  const minOffset =
+    entitlements.analyticsWindowDays === null
+      ? -Infinity
+      : -Math.floor((entitlements.analyticsWindowDays - 1) / 7);
+  const weekOffset = Math.max(requestedOffset, minOffset);
+  const clamped = requestedOffset < minOffset;
+
   const currency = restaurant.currency;
   const data = await getWeeklyReport(restaurant.id, restaurant.timezone, weekOffset);
 
@@ -83,12 +99,18 @@ export default async function WeeklyReportPage({
 
       {/* Week navigation */}
       <div className="flex items-center gap-2 print:hidden">
-        <Link
-          href={`/dashboard/analytics/weekly?week=${weekOffset - 1}`}
-          className="rounded-lg border border-line px-3 py-1.5 text-sm hover:border-ink/30"
-        >
-          ← Previous week
-        </Link>
+        {weekOffset > minOffset ? (
+          <Link
+            href={`/dashboard/analytics/weekly?week=${weekOffset - 1}`}
+            className="rounded-lg border border-line px-3 py-1.5 text-sm hover:border-ink/30"
+          >
+            ← Previous week
+          </Link>
+        ) : (
+          <span className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted/50 cursor-not-allowed">
+            ← Previous week
+          </span>
+        )}
         {!isCurrentWeek && (
           <Link
             href="/dashboard/analytics/weekly"
@@ -104,6 +126,8 @@ export default async function WeeklyReportPage({
           Next week →
         </Link>
       </div>
+
+      {clamped && <HistoryWindowNote />}
 
       {data.orderCount === 0 ? (
         <p className="text-muted">No paid bills in this week.</p>

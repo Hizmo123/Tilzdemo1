@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
+import { getEntitlements } from "@/lib/entitlements";
 import { getCustomerTracking } from "@/lib/analytics";
-import { parseRangeParams } from "@/lib/date-range";
+import { parseRangeParams, clampRangeToWindow } from "@/lib/date-range";
 import { formatCents } from "@/lib/money";
 import { AnalyticsTabs } from "@/components/dashboard/analytics-tabs";
 import { DateRangePicker } from "@/components/dashboard/date-range-picker";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { HistoryWindowNote } from "@/components/dashboard/history-window-note";
 
 export default async function CustomerAnalyticsPage({
   searchParams,
@@ -39,7 +41,13 @@ export default async function CustomerAnalyticsPage({
   }
 
   const sp = await searchParams;
-  const { preset, resolved } = parseRangeParams(sp, restaurant.timezone);
+  const { preset, resolved: requested } = parseRangeParams(sp, restaurant.timezone);
+  const entitlements = await getEntitlements(restaurant.organizationId);
+  const { resolved, clamped } = clampRangeToWindow(
+    requested,
+    entitlements.analyticsWindowDays,
+    restaurant.timezone,
+  );
   const currency = restaurant.currency;
   const data = await getCustomerTracking(restaurant.id, resolved);
 
@@ -56,6 +64,7 @@ export default async function CustomerAnalyticsPage({
 
       <AnalyticsTabs active="/dashboard/analytics/customers" />
       <DateRangePicker value={preset} customFrom={sp.from} customTo={sp.to} />
+      {clamped && <HistoryWindowNote />}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <StatCard label="Visits" value={String(data.visits)} />

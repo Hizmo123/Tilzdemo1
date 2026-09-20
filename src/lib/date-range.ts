@@ -89,3 +89,22 @@ export function parseRangeParams(
   const resolved = resolveRange(preset, timezone, { from: sp.from, to: sp.to });
   return { preset, resolved };
 }
+
+// Plan-gated history window (entitlements.analyticsWindowDays). `null` means
+// unrestricted (Growth/Pro). When the requested range starts earlier than
+// the window allows, clamps `from` forward and flags that it happened so
+// the page can show an "Upgrade for full history" note.
+export function clampRangeToWindow(
+  resolved: ResolvedRange,
+  windowDays: number | null,
+  timezone: string,
+): { resolved: ResolvedRange; clamped: boolean } {
+  if (windowDays === null) return { resolved, clamped: false };
+  const todayStart = startOfTodayInTz(timezone);
+  const earliestAllowed = addDays(todayStart, -(windowDays - 1));
+  if (resolved.from >= earliestAllowed) return { resolved, clamped: false };
+  return {
+    resolved: { ...resolved, from: earliestAllowed },
+    clamped: true,
+  };
+}
