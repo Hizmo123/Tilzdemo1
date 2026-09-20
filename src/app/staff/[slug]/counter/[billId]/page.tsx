@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { requireStaffForSlug } from "@/lib/staff-auth";
 import { roleCan } from "@/lib/rbac";
 import { getCounterBillWithOrders, getMenuForCustomer } from "@/lib/bills";
+import { getOpenSession } from "@/lib/cash-drawer";
 import { formatCents } from "@/lib/money";
 import { LiveRefresh } from "@/app/dashboard/live-refresh";
 import { CounterOrderPanel } from "./counter-order-panel";
@@ -46,6 +47,9 @@ export default async function CounterSalePage({
   if (!bill) notFound();
 
   const remaining = bill.totalCents - bill.amountPaidCents;
+  const openSession = bill.locationId
+    ? await getOpenSession(restaurant.id, bill.locationId)
+    : null;
 
   const menu = menuRows.map((c) => ({
     id: c.id,
@@ -125,6 +129,7 @@ export default async function CounterSalePage({
               billId={bill.id}
               remainingCents={remaining}
               currency={currency}
+              cashAvailable={!!openSession}
             />
           )}
         </div>

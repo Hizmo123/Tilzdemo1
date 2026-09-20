@@ -2,32 +2,42 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { TenderType } from "@prisma/client";
 import { closeCounterSale } from "../actions";
 import { formatCents } from "@/lib/money";
+
+const TENDERS: { value: TenderType; label: string }[] = [
+  { value: "CASH", label: "Cash" },
+  { value: "CARD", label: "Card" },
+  { value: "OTHER", label: "Other" },
+];
 
 export function TakePaymentButton({
   slug,
   billId,
   remainingCents,
   currency,
+  cashAvailable,
 }: {
   slug: string;
   billId: string;
   remainingCents: number;
   currency: string;
+  // Whether an open drawer session exists for this sale's location — Cash
+  // is disabled without one (see lib/bills.ts's tender check, which rejects
+  // it server-side too; this is just so staff aren't offered a choice the
+  // server will refuse).
+  cashAvailable: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState(false);
+  const [tender, setTender] = useState<TenderType | null>(null);
 
-  function pay() {
+  function pay(tenderType: TenderType) {
     setError(null);
     start(async () => {
-      // TODO(task 4): replace this fixed "OTHER" with the tender the staff
-      // member actually picks (Cash/Card/Other) — this button is rebuilt
-      // into a tender-choice UI in the very next task.
-      const res = await closeCounterSale(slug, billId, "OTHER");
+      const res = await closeCounterSale(slug, billId, tenderType);
       if (res && "error" in res && res.error) setError(res.error);
       else router.push(`/staff/${slug}/counter`);
     });
@@ -35,32 +45,49 @@ export function TakePaymentButton({
 
   return (
     <div className="mt-4">
-      {confirm ? (
+      {tender ? (
         <div className="flex items-center gap-2">
           <button
             disabled={pending}
-            onClick={pay}
+            onClick={() => pay(tender)}
             className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
           >
             {pending
               ? "Recording…"
-              : `Confirm — take ${formatCents(remainingCents, currency)}`}
+              : `Confirm ${tender.toLowerCase()} — take ${formatCents(remainingCents, currency)}`}
           </button>
           <button
             disabled={pending}
-            onClick={() => setConfirm(false)}
+            onClick={() => setTender(null)}
             className="rounded-lg border border-line px-4 py-2.5 text-sm hover:border-ink/30"
           >
             Cancel
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => setConfirm(true)}
-          className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-pine/50"
-        >
-          Take payment (counter / cash)
-        </button>
+        <div>
+          <p className="text-xs text-muted mb-2">Take payment (counter / cash)</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            {TENDERS.map((t) => {
+              const disabled = t.value === "CASH" && !cashAvailable;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  disabled={disabled}
+                  title={disabled ? "Open the drawer to take cash" : undefined}
+                  onClick={() => setTender(t.value)}
+                  className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-pine/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line"
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {!cashAvailable && (
+            <p className="text-xs text-muted mt-1.5">Open the drawer to take cash.</p>
+          )}
+        </div>
       )}
       {error && <p className="text-sm text-danger mt-2">{error}</p>}
     </div>
