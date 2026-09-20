@@ -36,6 +36,12 @@ export default async function AdminLayout({
             Organisations
           </Link>
           <Link
+            href="/admin/accounts"
+            className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+          >
+            Accounts
+          </Link>
+          <Link
             href="/admin/fulfilment"
             className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
           >
