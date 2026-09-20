@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { TenderType } from "@prisma/client";
 import { requireStaffForSlug } from "@/lib/staff-auth";
 import { roleCan } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
@@ -64,14 +65,19 @@ export async function addCounterItems(slug: string, billId: string, items: AddIt
 
 // Takes payment for a counter sale (mock "counter"/cash path — see
 // staffCloseBillById), closing it. After this the sale drops off the open
-// list.
-export async function closeCounterSale(slug: string, billId: string) {
+// list. tenderType is required — staffCloseBillById itself rejects CASH
+// with no open drawer session for the sale's location.
+export async function closeCounterSale(
+  slug: string,
+  billId: string,
+  tenderType: TenderType,
+) {
   const session = await requireStaffForSlug(slug);
   if (!session) return { error: "Your session has ended. Please sign in again." };
   if (!roleCan(session.staff.role, "orders:manage"))
     return { error: "Your role can't take payment." };
 
-  const res = await staffCloseBillById(billId, session.restaurant.id);
+  const res = await staffCloseBillById(billId, session.restaurant.id, tenderType);
   if ("error" in res) return res;
 
   revalidateCounter(slug, billId);

@@ -24,7 +24,10 @@ export function TakePaymentButton({
   function pay() {
     setError(null);
     start(async () => {
-      const res = await closeCounterSale(slug, billId);
+      // TODO(task 4): replace this fixed "OTHER" with the tender the staff
+      // member actually picks (Cash/Card/Other) — this button is rebuilt
+      // into a tender-choice UI in the very next task.
+      const res = await closeCounterSale(slug, billId, "OTHER");
       if (res && "error" in res && res.error) setError(res.error);
       else router.push(`/staff/${slug}/counter`);
     });

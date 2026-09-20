@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type TenderType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
 import { notifyRestaurant } from "@/lib/realtime";
@@ -1745,9 +1745,11 @@ async function settleOpenBillAsPaid(
     totalCents: number;
     amountPaidCents: number;
     currency: string;
+    locationId: string | null;
   } | null>,
   restaurantId: string,
   notFoundError: string,
+  tenderType: TenderType,
 ): Promise<{ paid: true } | { error: string }> {
   const provider = getPaymentProvider();
 
@@ -1757,6 +1759,20 @@ async function settleOpenBillAsPaid(
 
     const remaining = bill.totalCents - bill.amountPaidCents;
     if (remaining <= 0) return { paid: true as const };
+
+    // Resolve any open drawer session for this bill's location. CASH
+    // requires one — cash must land in a drawer, so staff can't take a cash
+    // payment with nowhere to reconcile it against (see
+    // lib/cash-drawer.ts#getZReport). CARD/OTHER attach one when present
+    // (so it still shows on that shift's Z-report) but don't require it.
+    const session = bill.locationId
+      ? await prisma.cashDrawerSession.findFirst({
+          where: { locationId: bill.locationId, restaurantId, status: "OPEN" },
+        })
+      : null;
+    if (tenderType === "CASH" && !session) {
+      return { error: "Open the drawer before taking cash." };
+    }
 
     const expectedPaid = bill.amountPaidCents;
     const cas = await prisma.bill.updateMany({
@@ -1790,6 +1806,8 @@ async function settleOpenBillAsPaid(
         providerRef: result.providerRef,
         idempotencyKey,
         test: result.test,
+        tenderType,
+        cashSessionId: session?.id ?? null,
       },
     });
     // Prepay: staff taking payment also releases any payment-held orders.
@@ -1800,7 +1818,18 @@ async function settleOpenBillAsPaid(
   return { error: "The bill is busy. Please try again." };
 }
 
-export async function staffCloseBill(tableId: string, restaurantId: string) {
+// tenderType defaults to "OTHER" for the dine-in table flow (this function's
+// only caller today is the table page's "Mark as paid (counter / cash)"
+// button, which has no tender-choice UI of its own — task 4 only builds that
+// for the counter sale screen). "OTHER" rather than "CASH" deliberately: it
+// means closing a dine-in table's bill never suddenly starts requiring an
+// open drawer, which would be a real, undiscussed behaviour change for a
+// flow this build wasn't asked to touch.
+export async function staffCloseBill(
+  tableId: string,
+  restaurantId: string,
+  tenderType: TenderType = "OTHER",
+) {
   return settleOpenBillAsPaid(
     () =>
       prisma.bill.findFirst({
@@ -1810,21 +1839,42 @@ export async function staffCloseBill(tableId: string, restaurantId: string) {
           table: { location: { restaurantId } },
         },
         orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          totalCents: true,
+          amountPaidCents: true,
+          currency: true,
+          locationId: true,
+        },
       }),
     restaurantId,
     "No open bill on this table.",
+    tenderType,
   );
 }
 
 // Same as staffCloseBill, but for a counter bill — no table to key off, so
-// this is scoped directly by billId + restaurantId instead.
-export async function staffCloseBillById(billId: string, restaurantId: string) {
+// this is scoped directly by billId + restaurantId instead. The counter
+// sale screen (task 4) always passes an explicit tenderType chosen by staff.
+export async function staffCloseBillById(
+  billId: string,
+  restaurantId: string,
+  tenderType: TenderType,
+) {
   return settleOpenBillAsPaid(
     () =>
       prisma.bill.findFirst({
         where: { id: billId, restaurantId, status: { in: ["OPEN", "PARTIALLY_PAID"] } },
+        select: {
+          id: true,
+          totalCents: true,
+          amountPaidCents: true,
+          currency: true,
+          locationId: true,
+        },
       }),
     restaurantId,
     "This sale is no longer open.",
+    tenderType,
   );
 }
