@@ -68,3 +68,15 @@ revoke all on "CashMovement" from anon, authenticated;
 -- through Prisma (src/lib/square/oauth.ts) only.
 alter table "SquareConnection" enable row level security;
 revoke all on "SquareConnection" from anon, authenticated;
+
+-- Added with Square Catalog Phase 2: the four Square<->Tillz id mapping
+-- tables. Not token material, but still internal reconciliation state with
+-- no reason to be reachable outside Prisma — same blanket policy.
+alter table "MenuItemSquareMap" enable row level security;
+alter table "MenuCategorySquareMap" enable row level security;
+alter table "ModifierGroupSquareMap" enable row level security;
+alter table "ModifierOptionSquareMap" enable row level security;
+revoke all on "MenuItemSquareMap" from anon, authenticated;
+revoke all on "MenuCategorySquareMap" from anon, authenticated;
+revoke all on "ModifierGroupSquareMap" from anon, authenticated;
+revoke all on "ModifierOptionSquareMap" from anon, authenticated;

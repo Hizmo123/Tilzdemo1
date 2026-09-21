@@ -297,6 +297,10 @@ model Restaurant {
   bills          Bill[]
   cashSessions   CashDrawerSession[]
   squareConnection SquareConnection?
+  menuItemSquareMaps MenuItemSquareMap[]
+  menuCategorySquareMaps MenuCategorySquareMap[]
+  modifierGroupSquareMaps ModifierGroupSquareMap[]
+  modifierOptionSquareMaps ModifierOptionSquareMap[]
 
   @@index([organizationId])
 }
@@ -327,8 +331,67 @@ model SquareConnection {
   // Not currently set by the disconnect flow (which deletes the row after
   // revoking at Square) — reserved for a future soft-revoke path.
   revokedAt       DateTime?
+  // Set by importCatalog() (Phase 2) on a successful reconcile. Null = never
+  // imported yet.
+  lastCatalogSyncAt DateTime?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+}
+
+// Square catalog <-> Tillz menu id mappings (Phase 2 — import/reconcile only,
+// no order-push yet). Each is unique on the Tillz id so re-importing updates
+// the existing row instead of creating a duplicate mapping.
+model MenuItemSquareMap {
+  id                 String     @id @default(cuid())
+  restaurantId       String
+  restaurant         Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItemId         String     @unique
+  menuItem           MenuItem   @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  squareItemId       String
+  squareVariationId  String
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@index([restaurantId])
+}
+
+model MenuCategorySquareMap {
+  id               String       @id @default(cuid())
+  restaurantId     String
+  restaurant       Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  categoryId       String       @unique
+  category         MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  squareCategoryId String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([restaurantId])
+}
+
+model ModifierGroupSquareMap {
+  id                    String         @id @default(cuid())
+  restaurantId          String
+  restaurant            Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  modifierGroupId       String         @unique
+  modifierGroup         ModifierGroup  @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  squareModifierListId  String
+  createdAt             DateTime       @default(now())
+  updatedAt              DateTime      @updatedAt
+
+  @@index([restaurantId])
+}
+
+model ModifierOptionSquareMap {
+  id                String          @id @default(cuid())
+  restaurantId      String
+  restaurant        Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  modifierOptionId  String          @unique
+  modifierOption    ModifierOption  @relation(fields: [modifierOptionId], references: [id], onDelete: Cascade)
+  squareModifierId  String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([restaurantId])
 }
 
 // In-progress onboarding wizard answers, keyed by the Supabase auth user id.
@@ -552,6 +615,7 @@ model MenuCategory {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   items        MenuItem[]
+  squareMap    MenuCategorySquareMap?
 
   @@index([restaurantId])
 }
@@ -580,6 +644,7 @@ model MenuItem {
   updatedAt   DateTime     @updatedAt
   billItems   BillItem[]
   modifierGroups ModifierGroup[]
+  squareMap   MenuItemSquareMap?
 
   @@index([categoryId])
 }
@@ -597,6 +662,7 @@ model ModifierGroup {
   sortOrder  Int              @default(0)
   createdAt  DateTime         @default(now())
   options    ModifierOption[]
+  squareMap  ModifierGroupSquareMap?
 
   @@index([menuItemId])
 }
@@ -609,6 +675,7 @@ model ModifierOption {
   priceDeltaCents Int          @default(0)
   sortOrder      Int           @default(0)
   createdAt      DateTime      @default(now())
+  squareMap      ModifierOptionSquareMap?
 
   @@index([groupId])
 }
