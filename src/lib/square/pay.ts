@@ -61,6 +61,10 @@ export type SquareChargeLineItem = {
   unitPriceCents: number;
   menuItemId?: string | null;
   squareVariationId?: string | null;
+  // Shown on the venue's Square KDS/POS under the line — used for a chosen-
+  // modifiers summary (e.g. "Full cream, Regular") so the kitchen can see
+  // what to actually make, not just the item name.
+  note?: string | null;
 };
 
 export type ChargeBillViaSquareInput = {
@@ -168,6 +172,9 @@ export async function chargeBillViaSquare(
     quantity: String(li.quantity),
     basePriceMoney: { amount: BigInt(li.unitPriceCents), currency: toCurrency(currency) },
     metadata: buildMetadata(li),
+    // Same empty-string rule as metadata — an empty/whitespace note is
+    // omitted rather than sent as "".
+    ...(li.note && li.note.trim() ? { note: li.note.trim() } : {}),
   }));
 
   console.error("square.charge_line_items", {
@@ -181,6 +188,7 @@ export async function chargeBillViaSquare(
       // as a string here would misleadingly suggest otherwise.
       basePriceMoneyAmount: Number(li.basePriceMoney.amount),
       basePriceMoneyCurrency: li.basePriceMoney.currency,
+      note: "note" in li ? li.note : undefined,
     })),
   });
 

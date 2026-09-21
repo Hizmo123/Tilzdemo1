@@ -1098,14 +1098,62 @@ export async function payBillAmount(
         await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
         return { error: "This venue's card payment isn't available right now." };
       }
-      // No set of specific bill items sums to an arbitrary full/equal/custom
-      // amount once partial item-split payments are mixed in, so this is
-      // always a single ad-hoc line for the amount actually being charged —
-      // see the note on ChargeBillViaSquareInput.lineItems for why that's the
-      // only choice that keeps the order total guaranteed exact.
-      const lineItems: SquareChargeLineItem[] = [
+      // Itemise ONLY when this one payment settles the entire bill from a
+      // clean slate — the bill had nothing paid yet (expectedPaid === 0, so
+      // every item's paidQuantity is also still 0 — no item-split payment
+      // could have landed without also moving amountPaidCents) and this
+      // charge covers the full total. That's the one case where the bill's
+      // real non-voided, non-comped line items are GUARANTEED to sum to
+      // exactly `amount` — recompute() only ever sums those into totalCents.
+      // Any other case (a prior partial payment already happened, or this
+      // charge itself is only equal/custom/partial-full) has no set of real
+      // items that sums to an arbitrary partial amount, so it keeps the
+      // single ad-hoc "Bill payment (mode)" line — see the note on
+      // ChargeBillViaSquareInput.lineItems for why that's the only choice
+      // that keeps the order total guaranteed exact in that case.
+      const isFullSinglePayment = expectedPaid === 0 && amount === bill.totalCents;
+      let lineItems: SquareChargeLineItem[] = [
         { name: `Bill payment (${mode})`, quantity: 1, unitPriceCents: amount },
       ];
+      if (isFullSinglePayment) {
+        const payable = bill.items.filter((it) => !it.voided && !it.comped);
+        const menuItemIds = payable.map((it) => it.menuItemId).filter((id): id is string => !!id);
+        const squareMaps = menuItemIds.length
+          ? await prisma.menuItemSquareMap.findMany({ where: { menuItemId: { in: menuItemIds } } })
+          : [];
+        const squareMapByMenuItemId = new Map(squareMaps.map((m) => [m.menuItemId, m]));
+
+        const itemised: SquareChargeLineItem[] = payable.map((it) => {
+          const modifiers = Array.isArray(it.modifiers) ? (it.modifiers as unknown as ModifierSnapshot[]) : [];
+          const note = modifiers.length ? modifiers.map((m) => m.name).join(", ") : undefined;
+          const map = it.menuItemId ? squareMapByMenuItemId.get(it.menuItemId) : undefined;
+          return {
+            name: it.nameSnapshot,
+            quantity: it.quantity,
+            unitPriceCents: it.unitPriceCents,
+            menuItemId: it.menuItemId,
+            squareVariationId: map?.squareVariationId,
+            note,
+          };
+        });
+
+        // Belt and braces: only use the itemised breakdown if it actually
+        // sums to the charged amount — chargeBillViaSquare's own order-total
+        // assertion would catch a mismatch too, but falling back here means
+        // a bug in this itemisation never blocks a real payment; it just
+        // loses the itemised KDS detail for that one charge.
+        const itemisedSum = itemised.reduce((sum, li) => sum + li.unitPriceCents * li.quantity, 0);
+        if (itemisedSum === amount) {
+          lineItems = itemised;
+        } else {
+          log.warn("payment.square_itemise_mismatch", {
+            restaurantId: resolved.visit.restaurantId,
+            billId: bill.id,
+            itemisedSum,
+            amount,
+          });
+        }
+      }
       try {
         const result = await chargeBillViaSquare({
           connection,
