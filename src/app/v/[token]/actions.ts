@@ -36,8 +36,11 @@ export async function payBill(
   amountCents: number | null,
   tipCents = 0,
   mode: "full" | "equal" | "custom" = "full",
+  // Web Payments SDK card token (Phase 3) — only meaningful on a
+  // Square-connected venue; the mock path ignores it.
+  sourceId?: string,
 ) {
-  return payBillAmount(token, amountCents, tipCents, mode);
+  return payBillAmount(token, amountCents, tipCents, mode, sourceId);
 }
 
 // Pay for chosen units of the bill (per-person item split).
@@ -45,8 +48,9 @@ export async function payItems(
   token: string,
   selections: ItemSelection[],
   tipCents = 0,
+  sourceId?: string,
 ) {
-  return payBillItems(token, selections, tipCents);
+  return payBillItems(token, selections, tipCents, sourceId);
 }
 
 // Cancel an order placed by mistake, while the kitchen hasn't started it.

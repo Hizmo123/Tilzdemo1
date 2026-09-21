@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { Prisma, type TenderType } from "@prisma/client";
+import { Prisma, type TenderType, type BillStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
 import { notifyRestaurant } from "@/lib/realtime";
@@ -7,6 +7,7 @@ import { formatCents } from "@/lib/money";
 import { log } from "@/lib/log";
 import { entitlementsForTier } from "@/lib/entitlements";
 import { getVenuePaymentContext } from "@/lib/square/context";
+import { chargeBillViaSquare, type SquareChargeLineItem } from "@/lib/square/pay";
 
 // ---- Visit resolution -------------------------------------------------------
 
@@ -962,11 +963,33 @@ export type PayResult =
 // against the same balance.
 //
 // requestedCents = null means "pay the full remaining balance".
+// Undoes an amountPaidCents CAS reserve that a Square charge failed to
+// honour, so the bill is never left falsely part-paid. Guarded by its own
+// CAS (only succeeds if the balance is still exactly what the reserve set
+// it to) rather than a blind write — nothing else can have legitimately
+// moved it in between (the reserve already claimed the balance), but this
+// keeps the release itself just as safe as the reserve was.
+async function releaseBillReserve(
+  billId: string,
+  reservedPaid: number,
+  previousPaid: number,
+  previousStatus: BillStatus,
+  previousPaidAt: Date | null,
+) {
+  await prisma.bill.updateMany({
+    where: { id: billId, amountPaidCents: reservedPaid },
+    data: { amountPaidCents: previousPaid, status: previousStatus, paidAt: previousPaidAt },
+  });
+}
+
 export async function payBillAmount(
   token: string,
   requestedCents: number | null,
   tipCents = 0,
   mode: "full" | "equal" | "custom" = "full",
+  // Web Payments SDK card token (Phase 3) — required when the venue is
+  // Square-connected (visit.squareEnabled); ignored on mock venues.
+  sourceId?: string,
 ): Promise<PayResult> {
   const resolved = await resolveVisit(token);
   if (!resolved.ok) return { error: "This table is no longer available." };
@@ -1047,15 +1070,85 @@ export async function payBillAmount(
 
     if (cas.count !== 1) continue; // lost the race — re-read and retry
 
-    // Balance reserved. Charge the provider (amount + tip + surcharge) and
-    // record it.
+    // Balance reserved. Charge (mock provider, or Square for a connected
+    // venue) and record the payment. Any Square failure from here on MUST
+    // release the reserve before returning — the balance was already bumped
+    // above, so a bill left here without either a successful charge or a
+    // release would be falsely part-paid.
     const idempotencyKey = `pay_${bill.id}_${randomBytes(8).toString("hex")}`;
-    const result = await provider.createPayment({
-      amountCents: amount + tip + surcharge,
-      currency: bill.currency,
-      idempotencyKey,
-      metadata: { billId: bill.id, tipCents: String(tip), surchargeCents: String(surcharge) },
-    });
+    const paymentContext = await getVenuePaymentContext(resolved.visit.restaurantId);
+
+    let paymentRow: {
+      status: "PENDING" | "SUCCEEDED" | "FAILED";
+      provider: string;
+      providerRef: string | undefined;
+      squareOrderId: string | null;
+      test: boolean;
+    };
+
+    if (paymentContext.mode === "square") {
+      if (!sourceId) {
+        await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
+        return { error: "Card details are required." };
+      }
+      const connection = await prisma.squareConnection.findUnique({
+        where: { restaurantId: resolved.visit.restaurantId },
+      });
+      if (!connection) {
+        await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
+        return { error: "This venue's card payment isn't available right now." };
+      }
+      // No set of specific bill items sums to an arbitrary full/equal/custom
+      // amount once partial item-split payments are mixed in, so this is
+      // always a single ad-hoc line for the amount actually being charged —
+      // see the note on ChargeBillViaSquareInput.lineItems for why that's the
+      // only choice that keeps the order total guaranteed exact.
+      const lineItems: SquareChargeLineItem[] = [
+        { name: `Bill payment (${mode})`, quantity: 1, unitPriceCents: amount },
+      ];
+      try {
+        const result = await chargeBillViaSquare({
+          connection,
+          bill: { id: bill.id },
+          lineItems,
+          goodsCents: amount,
+          tipCents: tip,
+          surchargeCents: surcharge,
+          currency: bill.currency,
+          sourceId,
+          idempotencyKey,
+        });
+        paymentRow = {
+          status: result.status,
+          provider: "square",
+          providerRef: result.providerRef,
+          squareOrderId: result.squareOrderId,
+          test: paymentContext.squareEnv !== "production",
+        };
+      } catch (e) {
+        await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
+        log.warn("payment.square_failed", {
+          restaurantId: resolved.visit.restaurantId,
+          billId: bill.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        return { error: "Card payment failed. Please try again." };
+      }
+    } else {
+      const result = await provider.createPayment({
+        amountCents: amount + tip + surcharge,
+        currency: bill.currency,
+        idempotencyKey,
+        metadata: { billId: bill.id, tipCents: String(tip), surchargeCents: String(surcharge) },
+      });
+      paymentRow = {
+        status: result.status,
+        provider: provider.name,
+        providerRef: result.providerRef,
+        squareOrderId: null,
+        test: result.test,
+      };
+    }
 
     await prisma.payment.create({
       data: {
@@ -1064,13 +1157,20 @@ export async function payBillAmount(
         tipCents: tip,
         surchargeCents: surcharge,
         currency: bill.currency,
-        status: result.status,
-        provider: provider.name,
-        providerRef: result.providerRef,
+        status: paymentRow.status,
+        provider: paymentRow.provider,
+        providerRef: paymentRow.providerRef,
+        squareOrderId: paymentRow.squareOrderId,
         idempotencyKey,
-        test: result.test,
+        test: paymentRow.test,
       },
     });
+    if (paymentRow.squareOrderId) {
+      await prisma.bill.update({
+        where: { id: bill.id },
+        data: { squareOrderId: paymentRow.squareOrderId },
+      });
+    }
 
     // Tips are additive to the venue, not a reduction of what's owed, so they're
     // accumulated on the bill separately from the balance CAS.
@@ -1091,9 +1191,9 @@ export async function payBillAmount(
       amountCents: amount,
       tipCents: tip,
       surchargeCents: surcharge,
-      provider: provider.name,
-      status: result.status,
-      test: result.test,
+      provider: paymentRow.provider,
+      status: paymentRow.status,
+      test: paymentRow.test,
     });
     return {
       paid: true,
@@ -1101,7 +1201,7 @@ export async function payBillAmount(
       tipCents: tip,
       surchargeCents: surcharge,
       fullyPaid,
-      test: result.test,
+      test: paymentRow.test,
     };
   }
 
@@ -1112,8 +1212,8 @@ export async function payBillAmount(
 }
 
 // Convenience: pay the entire remaining balance.
-export async function payBillFull(token: string): Promise<PayResult> {
-  return payBillAmount(token, null, 0);
+export async function payBillFull(token: string, sourceId?: string): Promise<PayResult> {
+  return payBillAmount(token, null, 0, "full", sourceId);
 }
 
 // ---- Pay for specific items (per-person split) -----------------------------
@@ -1121,6 +1221,32 @@ export async function payBillFull(token: string): Promise<PayResult> {
 export type ItemSelection = { billItemId: string; count: number };
 
 class PayConflict extends Error {}
+
+// Same idea as releaseBillReserve, but also undoes the per-line paidQuantity
+// bumps payBillItems' reserve makes — both are rolled back together, inside
+// one transaction, so a failed Square charge never leaves some units marked
+// paid without a successful payment behind them.
+async function releaseItemsReserve(
+  billId: string,
+  reservations: { billItemId: string; previousPaidQuantity: number; newPaidQuantity: number }[],
+  reservedPaid: number,
+  previousPaid: number,
+  previousStatus: BillStatus,
+  previousPaidAt: Date | null,
+) {
+  await prisma.$transaction(async (tx) => {
+    for (const r of reservations) {
+      await tx.billItem.updateMany({
+        where: { id: r.billItemId, paidQuantity: r.newPaidQuantity },
+        data: { paidQuantity: r.previousPaidQuantity },
+      });
+    }
+    await tx.bill.updateMany({
+      where: { id: billId, amountPaidCents: reservedPaid },
+      data: { amountPaidCents: previousPaid, status: previousStatus, paidAt: previousPaidAt },
+    });
+  });
+}
 
 // Pays for chosen UNITS of the bill (e.g. one of two flat whites), so each
 // person settles only their own items. `paidQuantity` on each line tracks how
@@ -1131,6 +1257,9 @@ export async function payBillItems(
   token: string,
   selections: ItemSelection[],
   tipCents = 0,
+  // Web Payments SDK card token (Phase 3) — required when the venue is
+  // Square-connected (visit.squareEnabled); ignored on mock venues.
+  sourceId?: string,
 ): Promise<PayResult> {
   const resolved = await resolveVisit(token);
   if (!resolved.ok) return { error: "This table is no longer available." };
@@ -1214,19 +1343,110 @@ export async function payBillItems(
       throw e;
     }
 
-    // Reserved. Charge the provider and record the payment.
+    // Reserved. Charge (mock, or Square for a connected venue) and record
+    // the payment. Any Square failure MUST release both the item paidQuantity
+    // bumps and the bill balance CAS above before returning.
     const idempotencyKey = `payitems_${bill.id}_${randomBytes(8).toString("hex")}`;
-    const result = await provider.createPayment({
-      amountCents: amount + tip + surcharge,
-      currency: bill.currency,
-      idempotencyKey,
-      metadata: {
-        billId: bill.id,
-        tipCents: String(tip),
-        surchargeCents: String(surcharge),
-        split: "items",
-      },
+    const paymentContext = await getVenuePaymentContext(resolved.visit.restaurantId);
+
+    const reservations = clean.map((sel) => {
+      const item = bill.items.find((it) => it.id === sel.billItemId)!;
+      return {
+        billItemId: item.id,
+        previousPaidQuantity: item.paidQuantity,
+        newPaidQuantity: item.paidQuantity + sel.count,
+      };
     });
+
+    let paymentRow: {
+      status: "PENDING" | "SUCCEEDED" | "FAILED";
+      provider: string;
+      providerRef: string | undefined;
+      squareOrderId: string | null;
+      test: boolean;
+    };
+
+    if (paymentContext.mode === "square") {
+      if (!sourceId) {
+        await releaseItemsReserve(bill.id, reservations, newPaid, expectedPaid, bill.status, bill.paidAt);
+        return { error: "Card details are required." };
+      }
+      const connection = await prisma.squareConnection.findUnique({
+        where: { restaurantId: resolved.visit.restaurantId },
+      });
+      if (!connection) {
+        await releaseItemsReserve(bill.id, reservations, newPaid, expectedPaid, bill.status, bill.paidAt);
+        return { error: "This venue's card payment isn't available right now." };
+      }
+      const menuItemIds = clean
+        .map((sel) => bill.items.find((it) => it.id === sel.billItemId)!.menuItemId)
+        .filter((id): id is string => !!id);
+      const squareMaps = menuItemIds.length
+        ? await prisma.menuItemSquareMap.findMany({ where: { menuItemId: { in: menuItemIds } } })
+        : [];
+      const squareMapByMenuItemId = new Map(squareMaps.map((m) => [m.menuItemId, m]));
+
+      const lineItems: SquareChargeLineItem[] = clean.map((sel) => {
+        const item = bill.items.find((it) => it.id === sel.billItemId)!;
+        const map = item.menuItemId ? squareMapByMenuItemId.get(item.menuItemId) : undefined;
+        return {
+          name: item.nameSnapshot,
+          quantity: sel.count,
+          unitPriceCents: item.unitPriceCents,
+          menuItemId: item.menuItemId,
+          squareVariationId: map?.squareVariationId,
+        };
+      });
+
+      try {
+        const result = await chargeBillViaSquare({
+          connection,
+          bill: { id: bill.id },
+          lineItems,
+          goodsCents: amount,
+          tipCents: tip,
+          surchargeCents: surcharge,
+          currency: bill.currency,
+          sourceId,
+          idempotencyKey,
+        });
+        paymentRow = {
+          status: result.status,
+          provider: "square",
+          providerRef: result.providerRef,
+          squareOrderId: result.squareOrderId,
+          test: paymentContext.squareEnv !== "production",
+        };
+      } catch (e) {
+        await releaseItemsReserve(bill.id, reservations, newPaid, expectedPaid, bill.status, bill.paidAt);
+        log.warn("payment.square_failed", {
+          restaurantId: resolved.visit.restaurantId,
+          billId: bill.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        return { error: "Card payment failed. Please try again." };
+      }
+    } else {
+      const result = await provider.createPayment({
+        amountCents: amount + tip + surcharge,
+        currency: bill.currency,
+        idempotencyKey,
+        metadata: {
+          billId: bill.id,
+          tipCents: String(tip),
+          surchargeCents: String(surcharge),
+          split: "items",
+        },
+      });
+      paymentRow = {
+        status: result.status,
+        provider: provider.name,
+        providerRef: result.providerRef,
+        squareOrderId: null,
+        test: result.test,
+      };
+    }
+
     await prisma.payment.create({
       data: {
         billId: bill.id,
@@ -1234,13 +1454,20 @@ export async function payBillItems(
         tipCents: tip,
         surchargeCents: surcharge,
         currency: bill.currency,
-        status: result.status,
-        provider: provider.name,
-        providerRef: result.providerRef,
+        status: paymentRow.status,
+        provider: paymentRow.provider,
+        providerRef: paymentRow.providerRef,
+        squareOrderId: paymentRow.squareOrderId,
         idempotencyKey,
-        test: result.test,
+        test: paymentRow.test,
       },
     });
+    if (paymentRow.squareOrderId) {
+      await prisma.bill.update({
+        where: { id: bill.id },
+        data: { squareOrderId: paymentRow.squareOrderId },
+      });
+    }
     if (tip > 0) {
       await prisma.bill.update({
         where: { id: bill.id },
@@ -1258,9 +1485,9 @@ export async function payBillItems(
       amountCents: amount,
       tipCents: tip,
       surchargeCents: surcharge,
-      provider: provider.name,
-      status: result.status,
-      test: result.test,
+      provider: paymentRow.provider,
+      status: paymentRow.status,
+      test: paymentRow.test,
       split: "items",
     });
     return {
@@ -1269,7 +1496,7 @@ export async function payBillItems(
       tipCents: tip,
       surchargeCents: surcharge,
       fullyPaid,
-      test: result.test,
+      test: paymentRow.test,
     };
   }
 
