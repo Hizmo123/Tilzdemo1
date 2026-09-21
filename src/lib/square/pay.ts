@@ -47,7 +47,10 @@ export type SquareChargeLineItem = {
 
 export type ChargeBillViaSquareInput = {
   connection: SquareConnection;
-  bill: { id: string };
+  // tableLabel is shown to the venue on their Square KDS/POS as the pickup
+  // fulfillment's recipient.displayName (Square has no first-class dine-in
+  // table concept — PICKUP is the closest fit for a QR table order).
+  bill: { id: string; tableLabel?: string | null };
   // The line items THIS CHARGE covers — not necessarily every item on the
   // bill. For a full or item-split payment these are real menu lines (so the
   // order is itemised for the venue's Square POS/KDS); for an equal-split or
@@ -159,30 +162,43 @@ export async function chargeBillViaSquare(
         ]
       : undefined;
 
+  // PICKUP is the closest fit for a QR table order — Square has no
+  // first-class dine-in/table fulfillment type. recipient.displayName is
+  // REQUIRED (this is what showed up as MISSING_REQUIRED_PARAMETER: the
+  // fulfillment was being sent with neither a recipient nor a pickupAt) and
+  // is what the venue actually sees on their Square KDS/POS, so it carries
+  // the Tillz table label rather than a generic placeholder. scheduleType
+  // ASAP still requires pickupAt to be set — Square does not default it.
+  const pickupAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  const orderRequest = {
+    order: {
+      locationId,
+      lineItems: orderLineItems,
+      serviceCharges,
+      fulfillments: [
+        {
+          type: "PICKUP" as const,
+          state: "PROPOSED" as const,
+          pickupDetails: {
+            recipient: { displayName: bill.tableLabel?.trim() || "Tillz order" },
+            scheduleType: "ASAP" as const,
+            pickupAt,
+            note: `Tillz bill ${bill.id}`,
+          },
+        },
+      ],
+    },
+    idempotencyKey: `${idempotencyKey}:order`,
+  };
+
+  console.error(
+    "square.order_body",
+    JSON.stringify(orderRequest, (_key, value) => (typeof value === "bigint" ? value.toString() : value)),
+  );
+
   let orderResponse;
   try {
-    orderResponse = await client.orders.create({
-      order: {
-        locationId,
-        lineItems: orderLineItems,
-        serviceCharges,
-        // PICKUP with no scheduled time (ASAP) just so the order shows up on
-        // the venue's Square POS/KDS as something to fulfil — Tillz's own
-        // table service isn't a Square fulfillment concept, so this is a
-        // minimal placeholder, not a real pickup flow.
-        fulfillments: [
-          {
-            type: "PICKUP",
-            state: "PROPOSED",
-            pickupDetails: {
-              scheduleType: "ASAP",
-              note: `Tillz bill ${bill.id}`,
-            },
-          },
-        ],
-      },
-      idempotencyKey: `${idempotencyKey}:order`,
-    });
+    orderResponse = await client.orders.create(orderRequest);
   } catch (e) {
     const detail = formatSquareError(e);
     console.error("square.create_order_failed", {

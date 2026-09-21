@@ -1109,7 +1109,7 @@ export async function payBillAmount(
       try {
         const result = await chargeBillViaSquare({
           connection,
-          bill: { id: bill.id },
+          bill: { id: bill.id, tableLabel: resolved.visit.tableLabel },
           lineItems,
           goodsCents: amount,
           tipCents: tip,
@@ -1407,7 +1407,7 @@ export async function payBillItems(
       try {
         const result = await chargeBillViaSquare({
           connection,
-          bill: { id: bill.id },
+          bill: { id: bill.id, tableLabel: resolved.visit.tableLabel },
           lineItems,
           goodsCents: amount,
           tipCents: tip,
