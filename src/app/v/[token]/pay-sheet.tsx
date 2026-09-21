@@ -1,10 +1,49 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { payBill, payItems } from "./actions";
 import { formatCents, dollarsToCents } from "@/lib/money";
 import { Spinner } from "@/components/ui/submit-button";
+
+// Square's Web Payments SDK attaches itself to window.Square once its script
+// tag loads — there's no npm package for the browser side (only the server
+// SDK, used elsewhere in src/lib/square/). Minimal shape of what's actually
+// used here, not the full SDK surface.
+type SquareCard = {
+  attach: (selector: string) => Promise<void>;
+  tokenize: () => Promise<{
+    status: string;
+    token?: string;
+    errors?: { message: string }[];
+  }>;
+  destroy: () => Promise<void>;
+};
+type SquarePayments = { card: () => Promise<SquareCard> };
+declare global {
+  interface Window {
+    Square?: { payments: (appId: string, locationId: string) => Promise<SquarePayments> };
+  }
+}
+
+const SQUARE_SDK_URL: Record<string, string> = {
+  sandbox: "https://sandbox.web.squarecdn.com/v1/square.js",
+  production: "https://web.squarecdn.com/v1/square.js",
+};
+
+let squareSdkPromise: Promise<void> | null = null;
+function loadSquareSdk(env: string): Promise<void> {
+  if (window.Square) return Promise.resolve();
+  if (squareSdkPromise) return squareSdkPromise;
+  squareSdkPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = SQUARE_SDK_URL[env] ?? SQUARE_SDK_URL.sandbox;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Couldn't load the card payment form."));
+    document.head.appendChild(script);
+  });
+  return squareSdkPromise;
+}
 
 type BillItem = {
   id: string;
@@ -36,6 +75,10 @@ export function PaySheet({
   surchargeEnabled = false,
   surchargeBasisPoints = 0,
   allowedModes = ALL_MODES,
+  squareEnabled = false,
+  squareAppId = null,
+  squareLocationId = null,
+  squareEnv = null,
   onClose,
   onPaid,
 }: {
@@ -53,6 +96,13 @@ export function PaySheet({
   // only — the server re-checks the same restriction, so this can never be
   // the only thing standing between a guest and a disallowed payment mode.
   allowedModes?: Mode[];
+  // When true, this venue is Square-connected (Phase 3) — a card field is
+  // rendered and tokenised client-side; the mock flow below (unchanged) is
+  // used for every other venue.
+  squareEnabled?: boolean;
+  squareAppId?: string | null;
+  squareLocationId?: string | null;
+  squareEnv?: string | null;
   onClose: () => void;
   onPaid: (amountCents: number, fullyPaid: boolean) => void;
 }) {
@@ -70,6 +120,44 @@ export function PaySheet({
   const [tipCustom, setTipCustom] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [paying, start] = useTransition();
+
+  // ---- Square card field (Phase 3) -----------------------------------------
+  const cardRef = useRef<SquareCard | null>(null);
+  const [squareStatus, setSquareStatus] = useState<"idle" | "loading" | "ready" | "error">(
+    squareEnabled ? "loading" : "idle",
+  );
+
+  useEffect(() => {
+    if (!open || !squareEnabled || !squareAppId || !squareLocationId) return;
+    let cancelled = false;
+
+    setSquareStatus("loading");
+    loadSquareSdk(squareEnv ?? "sandbox")
+      .then(async () => {
+        if (cancelled || !window.Square) return;
+        const payments = await window.Square.payments(squareAppId, squareLocationId);
+        const card = await payments.card();
+        await card.attach("#square-card-container");
+        if (cancelled) {
+          await card.destroy();
+          return;
+        }
+        cardRef.current = card;
+        setSquareStatus("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setSquareStatus("error");
+      });
+
+    return () => {
+      cancelled = true;
+      cardRef.current?.destroy().catch(() => {});
+      cardRef.current = null;
+    };
+    // Re-run only when the sheet opens — squareAppId/locationId/env are
+    // fixed for the life of a visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, squareEnabled]);
 
   // Equal split: round shares up to the cent and clamp to remaining so the bill
   // can always close exactly.
@@ -142,13 +230,32 @@ export function PaySheet({
         return;
       }
     }
+    if (squareEnabled && squareStatus !== "ready") {
+      setError("The card form isn't ready yet — please wait a moment.");
+      return;
+    }
     setError(null);
     const optimistic = amount ?? remainingCents;
     start(async () => {
+      let sourceId: string | undefined;
+      if (squareEnabled) {
+        const card = cardRef.current;
+        if (!card) {
+          setError("The card form isn't ready yet — please wait a moment.");
+          return;
+        }
+        const tokenResult = await card.tokenize();
+        if (tokenResult.status !== "OK" || !tokenResult.token) {
+          setError(tokenResult.errors?.[0]?.message ?? "Check your card details and try again.");
+          return;
+        }
+        sourceId = tokenResult.token;
+      }
+
       const res =
         mode === "items"
-          ? await payItems(token, itemSelections, tipCents)
-          : await payBill(token, amount, tipCents, mode);
+          ? await payItems(token, itemSelections, tipCents, sourceId)
+          : await payBill(token, amount, tipCents, mode, sourceId);
       if (res && "error" in res) {
         setError(res.error);
         router.refresh();
@@ -361,6 +468,24 @@ export function PaySheet({
             </p>
           )}
 
+          {squareEnabled && (
+            <div className="mb-4">
+              <p className="text-sm text-muted mb-2">Card details</p>
+              <div
+                id="square-card-container"
+                className="rounded-lg border border-line bg-surface px-3.5 py-2.5 min-h-[44px]"
+              />
+              {squareStatus === "loading" && (
+                <p className="text-xs text-muted mt-1.5">Loading card form…</p>
+              )}
+              {squareStatus === "error" && (
+                <p className="text-xs text-danger mt-1.5">
+                  Couldn&apos;t load the card form. Please refresh and try again.
+                </p>
+              )}
+            </div>
+          )}
+
           {error && (
             <p className="mb-3 rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
               {error}
@@ -369,7 +494,7 @@ export function PaySheet({
 
           <button
             onClick={pay}
-            disabled={paying}
+            disabled={paying || (squareEnabled && squareStatus !== "ready")}
             className="w-full rounded-xl bg-pine text-white py-3.5 font-medium hover:opacity-90 disabled:opacity-60 transition-opacity flex items-center justify-center gap-2"
           >
             {paying && <Spinner />}
@@ -377,11 +502,12 @@ export function PaySheet({
               ? "Processing…"
               : `Pay ${formatCents(Math.min(payBase, remainingCents) + tipCents + surchargeCents, currency)}${
                   tipCents > 0 ? ` (incl. ${formatCents(tipCents, currency)} tip)` : ""
-                } · test`}
+                }${squareEnabled ? "" : " · test"}`}
           </button>
           <p className="text-center text-[11px] text-muted mt-3">
-            Test payment — no real money moves. Amounts are capped at the
-            remaining balance.
+            {squareEnabled
+              ? "Amounts are capped at the remaining balance."
+              : "Test payment — no real money moves. Amounts are capped at the remaining balance."}
           </p>
         </div>
       </div>
