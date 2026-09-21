@@ -7,7 +7,7 @@ import { formatCents } from "@/lib/money";
 import { log } from "@/lib/log";
 import { entitlementsForTier } from "@/lib/entitlements";
 import { getVenuePaymentContext } from "@/lib/square/context";
-import { chargeBillViaSquare, type SquareChargeLineItem } from "@/lib/square/pay";
+import { chargeBillViaSquare, refundViaSquare, type SquareChargeLineItem } from "@/lib/square/pay";
 
 // ---- Visit resolution -------------------------------------------------------
 
@@ -1539,6 +1539,17 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
 
 export type RefundActor = { userId: string; email: string };
 
+// Undoes a refundedCents CAS reserve a Square refund call failed to honour —
+// same shape as releaseBillReserve/releaseItemsReserve on the payment side.
+// Guarded by its own CAS (only succeeds if refundedCents is still exactly
+// what the reserve set it to) rather than a blind write.
+async function releaseRefundReserve(paymentId: string, reservedRefunded: number, previousRefunded: number) {
+  await prisma.payment.updateMany({
+    where: { id: paymentId, refundedCents: reservedRefunded },
+    data: { refundedCents: previousRefunded },
+  });
+}
+
 export type RefundOutcome =
   | { ok: true; refundedCents: number; status: "SUCCEEDED" | "PENDING" | "FAILED" }
   | { error: string };
@@ -1606,29 +1617,84 @@ export async function refundBillPayment(
     if (cas.count !== 1) continue; // lost the race — re-read and retry
 
     const idempotencyKey = `refund_${payment.id}_${randomBytes(8).toString("hex")}`;
-    const result = await provider.refundPayment({
-      providerRef: payment.providerRef ?? "",
-      amountCents,
-      idempotencyKey,
-      reason: cleanReason,
-    });
+
+    let refundRow: {
+      status: "PENDING" | "SUCCEEDED" | "FAILED";
+      provider: string;
+      providerRef: string | undefined;
+      test: boolean;
+    };
+
+    if (payment.provider === "square") {
+      const connection = await prisma.squareConnection.findUnique({ where: { restaurantId } });
+      if (!connection) {
+        await releaseRefundReserve(payment.id, newRefunded, expectedRefunded);
+        return { error: "This venue's card payment isn't available right now." };
+      }
+      try {
+        const result = await refundViaSquare({
+          connection,
+          squarePaymentId: payment.providerRef ?? "",
+          amountCents,
+          currency: payment.currency,
+          reason: cleanReason,
+          idempotencyKey,
+        });
+        refundRow = {
+          status: result.status,
+          provider: "square",
+          providerRef: result.providerRef,
+          test: connection.environment !== "production",
+        };
+      } catch (e) {
+        await releaseRefundReserve(payment.id, newRefunded, expectedRefunded);
+        log.warn("payment.refund_square_failed", {
+          restaurantId,
+          paymentId: payment.id,
+          error: e instanceof Error ? e.message : String(e),
+        });
+        return { error: "Refund failed. Please try again." };
+      }
+    } else {
+      const result = await provider.refundPayment({
+        providerRef: payment.providerRef ?? "",
+        amountCents,
+        idempotencyKey,
+        reason: cleanReason,
+      });
+      refundRow = {
+        status: result.status,
+        provider: provider.name,
+        providerRef: result.providerRef,
+        test: result.test,
+      };
+    }
 
     await prisma.refund.create({
       data: {
         paymentId: payment.id,
         amountCents,
         reason: cleanReason,
-        status: result.status,
-        provider: provider.name,
-        providerRef: result.providerRef,
+        status: refundRow.status,
+        provider: refundRow.provider,
+        providerRef: refundRow.providerRef,
         idempotencyKey,
         actorUserId: actor.userId,
         actorEmail: actor.email,
-        test: result.test,
+        test: refundRow.test,
       },
     });
 
-    if (result.status === "SUCCEEDED") {
+    // A Square refund can come back FAILED/REJECTED synchronously (not just
+    // via a thrown error) — same rule either way: never leave refundedCents
+    // inflated for a refund that didn't happen. PENDING is left alone (funds
+    // provisionally held); the refund.updated webhook (Phase 4 Task 3)
+    // reconciles it once Square settles on a final status.
+    if (payment.provider === "square" && refundRow.status === "FAILED") {
+      await releaseRefundReserve(payment.id, newRefunded, expectedRefunded);
+    }
+
+    if (refundRow.status === "SUCCEEDED") {
       const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
       const surchargeBound = payment.surchargeCents;
       const tipBound = payment.surchargeCents + payment.tipCents;
@@ -1652,16 +1718,16 @@ export async function refundBillPayment(
     }
 
     await notifyRestaurant(restaurantId);
-    log[result.status === "SUCCEEDED" ? "info" : "warn"]("payment.refunded", {
+    log[refundRow.status === "SUCCEEDED" ? "info" : "warn"]("payment.refunded", {
       restaurantId,
       paymentId: payment.id,
       billId: payment.billId,
       amountCents,
-      provider: provider.name,
-      status: result.status,
-      test: result.test,
+      provider: refundRow.provider,
+      status: refundRow.status,
+      test: refundRow.test,
     });
-    return { ok: true, refundedCents: amountCents, status: result.status };
+    return { ok: true, refundedCents: amountCents, status: refundRow.status };
   }
 
   log.warn("payment.refund_contended", { restaurantId, paymentId: payment.id });

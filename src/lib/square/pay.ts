@@ -1,5 +1,5 @@
 import type { SquareConnection } from "@prisma/client";
-import type { PaymentStatus } from "@prisma/client";
+import type { PaymentStatus, RefundStatus } from "@prisma/client";
 import type { Square } from "square";
 import { squareClientFor } from "@/lib/square/client";
 import { env } from "@/lib/env";
@@ -169,5 +169,57 @@ export async function chargeBillViaSquare(
     status: mapSquareStatus(payment.status),
     providerRef: payment.id,
     squareOrderId: order.id,
+  };
+}
+
+// Square's refund status values are PENDING/COMPLETED/REJECTED/FAILED —
+// Tillz's RefundStatus enum only has PENDING/SUCCEEDED/FAILED (no separate
+// "rejected" state), so REJECTED folds into FAILED here; both mean the
+// refund didn't happen and refundedCents must be released either way.
+function mapSquareRefundStatus(status: string | undefined): RefundStatus {
+  if (status === "COMPLETED") return "SUCCEEDED";
+  if (status === "REJECTED" || status === "FAILED") return "FAILED";
+  return "PENDING";
+}
+
+export type RefundViaSquareInput = {
+  connection: SquareConnection;
+  // The Square Payment id being refunded — Payment.providerRef.
+  squarePaymentId: string;
+  amountCents: number;
+  currency: string;
+  reason: string;
+  idempotencyKey: string;
+};
+
+export type RefundViaSquareResult = {
+  status: RefundStatus;
+  providerRef: string;
+};
+
+// Refunds (fully or partially) a payment previously taken via
+// chargeBillViaSquare. Deliberately never sets app_fee_money — Square
+// prorates Tillz's application fee refund automatically to match the
+// refunded portion, which is the correct behaviour for both full and
+// partial refunds without Tillz having to compute it here.
+export async function refundViaSquare(input: RefundViaSquareInput): Promise<RefundViaSquareResult> {
+  const { connection, squarePaymentId, amountCents, currency, reason, idempotencyKey } = input;
+
+  const client = await squareClientFor(connection);
+  const response = await client.refunds.refundPayment({
+    idempotencyKey,
+    paymentId: squarePaymentId,
+    amountMoney: { amount: BigInt(amountCents), currency: toCurrency(currency) },
+    reason,
+  });
+
+  const refund = response.refund;
+  if (!refund?.id) {
+    throw new Error("Square did not return a refund id.");
+  }
+
+  return {
+    status: mapSquareRefundStatus(refund.status ?? undefined),
+    providerRef: refund.id,
   };
 }
