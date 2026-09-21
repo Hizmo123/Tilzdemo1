@@ -129,15 +129,27 @@ export async function chargeBillViaSquare(
     }
   });
 
+  // Square rejects order metadata containing an empty-string value (this was
+  // the actual MISSING_REQUIRED_PARAMETER cause: tillzMenuItemId was always
+  // included, even as "" when a line item had no menuItemId, e.g. the
+  // single ad-hoc "Bill payment (full)" line payBillAmount sends). Build the
+  // metadata key-by-key, keeping only non-empty string values, and omit the
+  // whole field when nothing survives — never send metadata: {} either.
+  function buildMetadata(li: SquareChargeLineItem): Record<string, string> | undefined {
+    const entries: [string, string][] = [];
+    if (li.menuItemId && li.menuItemId.trim()) entries.push(["tillzMenuItemId", li.menuItemId]);
+    if (li.squareVariationId && li.squareVariationId.trim()) {
+      entries.push(["squareVariationId", li.squareVariationId]);
+    }
+    return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+  }
+
   const orderLineItems = lineItems.map((li) => ({
     name: li.name,
     // Square requires quantity as a string (e.g. "1", "2") — never a number.
     quantity: String(li.quantity),
     basePriceMoney: { amount: BigInt(li.unitPriceCents), currency: toCurrency(currency) },
-    metadata: {
-      tillzMenuItemId: li.menuItemId ?? "",
-      ...(li.squareVariationId ? { squareVariationId: li.squareVariationId } : {}),
-    },
+    metadata: buildMetadata(li),
   }));
 
   console.error("square.charge_line_items", {
