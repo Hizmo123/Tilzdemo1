@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { roleCan, type Permission } from "@/lib/rbac";
 import type { Role } from "@prisma/client";
 import { getEntitlements } from "@/lib/entitlements";
+import { prisma } from "@/lib/prisma";
 import { signOut } from "../(auth)/actions";
 import { MobileNav } from "./mobile-nav";
 
@@ -186,6 +187,24 @@ export default async function DashboardLayout({
     role,
     entitlements?.ordering ?? true,
   );
+
+  // Square catalog link — only when this venue actually has a connection
+  // (not gated on entitlements.ordering; a connected Square account is
+  // independent of the plan tier). Inserted after buildVisibleSections
+  // rather than declared statically in navSections since it depends on a
+  // per-request DB check, unlike every other (permission-only) nav item.
+  if (restaurant) {
+    const squareConnection = await prisma.squareConnection.findUnique({
+      where: { restaurantId: restaurant.id },
+      select: { id: true },
+    });
+    if (squareConnection && (!role || roleCan(role, "menu:availability"))) {
+      const menuSection = visibleSections.find((s) => s.label === "Menu & hardware");
+      if (menuSection) {
+        menuSection.items.push({ label: "Square catalog", href: "/dashboard/menu/square", perm: null });
+      }
+    }
+  }
 
   return (
     <div className="min-h-dvh flex">
