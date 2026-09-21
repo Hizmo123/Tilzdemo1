@@ -1,0 +1,100 @@
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { listSquareLocations, setSquareLocation, disconnectSquare } from "./actions";
+
+type Connection = {
+  merchantName: string | null;
+  environment: string;
+  locationId: string | null;
+};
+
+export function SquareCard({ connection }: { connection: Connection | null }) {
+  const [pending, start] = useTransition();
+  const [locations, setLocations] = useState<{ id: string; name: string }[] | null>(null);
+  const [selected, setSelected] = useState(connection?.locationId ?? "");
+
+  useEffect(() => {
+    if (!connection) return;
+    listSquareLocations().then(setLocations).catch(() => setLocations([]));
+  }, [connection]);
+
+  const environmentLabel = connection?.environment === "production" ? "Production" : "Sandbox";
+
+  return (
+    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold tracking-tight">Square</h2>
+          <p className="text-sm text-muted mt-0.5">
+            {connection
+              ? "Connected — this venue's Square account."
+              : "Connect this venue's Square account to Tillz."}
+          </p>
+        </div>
+        {connection && (
+          <span
+            className={`text-xs rounded-full px-2.5 py-1 font-medium ${
+              connection.environment === "production"
+                ? "bg-pine/10 text-pine-deep"
+                : "bg-amber-50 text-amber-800"
+            }`}
+          >
+            {environmentLabel}
+          </span>
+        )}
+      </div>
+
+      {!connection ? (
+        <a
+          href="/api/square/authorize"
+          className="mt-4 inline-block rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
+        >
+          Connect Square
+        </a>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {connection.merchantName && (
+            <p className="text-sm">
+              <span className="text-muted">Merchant</span>{" "}
+              <span className="font-medium">{connection.merchantName}</span>
+            </p>
+          )}
+
+          <div>
+            <label className="text-sm text-muted block mb-1">Location</label>
+            <select
+              value={selected}
+              disabled={pending || locations === null}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelected(id);
+                start(async () => {
+                  await setSquareLocation(id);
+                });
+              }}
+              className="w-full max-w-sm rounded-lg border border-line bg-surface px-3.5 py-2.5 focus:border-pine focus:outline-none"
+            >
+              <option value="" disabled>
+                {locations === null ? "Loading…" : "Choose a location"}
+              </option>
+              {locations?.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => start(async () => disconnectSquare())}
+            disabled={pending}
+            className="text-sm text-muted hover:text-danger"
+          >
+            Disconnect
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
