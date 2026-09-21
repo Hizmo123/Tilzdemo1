@@ -6,6 +6,7 @@ import { notifyRestaurant } from "@/lib/realtime";
 import { formatCents } from "@/lib/money";
 import { log } from "@/lib/log";
 import { entitlementsForTier } from "@/lib/entitlements";
+import { getVenuePaymentContext } from "@/lib/square/context";
 
 // ---- Visit resolution -------------------------------------------------------
 
@@ -68,6 +69,15 @@ export type ResolvedVisit = {
   qrBackgroundColor: string | null;
   qrCornerStyle: string;
   qrEmbedLogo: boolean;
+  // Whether this venue's card payments go through Square (Phase 3) or the
+  // mock provider — see getVenuePaymentContext. Only public, non-secret
+  // values reach the client: the app id and location id are meant to be
+  // embedded in a browser page (that's how Square's Web Payments SDK is
+  // designed to work), never the OAuth access token or app secret.
+  squareEnabled: boolean;
+  squareAppId: string | null;
+  squareLocationId: string | null;
+  squareEnv: string | null;
 };
 
 // Resolves an opaque visit token to its table/restaurant, or an invalid reason.
@@ -104,6 +114,7 @@ export async function resolveVisit(
   const ent = entitlementsForTier(r.organization.plan, {
     lapsedAt: r.organization.subscriptionLapsedAt,
   });
+  const paymentContext = await getVenuePaymentContext(r.id);
   return {
     ok: true,
     visit: {
@@ -152,6 +163,10 @@ export async function resolveVisit(
       qrBackgroundColor: r.qrBackgroundColor,
       qrCornerStyle: r.qrCornerStyle,
       qrEmbedLogo: r.qrEmbedLogo,
+      squareEnabled: paymentContext.mode === "square",
+      squareAppId: paymentContext.mode === "square" ? paymentContext.squareAppId : null,
+      squareLocationId: paymentContext.mode === "square" ? paymentContext.squareLocationId : null,
+      squareEnv: paymentContext.mode === "square" ? paymentContext.squareEnv : null,
     },
   };
 }
