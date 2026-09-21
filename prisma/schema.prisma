@@ -734,6 +734,11 @@ model Bill {
   // on repeat requests. Never required; a bill can be paid with no email.
   receiptEmail      String?
   receiptEmailSentAt DateTime?
+  // Square Order id (Phase 3), set on each successful Square-connected
+  // payment against this bill — a split-paid bill can charge through several
+  // Square Orders over time, so this always holds the MOST RECENT one; the
+  // authoritative per-charge record is Payment.squareOrderId below.
+  squareOrderId  String?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
   paidAt         DateTime?
@@ -862,6 +867,9 @@ model Payment {
   status         PaymentStatus @default(PENDING)
   provider       String        @default("mock")
   providerRef    String?
+  // The Square Order this payment was charged against (Phase 3) — null for
+  // every mock-provider payment and for anything predating this column.
+  squareOrderId  String?
   idempotencyKey String        @unique
   // Cached running total of successful refunds against this payment. Kept in
   // sync via the same compare-and-swap pattern as Bill.amountPaidCents.

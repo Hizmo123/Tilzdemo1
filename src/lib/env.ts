@@ -21,4 +21,14 @@ export const env = {
   // Base64-encoded 32-byte key for AES-256-GCM token encryption (see
   // src/lib/square/crypto.ts). Never logged, never sent to the client.
   squareTokenEncKey: () => required("SQUARE_TOKEN_ENC_KEY"),
+  // Tillz's application fee on Square-connected card payments, in basis
+  // points of the goods amount (not tip/surcharge) — see
+  // src/lib/square/pay.ts. Optional; defaults to 0 (no fee) rather than
+  // required(), since most deployments won't set this until Tillz's own
+  // monetization on connected payments is actually turned on.
+  squareAppFeeBps: (): number => {
+    const raw = process.env.SQUARE_APP_FEE_BPS;
+    const n = raw ? parseInt(raw, 10) : 0;
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  },
 };
