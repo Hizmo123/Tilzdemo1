@@ -60,6 +60,12 @@ const CARDS: {
     description: "Export your data, or request account deletion.",
     perm: "settings:manage",
   },
+  {
+    href: "/dashboard/settings/integrations",
+    label: "Integrations",
+    description: "Connect Square to this venue.",
+    perm: "settings:manage",
+  },
 ];
 
 export default async function SettingsPage() {

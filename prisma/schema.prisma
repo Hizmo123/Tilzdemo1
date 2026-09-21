@@ -296,8 +296,39 @@ model Restaurant {
   standOrders    StandOrder[]
   bills          Bill[]
   cashSessions   CashDrawerSession[]
+  squareConnection SquareConnection?
 
   @@index([organizationId])
+}
+
+// A venue's connection to its own Square merchant account (OAuth, per venue —
+// each restaurant connects its own Square, never shared across an org). This
+// phase only stores the connection; it does not take payments or push orders
+// (see src/lib/payments/ for the actual payment abstraction, left untouched).
+// Token fields are AES-256-GCM ciphertext (src/lib/square/crypto.ts) — never
+// plaintext, never returned to the client, never logged.
+model SquareConnection {
+  id              String     @id @default(cuid())
+  restaurantId    String     @unique
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  merchantId      String
+  // "sandbox" | "production" — mirrors SQUARE_ENV at the time this connection
+  // was created, so a later env change doesn't silently reinterpret it.
+  environment     String
+  accessTokenEnc  String
+  refreshTokenEnc String
+  tokenExpiresAt  DateTime
+  // Square location chosen for this venue, set after connecting (a merchant
+  // can have several); null until the owner picks one in Settings.
+  locationId      String?
+  merchantName    String?
+  scopes          String[]
+  connectedByUserId String
+  // Not currently set by the disconnect flow (which deletes the row after
+  // revoking at Square) — reserved for a future soft-revoke path.
+  revokedAt       DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }
 
 // In-progress onboarding wizard answers, keyed by the Supabase auth user id.
