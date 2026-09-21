@@ -61,3 +61,10 @@ alter table "CashDrawerSession" enable row level security;
 alter table "CashMovement" enable row level security;
 revoke all on "CashDrawerSession" from anon, authenticated;
 revoke all on "CashMovement" from anon, authenticated;
+
+-- Added with Square OAuth Phase 1: SquareConnection holds AES-256-GCM
+-- encrypted access/refresh tokens per venue. Even encrypted, this must never
+-- be reachable via the anon/authenticated Supabase API — all access goes
+-- through Prisma (src/lib/square/oauth.ts) only.
+alter table "SquareConnection" enable row level security;
+revoke all on "SquareConnection" from anon, authenticated;
