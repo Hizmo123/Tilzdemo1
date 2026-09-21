@@ -257,8 +257,13 @@ export function PaySheet({
           ? await payItems(token, itemSelections, tipCents, sourceId)
           : await payBill(token, amount, tipCents, mode, sourceId);
       if (res && "error" in res) {
+        // Deliberately no router.refresh() here — nothing server-side
+        // changed on a failed payment (the CAS reserve was released), and a
+        // refresh right after setting the error risked the error banner
+        // flashing/disappearing under the resulting re-render. The error
+        // stays until the user edits an input or taps Pay again (both clear
+        // it explicitly) — never auto-cleared, never closes/resets the sheet.
         setError(res.error);
-        router.refresh();
       } else if (res) {
         onPaid(res.amountPaidCents || optimistic, res.fullyPaid);
         router.refresh();

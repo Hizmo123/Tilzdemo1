@@ -1,8 +1,24 @@
 import type { SquareConnection } from "@prisma/client";
 import type { PaymentStatus, RefundStatus } from "@prisma/client";
 import type { Square } from "square";
+import { SquareError } from "square";
 import { squareClientFor } from "@/lib/square/client";
 import { env } from "@/lib/env";
+
+// Turns a thrown Square API error into a specific, debuggable message —
+// "category/code: detail" per structured error entry — instead of the
+// generic "payment failed" a customer or a log line is otherwise left with.
+// Exported so callers (bills.ts) can log/report the same detail rather than
+// re-deriving it from a caught error.
+export function formatSquareError(e: unknown): string {
+  if (e instanceof SquareError && e.errors.length > 0) {
+    return e.errors
+      .map((err) => `${err.category}/${err.code}${err.detail ? `: ${err.detail}` : ""}`)
+      .join("; ");
+  }
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
 
 // Charges a card via Square for the EXACT amount Tillz computed. The two
 // highest-risk invariants in this whole phase live here:
@@ -104,31 +120,45 @@ export async function chargeBillViaSquare(
         ]
       : undefined;
 
-  const orderResponse = await client.orders.create({
-    order: {
-      locationId,
-      lineItems: orderLineItems,
-      serviceCharges,
-      // PICKUP with no scheduled time (ASAP) just so the order shows up on
-      // the venue's Square POS/KDS as something to fulfil — Tillz's own
-      // table service isn't a Square fulfillment concept, so this is a
-      // minimal placeholder, not a real pickup flow.
-      fulfillments: [
-        {
-          type: "PICKUP",
-          state: "PROPOSED",
-          pickupDetails: {
-            scheduleType: "ASAP",
-            note: `Tillz bill ${bill.id}`,
+  let orderResponse;
+  try {
+    orderResponse = await client.orders.create({
+      order: {
+        locationId,
+        lineItems: orderLineItems,
+        serviceCharges,
+        // PICKUP with no scheduled time (ASAP) just so the order shows up on
+        // the venue's Square POS/KDS as something to fulfil — Tillz's own
+        // table service isn't a Square fulfillment concept, so this is a
+        // minimal placeholder, not a real pickup flow.
+        fulfillments: [
+          {
+            type: "PICKUP",
+            state: "PROPOSED",
+            pickupDetails: {
+              scheduleType: "ASAP",
+              note: `Tillz bill ${bill.id}`,
+            },
           },
-        },
-      ],
-    },
-    idempotencyKey: `${idempotencyKey}:order`,
-  });
+        ],
+      },
+      idempotencyKey: `${idempotencyKey}:order`,
+    });
+  } catch (e) {
+    const detail = formatSquareError(e);
+    console.error("square.create_order_failed", {
+      billId: bill.id,
+      goodsCents,
+      surchargeCents,
+      currency,
+      error: detail,
+    });
+    throw new Error(`Square order creation failed — ${detail}`);
+  }
 
   const order = orderResponse.order;
   if (!order?.id) {
+    console.error("square.create_order_no_id", { billId: bill.id, response: orderResponse });
     throw new Error("Square did not return an order id.");
   }
 
@@ -136,6 +166,15 @@ export async function chargeBillViaSquare(
   const expectedCents = goodsCents + surchargeCents;
   const actualCents = order.totalMoney?.amount != null ? Number(order.totalMoney.amount) : NaN;
   if (actualCents !== expectedCents) {
+    console.error("square.order_total_mismatch", {
+      billId: bill.id,
+      orderId: order.id,
+      expectedCents,
+      actualCents,
+      goodsCents,
+      surchargeCents,
+      currency,
+    });
     throw new SquarePriceMismatchError(expectedCents, actualCents);
   }
 
@@ -150,18 +189,35 @@ export async function chargeBillViaSquare(
     Math.floor(totalChargeCents * 0.9),
   );
 
-  const paymentResponse = await client.payments.create({
-    sourceId,
-    idempotencyKey,
-    locationId,
-    orderId: order.id,
-    amountMoney: { amount: BigInt(goodsCents + surchargeCents), currency: toCurrency(currency) },
-    ...(tipCents > 0 ? { tipMoney: { amount: BigInt(tipCents), currency: toCurrency(currency) } } : {}),
-    ...(appFeeCents > 0 ? { appFeeMoney: { amount: BigInt(appFeeCents), currency: toCurrency(currency) } } : {}),
-  });
+  let paymentResponse;
+  try {
+    paymentResponse = await client.payments.create({
+      sourceId,
+      idempotencyKey,
+      locationId,
+      orderId: order.id,
+      amountMoney: { amount: BigInt(goodsCents + surchargeCents), currency: toCurrency(currency) },
+      ...(tipCents > 0 ? { tipMoney: { amount: BigInt(tipCents), currency: toCurrency(currency) } } : {}),
+      ...(appFeeCents > 0 ? { appFeeMoney: { amount: BigInt(appFeeCents), currency: toCurrency(currency) } } : {}),
+    });
+  } catch (e) {
+    const detail = formatSquareError(e);
+    console.error("square.create_payment_failed", {
+      billId: bill.id,
+      orderId: order.id,
+      expectedOrderTotalCents: expectedCents,
+      amountSentCents: goodsCents + surchargeCents,
+      tipCents,
+      appFeeCents,
+      currency,
+      error: detail,
+    });
+    throw new Error(`Square payment failed — ${detail}`);
+  }
 
   const payment = paymentResponse.payment;
   if (!payment?.id) {
+    console.error("square.create_payment_no_id", { billId: bill.id, orderId: order.id, response: paymentResponse });
     throw new Error("Square did not return a payment id.");
   }
 

@@ -1127,12 +1127,18 @@ export async function payBillAmount(
         };
       } catch (e) {
         await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
+        const detail = e instanceof Error ? e.message : String(e);
+        console.error("square.pay_bill_amount_failed", { billId: bill.id, error: detail });
         log.warn("payment.square_failed", {
           restaurantId: resolved.visit.restaurantId,
           billId: bill.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: detail,
         });
-        return { error: "Card payment failed. Please try again." };
+        // The detailed Square error (already formatted as category/code:
+        // detail by chargeBillViaSquare) reaches the client verbatim, not a
+        // generic message — this is what's actually shown in the pay sheet,
+        // and what needs to be visible to diagnose a real failure.
+        return { error: detail };
       }
     } else {
       const result = await provider.createPayment({
@@ -1419,12 +1425,14 @@ export async function payBillItems(
         };
       } catch (e) {
         await releaseItemsReserve(bill.id, reservations, newPaid, expectedPaid, bill.status, bill.paidAt);
+        const detail = e instanceof Error ? e.message : String(e);
+        console.error("square.pay_bill_items_failed", { billId: bill.id, error: detail });
         log.warn("payment.square_failed", {
           restaurantId: resolved.visit.restaurantId,
           billId: bill.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: detail,
         });
-        return { error: "Card payment failed. Please try again." };
+        return { error: detail };
       }
     } else {
       const result = await provider.createPayment({
