@@ -72,6 +72,10 @@ export function CustomerExperience({
   surchargeBasisPoints,
   showTillzBranding,
   splitMethods,
+  squareEnabled,
+  squareAppId,
+  squareLocationId,
+  squareEnv,
   open,
   canOrder,
   canPay,
@@ -112,6 +116,10 @@ export function CustomerExperience({
   surchargeBasisPoints: number;
   showTillzBranding: boolean;
   splitMethods: string[];
+  squareEnabled: boolean;
+  squareAppId: string | null;
+  squareLocationId: string | null;
+  squareEnv: string | null;
   open: boolean;
   canOrder: boolean;
   canPay: boolean;
@@ -697,6 +705,10 @@ export function CustomerExperience({
           surchargeEnabled={surchargeEnabled}
           surchargeBasisPoints={surchargeBasisPoints}
           allowedModes={allowedModes}
+          squareEnabled={squareEnabled}
+          squareAppId={squareAppId}
+          squareLocationId={squareLocationId}
+          squareEnv={squareEnv}
           onClose={() => setPayOpen(false)}
           onPaid={(amountCents, fullyPaid) => {
             setPayOpen(false);

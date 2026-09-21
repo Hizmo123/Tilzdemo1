@@ -171,6 +171,10 @@ export default async function VisitPage({
       surchargeBasisPoints={visit.surchargeBasisPoints}
       showTillzBranding={visit.showTillzBranding}
       splitMethods={visit.splitMethods}
+      squareEnabled={visit.squareEnabled}
+      squareAppId={visit.squareAppId}
+      squareLocationId={visit.squareLocationId}
+      squareEnv={visit.squareEnv}
       open={open}
       canOrder={visit.customerOrdering && open}
       canPay={visit.customerPayment}
