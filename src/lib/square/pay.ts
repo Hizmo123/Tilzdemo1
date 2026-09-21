@@ -146,7 +146,10 @@ export async function chargeBillViaSquare(
       name: li.name,
       quantity: li.quantity,
       quantityType: typeof li.quantity,
-      basePriceMoneyAmount: li.basePriceMoney.amount.toString(),
+      // Number(), not .toString() — same reasoning as the order_body log
+      // below: this is a real bigint in the actual request, and logging it
+      // as a string here would misleadingly suggest otherwise.
+      basePriceMoneyAmount: Number(li.basePriceMoney.amount),
       basePriceMoneyCurrency: li.basePriceMoney.currency,
     })),
   });
@@ -191,9 +194,20 @@ export async function chargeBillViaSquare(
     idempotencyKey: `${idempotencyKey}:order`,
   };
 
+  // Logging-only concern: native JSON.stringify can't serialise a bigint at
+  // all without a replacer, so one is required here just to produce a log
+  // line — but returning value.toString() (a string) makes a correctly-typed
+  // bigint amount print as a QUOTED "2000" in the log, which reads exactly
+  // like the real request carries a string, even though it doesn't. The
+  // actual request object below (orderRequest, passed to client.orders.create
+  // untouched by this JSON.stringify call) still holds real bigints — the
+  // SDK's own wire serialiser (core/json.js toJson) converts those to
+  // genuine unquoted JSON numbers. Number(...) here mirrors that for the log
+  // (cents amounts are always far below Number.MAX_SAFE_INTEGER), so what's
+  // logged actually matches what goes over the wire.
   console.error(
     "square.order_body",
-    JSON.stringify(orderRequest, (_key, value) => (typeof value === "bigint" ? value.toString() : value)),
+    JSON.stringify(orderRequest, (_key, value) => (typeof value === "bigint" ? Number(value) : value)),
   );
 
   let orderResponse;
