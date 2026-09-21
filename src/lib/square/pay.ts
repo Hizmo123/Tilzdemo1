@@ -90,6 +90,15 @@ export async function chargeBillViaSquare(
   const { connection, bill, lineItems, goodsCents, tipCents, surchargeCents, currency, sourceId, idempotencyKey } =
     input;
 
+  // location_id is required on the Order itself — an empty string is just as
+  // unusable as null/undefined here, so this is a falsy check, not a strict
+  // null check. Logged explicitly (not just guarded) so a MISSING_REQUIRED_
+  // PARAMETER on location_id is immediately distinguishable in the logs from
+  // one caused by a line item instead.
+  console.error("square.charge_location_id", {
+    billId: bill.id,
+    locationId: connection.locationId || "(empty)",
+  });
   if (!connection.locationId) {
     throw new Error("Square connection has no location selected.");
   }
@@ -99,8 +108,27 @@ export async function chargeBillViaSquare(
 
   // ---- 1. Build the order (ad-hoc pricing — never catalog_object_id, so
   // Square can't substitute its own catalog price for what Tillz charges) --
+  // Every line item MUST carry a non-empty name, a quantity serialised as a
+  // STRING (Square's OrderLineItem.quantity is a string field — sending a
+  // number here is exactly what produces MISSING_REQUIRED_PARAMETER, since
+  // Square's API doesn't coerce it), and a base_price_money with both amount
+  // and currency. Validated up front — with the offending item identified —
+  // rather than letting a malformed item reach Square as a cryptic 400.
+  lineItems.forEach((li, i) => {
+    if (!li.name || !li.name.trim()) {
+      throw new Error(`Square line item ${i} is missing a name.`);
+    }
+    if (!Number.isInteger(li.quantity) || li.quantity <= 0) {
+      throw new Error(`Square line item "${li.name}" has an invalid quantity: ${li.quantity}`);
+    }
+    if (!Number.isInteger(li.unitPriceCents) || li.unitPriceCents < 0) {
+      throw new Error(`Square line item "${li.name}" has an invalid price: ${li.unitPriceCents}`);
+    }
+  });
+
   const orderLineItems = lineItems.map((li) => ({
     name: li.name,
+    // Square requires quantity as a string (e.g. "1", "2") — never a number.
     quantity: String(li.quantity),
     basePriceMoney: { amount: BigInt(li.unitPriceCents), currency: toCurrency(currency) },
     metadata: {
@@ -108,6 +136,17 @@ export async function chargeBillViaSquare(
       ...(li.squareVariationId ? { squareVariationId: li.squareVariationId } : {}),
     },
   }));
+
+  console.error("square.charge_line_items", {
+    billId: bill.id,
+    lineItems: orderLineItems.map((li) => ({
+      name: li.name,
+      quantity: li.quantity,
+      quantityType: typeof li.quantity,
+      basePriceMoneyAmount: li.basePriceMoney.amount.toString(),
+      basePriceMoneyCurrency: li.basePriceMoney.currency,
+    })),
+  });
 
   const serviceCharges =
     surchargeCents > 0
