@@ -1,9 +1,27 @@
+import { createHash } from "crypto";
 import type { SquareConnection } from "@prisma/client";
 import type { PaymentStatus, RefundStatus } from "@prisma/client";
 import type { Square } from "square";
 import { SquareError } from "square";
 import { squareClientFor } from "@/lib/square/client";
 import { env } from "@/lib/env";
+
+// Square caps idempotency_key at 45 characters. Tillz's own idempotency keys
+// (built in lib/bills.ts — e.g. "pay_<bill cuid>_<16 hex chars>" — also
+// stored as Payment.idempotencyKey/Refund.idempotencyKey for DB-level
+// uniqueness) run well past that once a bill's cuid and a distinguishing
+// suffix are involved, and are never trimmed for that DB role. This derives
+// a short, per-purpose key from the same base string for Square's wire
+// parameter instead: SHA-256 is deterministic, so the SAME base always
+// produces the SAME derived key (retries of one logical attempt stay
+// consistent), and "order"/"payment"/"refund" each get their own key from a
+// single base via a distinct prefix, satisfying Square's "different
+// idempotency key per distinct request" rule.
+function squareIdempotencyKey(base: string, purpose: "order" | "payment" | "refund"): string {
+  const hash = createHash("sha256").update(base).digest("hex").slice(0, 32);
+  const prefix = purpose === "order" ? "o_" : purpose === "payment" ? "p_" : "r_";
+  return `${prefix}${hash}`; // 2 + 32 = 34 chars, comfortably under the 45-char cap
+}
 
 // Turns a thrown Square API error into a specific, debuggable message —
 // "category/code: detail" per structured error entry — instead of the
@@ -203,7 +221,7 @@ export async function chargeBillViaSquare(
         },
       ],
     },
-    idempotencyKey: `${idempotencyKey}:order`,
+    idempotencyKey: squareIdempotencyKey(idempotencyKey, "order"),
   };
 
   // Logging-only concern: native JSON.stringify can't serialise a bigint at
@@ -221,6 +239,11 @@ export async function chargeBillViaSquare(
     "square.order_body",
     JSON.stringify(orderRequest, (_key, value) => (typeof value === "bigint" ? Number(value) : value)),
   );
+  console.error("square.order_idempotency_key", {
+    billId: bill.id,
+    key: orderRequest.idempotencyKey,
+    length: orderRequest.idempotencyKey.length,
+  });
 
   let orderResponse;
   try {
@@ -274,7 +297,7 @@ export async function chargeBillViaSquare(
   try {
     paymentResponse = await client.payments.create({
       sourceId,
-      idempotencyKey,
+      idempotencyKey: squareIdempotencyKey(idempotencyKey, "payment"),
       locationId,
       orderId: order.id,
       amountMoney: { amount: BigInt(goodsCents + surchargeCents), currency: toCurrency(currency) },
@@ -344,7 +367,7 @@ export async function refundViaSquare(input: RefundViaSquareInput): Promise<Refu
 
   const client = await squareClientFor(connection);
   const response = await client.refunds.refundPayment({
-    idempotencyKey,
+    idempotencyKey: squareIdempotencyKey(idempotencyKey, "refund"),
     paymentId: squarePaymentId,
     amountMoney: { amount: BigInt(amountCents), currency: toCurrency(currency) },
     reason,
