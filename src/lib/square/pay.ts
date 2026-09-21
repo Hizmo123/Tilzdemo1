@@ -62,7 +62,7 @@ function toCurrency(currency: string): Square.Currency {
   return currency as Square.Currency;
 }
 
-function mapSquareStatus(status: string | undefined): PaymentStatus {
+export function mapSquareStatus(status: string | undefined): PaymentStatus {
   if (status === "COMPLETED" || status === "APPROVED") return "SUCCEEDED";
   if (status === "CANCELED" || status === "FAILED") return "FAILED";
   return "PENDING";
@@ -176,7 +176,7 @@ export async function chargeBillViaSquare(
 // Tillz's RefundStatus enum only has PENDING/SUCCEEDED/FAILED (no separate
 // "rejected" state), so REJECTED folds into FAILED here; both mean the
 // refund didn't happen and refundedCents must be released either way.
-function mapSquareRefundStatus(status: string | undefined): RefundStatus {
+export function mapSquareRefundStatus(status: string | undefined): RefundStatus {
   if (status === "COMPLETED") return "SUCCEEDED";
   if (status === "REJECTED" || status === "FAILED") return "FAILED";
   return "PENDING";

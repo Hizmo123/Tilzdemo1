@@ -31,4 +31,8 @@ export const env = {
     const n = raw ? parseInt(raw, 10) : 0;
     return Number.isFinite(n) && n >= 0 ? n : 0;
   },
+  // Signs Square webhook deliveries — verified against every request to
+  // /api/square/webhook before its body is trusted for anything. See
+  // src/app/api/square/webhook/route.ts.
+  squareWebhookSignatureKey: () => required("SQUARE_WEBHOOK_SIGNATURE_KEY"),
 };

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { Prisma, type TenderType, type BillStatus } from "@prisma/client";
+import { Prisma, type TenderType, type BillStatus, type PaymentStatus, type RefundStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
 import { notifyRestaurant } from "@/lib/realtime";
@@ -1732,6 +1732,97 @@ export async function refundBillPayment(
 
   log.warn("payment.refund_contended", { restaurantId, paymentId: payment.id });
   return { error: "That payment is being updated by someone else. Please try again." };
+}
+
+// ---- Square webhook reconciliation (Phase 4) --------------------------------
+// Both functions are idempotent no-ops if the stored status already matches —
+// safe to call from a webhook handler that may see the same event more than
+// once (dedup in /api/square/webhook is the primary guard; this is the
+// belt-and-braces backstop).
+
+// payment.updated: Square is the source of truth for what actually happened
+// to a payment it processed. Only a transition INTO a failure state needs a
+// write here — Square never re-confirms an already-SUCCEEDED payment in a
+// way Tillz needs to react to, and a PENDING -> SUCCEEDED move needs no bill
+// adjustment (the bill's amountPaidCents was already bumped optimistically
+// when the payment was first reserved).
+export async function syncSquarePaymentStatus(
+  squarePaymentId: string,
+  newStatus: PaymentStatus,
+): Promise<void> {
+  const payment = await prisma.payment.findFirst({
+    where: { provider: "square", providerRef: squarePaymentId },
+  });
+  if (!payment || payment.status === newStatus) return;
+
+  if (newStatus === "FAILED" && payment.status !== "FAILED") {
+    await prisma.$transaction([
+      prisma.bill.update({
+        where: { id: payment.billId },
+        data: {
+          amountPaidCents: { decrement: payment.amountCents },
+          tipCents: { decrement: payment.tipCents },
+        },
+      }),
+      prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } }),
+    ]);
+    log.warn("payment.square_webhook_failed", { paymentId: payment.id, billId: payment.billId });
+  } else {
+    await prisma.payment.update({ where: { id: payment.id }, data: { status: newStatus } });
+  }
+}
+
+// refund.updated: mirrors the SUCCEEDED/FAILED handling refundBillPayment
+// does synchronously, for a refund that was PENDING at request time and only
+// now (via webhook) reaches its final Square status. Reconstructs the same
+// before/after refundedCents window refundBillPayment would have used — the
+// reserve for this specific refund was already applied (and never released,
+// since it was PENDING) when the refund was first requested.
+export async function syncSquareRefundStatus(
+  squareRefundId: string,
+  newStatus: RefundStatus,
+): Promise<void> {
+  const refund = await prisma.refund.findFirst({
+    where: { provider: "square", providerRef: squareRefundId },
+    include: { payment: true },
+  });
+  if (!refund || refund.status === newStatus || refund.status !== "PENDING") return;
+
+  const payment = refund.payment;
+  const newRefunded = payment.refundedCents; // already includes this refund's reserve
+  const previousRefunded = newRefunded - refund.amountCents;
+
+  if (newStatus === "SUCCEEDED") {
+    const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+    const envelope = payment.amountCents + payment.tipCents + payment.surchargeCents;
+    const surchargeBound = payment.surchargeCents;
+    const tipBound = payment.surchargeCents + payment.tipCents;
+    const tipRefunded =
+      clamp(newRefunded, surchargeBound, tipBound) - clamp(previousRefunded, surchargeBound, tipBound);
+    const goodsRefunded =
+      clamp(newRefunded, tipBound, envelope) - clamp(previousRefunded, tipBound, envelope);
+
+    await prisma.$transaction([
+      prisma.bill.update({
+        where: { id: payment.billId },
+        data: {
+          amountPaidCents: { decrement: goodsRefunded },
+          tipCents: { decrement: tipRefunded },
+          refundedCents: { increment: refund.amountCents },
+        },
+      }),
+      prisma.refund.update({ where: { id: refund.id }, data: { status: "SUCCEEDED" } }),
+    ]);
+  } else if (newStatus === "FAILED") {
+    await prisma.$transaction([
+      prisma.payment.update({
+        where: { id: payment.id },
+        data: { refundedCents: previousRefunded },
+      }),
+      prisma.refund.update({ where: { id: refund.id }, data: { status: "FAILED" } }),
+    ]);
+    log.warn("payment.refund_square_webhook_failed", { paymentId: payment.id, refundId: refund.id });
+  }
 }
 
 // ---- Order history (staff / kitchen) ---------------------------------------
