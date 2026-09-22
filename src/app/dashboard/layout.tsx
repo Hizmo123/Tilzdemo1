@@ -8,6 +8,7 @@ import { getEntitlements } from "@/lib/entitlements";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "../(auth)/actions";
 import { MobileNav } from "./mobile-nav";
+import { NavSections } from "./nav-sections";
 
 // Each nav item declares the permission needed to see it. Overview and Bills are
 // visible to every role (all roles have bills:view). This only hides controls —
@@ -233,27 +234,12 @@ export default async function DashboardLayout({
           )}
         </div>
 
-        <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-4">
-          {visibleSections.map((section) => (
-            <div key={section.label}>
-              <p className="px-3 mb-1 text-xs font-medium uppercase tracking-wide text-muted">
-                {section.label}
-              </p>
-              <div className="space-y-0.5">
-                {section.items.map((item) => (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    prefetch={false}
-                    className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
+        <NavSections
+          sections={visibleSections.map((section) => ({
+            label: section.label,
+            items: section.items.map(({ label, href }) => ({ label, href })),
+          }))}
+        />
 
         <div className="border-t border-line px-5 py-4 pb-6 space-y-2">
           <div className="flex items-center gap-3 text-sm">
