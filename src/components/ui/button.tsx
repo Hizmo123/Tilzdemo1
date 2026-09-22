@@ -1,9 +1,10 @@
 "use client";
 
 import { forwardRef } from "react";
+import Link from "next/link";
 import { motion, type HTMLMotionProps } from "motion/react";
 import { SPRING_PRESS } from "./motion";
-import { Spinner } from "./submit-button";
+import { Spinner } from "./spinner";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "soft" | "ink";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -27,6 +28,13 @@ const SIZE: Record<ButtonSize, string> = {
   lg: "h-13 min-h-[52px] px-6 text-base rounded-[var(--radius-lg)]",
 };
 
+const BASE =
+  "inline-flex items-center justify-center gap-2 font-medium select-none transition-[filter,box-shadow,border-color,background-color] duration-[var(--dur-fast)]";
+
+export function buttonClasses(variant: ButtonVariant, size: ButtonSize, full = false, extra = "") {
+  return `${BASE} ${VARIANT[variant]} ${SIZE[size]} ${full ? "w-full" : ""} ${extra}`;
+}
+
 type Props = Omit<HTMLMotionProps<"button">, "children"> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
@@ -49,7 +57,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
       transition={SPRING_PRESS}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={`inline-flex items-center justify-center gap-2 font-medium select-none transition-[filter,box-shadow,border-color,background-color] duration-[var(--dur-fast)] disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none ${VARIANT[variant]} ${SIZE[size]} ${full ? "w-full" : ""} ${className}`}
+      className={`${buttonClasses(variant, size, full, className)} disabled:opacity-60 disabled:cursor-not-allowed disabled:shadow-none`}
       {...props}
     >
       {loading && <Spinner />}
@@ -57,3 +65,47 @@ export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
     </motion.button>
   );
 });
+
+const MotionLink = motion.create(Link);
+
+// The same button, as a navigation link (marketing CTAs, "Get started",
+// pricing cards). Same chrome and press feel as Button so a tap on a link
+// and a tap on a button are indistinguishable.
+export function LinkButton({
+  variant = "primary",
+  size = "md",
+  full = false,
+  className = "",
+  href,
+  children,
+  prefetch,
+  target,
+  rel,
+  "aria-label": ariaLabel,
+}: {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  full?: boolean;
+  className?: string;
+  href: string;
+  children: React.ReactNode;
+  prefetch?: boolean;
+  target?: string;
+  rel?: string;
+  "aria-label"?: string;
+}) {
+  return (
+    <MotionLink
+      href={href}
+      prefetch={prefetch}
+      target={target}
+      rel={rel}
+      aria-label={ariaLabel}
+      whileTap={{ scale: 0.97 }}
+      transition={SPRING_PRESS}
+      className={buttonClasses(variant, size, full, className)}
+    >
+      {children}
+    </MotionLink>
+  );
+}

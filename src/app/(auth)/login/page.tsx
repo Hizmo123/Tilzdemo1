@@ -5,9 +5,11 @@ import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { signIn, type AuthState } from "../actions";
 import { createClient } from "@/lib/supabase/client";
-import { Label, Input, FormMessage } from "@/components/ui/field";
+import { Label, Input } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { Button } from "@/components/ui/button";
 import { GoogleSignInButton } from "../google-sign-in-button";
+import { FormError } from "../form-error";
 
 const initial: AuthState = {};
 
@@ -36,27 +38,22 @@ export default function LoginPage() {
     });
   }
 
+  const invalid = !!state.error;
+
   return (
     <>
-      <h1 className="font-display text-2xl font-semibold tracking-tight">
-        Log in
-      </h1>
-      <p className="text-sm text-muted mt-1 mb-6">
-        Welcome back to your dashboard.
-      </p>
+      <h1 className="font-display text-display-sm font-semibold">Log in</h1>
+      <p className="text-sm text-muted mt-1 mb-6">Welcome back to your dashboard.</p>
 
       <form action={action} className="space-y-4">
         <div>
           <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
+          <Input id="email" name="email" type="email" autoComplete="email" invalid={invalid} required />
         </div>
         <div>
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link
-              href="/forgot-password"
-              className="text-xs text-pine hover:underline"
-            >
+            <Link href="/forgot-password" className="text-xs text-pine hover:underline mb-1.5">
               Forgot password?
             </Link>
           </div>
@@ -65,19 +62,19 @@ export default function LoginPage() {
             name="password"
             type="password"
             autoComplete="current-password"
+            invalid={invalid}
             required
           />
         </div>
 
-        {state.error && (
-          <div>
-            <FormMessage tone="error">{state.error}</FormMessage>
+        <div className={state.error ? "" : "hidden"}>
+          <FormError>{state.error}</FormError>
+          {state.error && (
             <p className="text-xs text-muted mt-1.5">
-              Just signed up? Confirm your email first — check your inbox for the
-              link.
+              Just signed up? Confirm your email first — check your inbox for the link.
             </p>
-          </div>
-        )}
+          )}
+        </div>
 
         <SubmitButton pendingLabel="Logging in…">Log in</SubmitButton>
       </form>
@@ -90,15 +87,13 @@ export default function LoginPage() {
 
       <div className="space-y-2">
         <GoogleSignInButton />
-        <button
-          onClick={signInWithPasskey}
-          disabled={pkPending}
-          className="w-full rounded-xl border border-line py-3 font-medium hover:border-ink/30 disabled:opacity-50"
-        >
+        <Button variant="secondary" full onClick={signInWithPasskey} loading={pkPending}>
           {pkPending ? "Waiting for your device…" : "Sign in with fingerprint / Face ID"}
-        </button>
+        </Button>
       </div>
-      {pkError && <p className="text-sm text-danger mt-2 text-center">{pkError}</p>}
+      <div className={pkError ? "mt-2" : ""}>
+        <FormError>{pkError}</FormError>
+      </div>
 
       <p className="text-sm text-muted mt-6 text-center">
         No account?{" "}

@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { motion } from "motion/react";
 import { signUp, resendConfirmation, type AuthState } from "../actions";
 import { Label, Input, FormMessage } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { Button } from "@/components/ui/button";
+import { SPRING } from "@/components/ui/motion";
 import { GoogleSignInButton } from "../google-sign-in-button";
+import { FormError } from "../form-error";
 
 const initial: AuthState = {};
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -25,11 +29,11 @@ export default function SignupPage() {
     );
   }
 
+  const invalid = !!state.error;
+
   return (
     <>
-      <h1 className="font-display text-2xl font-semibold tracking-tight">
-        Create your account
-      </h1>
+      <h1 className="font-display text-display-sm font-semibold">Create your account</h1>
       <p className="text-sm text-muted mt-1">
         QR ordering, bill splitting and payments — live in a few minutes.
         Next you&apos;ll set up your venue: name, tables and menu.
@@ -55,31 +59,27 @@ export default function SignupPage() {
             autoComplete="email"
             inputMode="email"
             defaultValue={editingAfterConfirm ? state.confirmEmail : undefined}
+            invalid={invalid}
             required
           />
         </div>
-        <PasswordField />
+        <PasswordField invalid={invalid && !state.accountExists} />
 
-        {state.error && (
-          <div>
-            <FormMessage tone="error">{state.error}</FormMessage>
-            {state.accountExists && (
-              <p className="text-sm text-muted mt-2">
-                <Link href="/login" className="text-pine font-medium hover:underline">
-                  Log in
-                </Link>{" "}
-                or{" "}
-                <Link
-                  href="/forgot-password"
-                  className="text-pine font-medium hover:underline"
-                >
-                  reset your password
-                </Link>{" "}
-                instead.
-              </p>
-            )}
-          </div>
-        )}
+        <div className={state.error ? "" : "hidden"}>
+          <FormError>{state.error}</FormError>
+          {state.accountExists && (
+            <p className="text-sm text-muted mt-2">
+              <Link href="/login" className="text-pine font-medium hover:underline">
+                Log in
+              </Link>{" "}
+              or{" "}
+              <Link href="/forgot-password" className="text-pine font-medium hover:underline">
+                reset your password
+              </Link>{" "}
+              instead.
+            </p>
+          )}
+        </div>
 
         <SubmitButton pendingLabel="Creating…">Create account</SubmitButton>
       </form>
@@ -109,7 +109,7 @@ export default function SignupPage() {
 // The one requirement actually enforced server-side (8+ characters) — shown
 // live rather than only as an error after submit, and never claims a rule
 // that isn't really checked.
-function PasswordField() {
+function PasswordField({ invalid = false }: { invalid?: boolean }) {
   const [value, setValue] = useState("");
   const [show, setShow] = useState(false);
   const longEnough = value.length >= 8;
@@ -126,22 +126,34 @@ function PasswordField() {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           className="pr-16"
+          invalid={invalid}
           required
         />
         <button
           type="button"
           onClick={() => setShow((s) => !s)}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted hover:text-ink"
+          className="absolute right-1 top-1/2 -translate-y-1/2 h-9 px-2.5 text-xs text-muted hover:text-ink rounded-[var(--radius-sm)]"
         >
           {show ? "Hide" : "Show"}
         </button>
       </div>
       <p
-        className={`text-xs mt-1.5 flex items-center gap-1.5 ${
+        className={`text-xs mt-1.5 flex items-center gap-1.5 transition-colors duration-[var(--dur-fast)] ${
           longEnough ? "text-pine-deep" : "text-muted"
         }`}
       >
-        <span aria-hidden>{longEnough ? "✓" : "○"}</span>
+        <span
+          aria-hidden
+          className={`inline-flex w-3.5 h-3.5 items-center justify-center rounded-pill border transition-colors duration-[var(--dur-fast)] ${
+            longEnough ? "bg-pine border-pine text-on-accent" : "border-line-strong"
+          }`}
+        >
+          {longEnough && (
+            <svg viewBox="0 0 20 20" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <motion.path d="M4 10.5l3.5 3.5L16 6" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.25 }} />
+            </svg>
+          )}
+        </span>
         At least 8 characters
       </p>
     </div>
@@ -191,31 +203,35 @@ function ConfirmScreen({
 
   return (
     <div className="text-center">
-      <div className="w-14 h-14 rounded-full bg-pine-soft text-pine-deep flex items-center justify-center mx-auto mb-4 text-2xl">
-        ✉
-      </div>
-      <h1 className="font-display text-2xl font-semibold tracking-tight">
-        Check your inbox
-      </h1>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={SPRING}
+        className="w-14 h-14 rounded-pill bg-pine-soft text-pine-deep flex items-center justify-center mx-auto mb-4"
+      >
+        <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="3" y="5" width="18" height="14" rx="2.5" />
+          <path d="M3.5 7.5 12 13l8.5-5.5" />
+        </svg>
+      </motion.div>
+      <h1 className="font-display text-display-sm font-semibold">Check your inbox</h1>
       <p className="text-sm text-muted mt-2">
         We sent a confirmation link to{" "}
         <span className="font-medium text-ink">{email}</span>. Click it to
         activate your account, then log in.
       </p>
-      <p className="text-xs text-muted mt-3">
-        Can&apos;t find it? Check your spam folder.
-      </p>
+      <p className="text-xs text-muted mt-3">Can&apos;t find it? Check your spam folder.</p>
 
-      {msg && <p className="text-sm text-pine-deep mt-4">{msg}</p>}
-      {err && <p className="text-sm text-danger mt-4">{err}</p>}
+      <div className="mt-4 text-left">
+        {msg && <FormMessage tone="info">{msg}</FormMessage>}
+        <FormError>{err}</FormError>
+      </div>
 
-      <button
-        disabled={pending || cooldown > 0}
-        onClick={resend}
-        className="mt-5 text-sm rounded-lg border border-line px-4 py-2 hover:border-ink/30 disabled:opacity-50"
-      >
-        {pending ? "Sending…" : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend email"}
-      </button>
+      <div className="mt-5">
+        <Button variant="secondary" size="sm" disabled={cooldown > 0} loading={pending} onClick={resend}>
+          {pending ? "Sending…" : cooldown > 0 ? `Resend in ${cooldown}s` : "Resend email"}
+        </Button>
+      </div>
 
       <p className="text-sm text-muted mt-4">
         <button onClick={onEditEmail} className="text-pine font-medium hover:underline">

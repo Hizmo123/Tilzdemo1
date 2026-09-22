@@ -12,13 +12,23 @@ export function Label({
   );
 }
 
+// Text input on the Phase 0 tokens: 44px tall (tap target), radius-md like
+// the md Button so a field and the button under it line up, resting shadow,
+// accent focus ring. `invalid` (or aria-invalid) swaps the ring to danger.
 export function Input({
   className = "",
+  invalid,
   ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
+}: React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) {
+  const isInvalid = invalid || props["aria-invalid"] === true || props["aria-invalid"] === "true";
   return (
     <input
-      className={`w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-ink placeholder:text-muted/70 focus:border-pine focus:outline-none transition-colors ${className}`}
+      aria-invalid={isInvalid || undefined}
+      className={`w-full h-11 rounded-[var(--radius-md)] bg-surface px-3.5 text-ink placeholder:text-muted/70 border shadow-rest transition-[border-color,box-shadow] duration-[var(--dur-fast)] focus:outline-none focus:ring-[3px] ${
+        isInvalid
+          ? "border-danger focus:border-danger focus:ring-danger/20"
+          : "border-line hover:border-line-strong focus:border-pine focus:ring-pine/20"
+      } ${className}`}
       {...props}
     />
   );
@@ -38,6 +48,8 @@ export function FormMessage({
       ? "bg-danger-soft text-danger"
       : "bg-pine-soft text-pine-deep";
   return (
-    <p className={`rounded-lg px-3.5 py-2.5 text-sm ${styles}`}>{children}</p>
+    <p role={tone === "error" ? "alert" : undefined} className={`rounded-[var(--radius-sm)] px-3.5 py-2.5 text-sm ${styles}`}>
+      {children}
+    </p>
   );
 }

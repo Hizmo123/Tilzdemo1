@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { signInWithGoogle, type AuthState } from "./actions";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { FormMessage } from "@/components/ui/field";
+import { FormError } from "./form-error";
 
 const initial: AuthState = {};
 
@@ -16,19 +16,14 @@ export function GoogleSignInButton() {
   return (
     <div>
       <form action={action}>
-        <SubmitButton
-          pendingLabel="Redirecting…"
-          className="!bg-surface !text-ink border border-line hover:!bg-paper flex items-center justify-center gap-2.5"
-        >
+        <SubmitButton variant="secondary" pendingLabel="Redirecting…" className="gap-2.5">
           <GoogleLogo />
           Continue with Google
         </SubmitButton>
       </form>
-      {state.error && (
-        <div className="mt-2">
-          <FormMessage>{state.error}</FormMessage>
-        </div>
-      )}
+      <div className={state.error ? "mt-2" : ""}>
+        <FormError>{state.error}</FormError>
+      </div>
     </div>
   );
 }
