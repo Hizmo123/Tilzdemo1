@@ -5,15 +5,18 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 const SESSION_KEY_PREFIX = "tillz_intro_shown_";
 
-// A ~1.4s brand moment on the first hard load of a table link: a curved
-// panel in the venue's own colour sweeps down from the top, holds with a
-// small "Powered by Tillz", then keeps travelling off the bottom to reveal
-// the landing page — which is already painted underneath the whole time.
+// A quiet ~3s brand moment on the first hard load of a table link: a soft,
+// low-contrast wave washes down over the (already-painted) landing page,
+// pauses on a small "Powered by Tillz" wordmark, then continues down and
+// off the bottom of the screen. Deliberately plain white — never the
+// venue's brand colour — so it reads as a calm, neutral beat rather than
+// venue chrome, and never clashes with whatever theme the venue picked.
 //
 //   - Decorative only. pointer-events-none, so nothing is blocked, and the
 //     landing's own data/entrance are never held back — the panel just
 //     covers them visually until its single translateY run ends.
-//   - One translateY animation + two opacity fades: transform/opacity only.
+//   - One translateY animation + one opacity/y fade for the wordmark:
+//     transform/opacity only, soft ease, no bounce.
 //   - Runs once per tab session per table token (sessionStorage, guarded),
 //     so Menu → Back within the app, or a router refresh, never replays it.
 //   - prefers-reduced-motion: renders nothing at all — no wave, no delay.
@@ -43,50 +46,49 @@ export function BrandIntro({ token }: { token: string }) {
         <motion.div
           key="brand-intro"
           aria-hidden
-          exit={{ opacity: 0, transition: { duration: 0.15 } }}
+          exit={{ opacity: 0, transition: { duration: 0.2 } }}
           className="fixed inset-0 z-[60] pointer-events-none overflow-hidden"
         >
-          {/* The sweeping panel. Taller than the viewport so its curved
-              leading/trailing edges (the SVGs hanging off each end) are
-              what the customer sees crossing the screen, never a hard
-              horizontal line. Colours: the venue's accent gradient, with
-              each curve matched to the gradient end it sits on. */}
+          {/* The sweeping panel: plain white, taller than the viewport so
+              its soft curved leading/trailing edges (faint grey tint, not
+              a hard line) are what's visible crossing the screen. */}
           <motion.div
-            className="absolute inset-x-0 top-0 h-[120vh] bg-accent-gradient"
-            initial={{ y: "-130%" }}
-            animate={{ y: ["-130%", "0%", "0%", "130%"] }}
+            className="absolute inset-x-0 top-0 h-[130vh] bg-white"
+            initial={{ y: "-108%" }}
+            animate={{ y: ["-108%", "0%", "0%", "108%"] }}
             transition={{
-              duration: 1.4,
-              times: [0, 0.34, 0.66, 1],
-              ease: ["easeOut", "linear", "easeIn"],
+              duration: 3,
+              times: [0, 0.34, 0.62, 1],
+              ease: ["easeInOut", "linear", "easeInOut"],
             }}
             onAnimationComplete={() => setShow(false)}
           >
             <svg
-              className="absolute left-0 top-0 w-full h-[12vh] -translate-y-full text-[var(--color-pine)]"
-              viewBox="0 0 1440 120"
+              className="absolute left-0 top-0 w-full h-[8vh] -translate-y-full"
+              viewBox="0 0 1440 100"
               preserveAspectRatio="none"
             >
-              <path fill="currentColor" d="M0,120 C360,0 1080,0 1440,120 L1440,120 L0,120 Z" />
+              <path fill="#f4f3f0" d="M0,100 C360,20 1080,20 1440,100 L1440,100 L0,100 Z" />
             </svg>
             <svg
-              className="absolute left-0 bottom-0 w-full h-[12vh] translate-y-full text-[var(--color-pine-strong)]"
-              viewBox="0 0 1440 120"
+              className="absolute left-0 bottom-0 w-full h-[8vh] translate-y-full"
+              viewBox="0 0 1440 100"
               preserveAspectRatio="none"
             >
-              <path fill="currentColor" d="M0,0 C360,120 1080,120 1440,0 L1440,0 L0,0 Z" />
+              <path fill="#f4f3f0" d="M0,0 C360,80 1080,80 1440,0 L1440,0 L0,0 Z" />
             </svg>
 
-            {/* Courtesy beat: small, centred, only visible during the hold. */}
+            {/* Courtesy beat: small, quiet, centred — visible only during
+                the hold, refined rather than bold. */}
             <motion.div
-              className="absolute inset-0 flex items-center justify-center text-on-accent"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: [0, 0, 1, 1, 0], y: [8, 8, 0, 0, -6] }}
-              transition={{ duration: 1.4, times: [0, 0.3, 0.42, 0.6, 0.72], ease: "easeOut" }}
+              className="absolute inset-0 flex items-center justify-center"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: [0, 0, 1, 1, 0], y: [6, 6, 0, 0, -4] }}
+              transition={{ duration: 3, times: [0, 0.3, 0.42, 0.58, 0.7], ease: "easeInOut" }}
             >
-              <p className="flex items-baseline gap-1.5 -translate-y-[10vh]">
-                <span className="text-[11px] uppercase tracking-[0.22em] opacity-80">Powered by</span>
-                <span className="font-display text-xl font-semibold tracking-tight">Tillz</span>
+              <p className="flex items-baseline gap-1.5 text-[color:var(--color-ink-soft)]">
+                <span className="text-[10px] uppercase tracking-[0.25em] opacity-70">Powered by</span>
+                <span className="font-display text-base font-medium tracking-tight">Tillz</span>
               </p>
             </motion.div>
           </motion.div>
