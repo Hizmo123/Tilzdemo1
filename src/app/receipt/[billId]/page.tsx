@@ -119,9 +119,14 @@ export default async function OwnerReceiptPage({
                   test: p.test,
                   createdAt: p.createdAt.toISOString(),
                 }))}
-              onRefund={(paymentId, amountCents, reason) =>
-                refundPaymentAction(bill.id, paymentId, amountCents, reason)
-              }
+              // A bound Server Action, not an inline closure — the latter is
+              // an "event handler" from the server/client boundary's point
+              // of view and Next.js refuses to pass it to a Client Component
+              // ("Event handlers cannot be passed to Client Component
+              // props"). .bind() on an actual "use server" action is the
+              // supported way to pre-fill billId while still crossing the
+              // boundary as a real Server Action reference.
+              action={refundPaymentAction.bind(null, bill.id)}
             />
           </div>
         )}

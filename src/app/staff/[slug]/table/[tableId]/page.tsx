@@ -205,9 +205,11 @@ export default async function StaffTablePage({
                 test: p.test,
                 createdAt: p.createdAt.toISOString(),
               }))}
-              onRefund={(paymentId, amountCents, reason) =>
-                staffRefundPayment(slug, table.id, paymentId, amountCents, reason)
-              }
+              // Bound Server Action, not an inline closure — see the same
+              // comment on the owner receipt page's RefundPanel usage for
+              // why (Next.js refuses to pass a plain function/closure to a
+              // Client Component prop).
+              action={staffRefundPayment.bind(null, slug, table.id)}
             />
           )}
         </div>
