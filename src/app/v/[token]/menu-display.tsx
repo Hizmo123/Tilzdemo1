@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import { formatCents } from "@/lib/money";
 import { BADGE_META, type BadgeKey } from "@/lib/menu-badges";
@@ -181,9 +182,45 @@ export function MenuDisplay({
   const isMagazine = layout === "magazine";
   const isMinimal = layout === "minimal";
 
+  // Client-side only — no refetch. null = "All".
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const visibleCategories = activeCategoryId
+    ? menu.filter((cat) => cat.id === activeCategoryId)
+    : menu;
+
   return (
     <div className={isMagazine ? "space-y-10" : "space-y-6"}>
-      {menu.map((cat) => (
+      {menu.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          <button
+            type="button"
+            onClick={() => setActiveCategoryId(null)}
+            className={`shrink-0 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+              activeCategoryId === null
+                ? "border-pine bg-pine-soft text-pine-deep"
+                : "border-line text-muted hover:border-ink/30"
+            }`}
+          >
+            All
+          </button>
+          {menu.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setActiveCategoryId(cat.id)}
+              className={`shrink-0 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
+                activeCategoryId === cat.id
+                  ? "border-pine bg-pine-soft text-pine-deep"
+                  : "border-line text-muted hover:border-ink/30"
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visibleCategories.map((cat) => (
         <section key={cat.id}>
           <h3
             style={{ fontSize: isMagazine ? `calc(${ts.categoryHeader} + 4px)` : ts.categoryHeader }}
