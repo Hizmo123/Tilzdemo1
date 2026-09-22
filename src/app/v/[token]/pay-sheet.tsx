@@ -263,7 +263,12 @@ export function PaySheet({
         // flashing/disappearing under the resulting re-render. The error
         // stays until the user edits an input or taps Pay again (both clear
         // it explicitly) — never auto-cleared, never closes/resets the sheet.
-        setError(res.error);
+        // res.error is always a plain customer-facing message by the time it
+        // reaches here (payBillAmount/payBillItems map any Square failure to
+        // a friendly string server-side — the raw category/code/detail never
+        // leaves the server); the fallback below is just a backstop against
+        // an unexpectedly empty string, not a raw-error filter.
+        setError(res.error || "Your payment couldn't be processed. Please try again.");
       } else if (res) {
         onPaid(res.amountPaidCents || optimistic, res.fullyPaid);
         router.refresh();

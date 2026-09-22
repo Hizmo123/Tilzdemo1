@@ -38,6 +38,36 @@ export function formatSquareError(e: unknown): string {
   return String(e);
 }
 
+export type SquareErrorKind = "declined" | "error";
+
+// Square buckets every card-specific failure (a real decline, CVV mismatch,
+// expired card, insufficient funds, etc.) under the PAYMENT_METHOD_ERROR
+// category — checking that one category covers the whole "try a different
+// card" class the customer-facing message needs to distinguish from an
+// infrastructural/configuration failure.
+function classifySquareError(e: unknown): { kind: SquareErrorKind; friendlyMessage: string } {
+  if (e instanceof SquareError && e.errors.some((err) => err.category === "PAYMENT_METHOD_ERROR")) {
+    return { kind: "declined", friendlyMessage: "Your card was declined. Please try another card." };
+  }
+  return { kind: "error", friendlyMessage: "Your payment couldn't be processed. Please try again." };
+}
+
+// Thrown instead of a plain Error on a failed Square order/payment call.
+// `.message` (Error's own field) stays the FULL diagnostic detail —
+// category/code/detail via formatSquareError — for server-side logs;
+// `.friendlyMessage`/`.kind` are what's safe to return to the customer.
+// Never let `.message` reach the client; always use `.friendlyMessage` there.
+export class SquarePaymentError extends Error {
+  readonly kind: SquareErrorKind;
+  readonly friendlyMessage: string;
+  constructor(detail: string, kind: SquareErrorKind, friendlyMessage: string) {
+    super(detail);
+    this.name = "SquarePaymentError";
+    this.kind = kind;
+    this.friendlyMessage = friendlyMessage;
+  }
+}
+
 // Charges a card via Square for the EXACT amount Tillz computed. The two
 // highest-risk invariants in this whole phase live here:
 //   1. The Square Order's own computed total must equal what we intend to
@@ -117,13 +147,7 @@ export async function chargeBillViaSquare(
 
   // location_id is required on the Order itself — an empty string is just as
   // unusable as null/undefined here, so this is a falsy check, not a strict
-  // null check. Logged explicitly (not just guarded) so a MISSING_REQUIRED_
-  // PARAMETER on location_id is immediately distinguishable in the logs from
-  // one caused by a line item instead.
-  console.error("square.charge_location_id", {
-    billId: bill.id,
-    locationId: connection.locationId || "(empty)",
-  });
+  // null check.
   if (!connection.locationId) {
     throw new Error("Square connection has no location selected.");
   }
@@ -177,21 +201,6 @@ export async function chargeBillViaSquare(
     ...(li.note && li.note.trim() ? { note: li.note.trim() } : {}),
   }));
 
-  console.error("square.charge_line_items", {
-    billId: bill.id,
-    lineItems: orderLineItems.map((li) => ({
-      name: li.name,
-      quantity: li.quantity,
-      quantityType: typeof li.quantity,
-      // Number(), not .toString() — same reasoning as the order_body log
-      // below: this is a real bigint in the actual request, and logging it
-      // as a string here would misleadingly suggest otherwise.
-      basePriceMoneyAmount: Number(li.basePriceMoney.amount),
-      basePriceMoneyCurrency: li.basePriceMoney.currency,
-      note: "note" in li ? li.note : undefined,
-    })),
-  });
-
   const serviceCharges =
     surchargeCents > 0
       ? [
@@ -232,45 +241,16 @@ export async function chargeBillViaSquare(
     idempotencyKey: squareIdempotencyKey(idempotencyKey, "order"),
   };
 
-  // Logging-only concern: native JSON.stringify can't serialise a bigint at
-  // all without a replacer, so one is required here just to produce a log
-  // line — but returning value.toString() (a string) makes a correctly-typed
-  // bigint amount print as a QUOTED "2000" in the log, which reads exactly
-  // like the real request carries a string, even though it doesn't. The
-  // actual request object below (orderRequest, passed to client.orders.create
-  // untouched by this JSON.stringify call) still holds real bigints — the
-  // SDK's own wire serialiser (core/json.js toJson) converts those to
-  // genuine unquoted JSON numbers. Number(...) here mirrors that for the log
-  // (cents amounts are always far below Number.MAX_SAFE_INTEGER), so what's
-  // logged actually matches what goes over the wire.
-  console.error(
-    "square.order_body",
-    JSON.stringify(orderRequest, (_key, value) => (typeof value === "bigint" ? Number(value) : value)),
-  );
-  console.error("square.order_idempotency_key", {
-    billId: bill.id,
-    key: orderRequest.idempotencyKey,
-    length: orderRequest.idempotencyKey.length,
-  });
-
   let orderResponse;
   try {
     orderResponse = await client.orders.create(orderRequest);
   } catch (e) {
-    const detail = formatSquareError(e);
-    console.error("square.create_order_failed", {
-      billId: bill.id,
-      goodsCents,
-      surchargeCents,
-      currency,
-      error: detail,
-    });
-    throw new Error(`Square order creation failed — ${detail}`);
+    const { kind, friendlyMessage } = classifySquareError(e);
+    throw new SquarePaymentError(`Square order creation failed — ${formatSquareError(e)}`, kind, friendlyMessage);
   }
 
   const order = orderResponse.order;
   if (!order?.id) {
-    console.error("square.create_order_no_id", { billId: bill.id, response: orderResponse });
     throw new Error("Square did not return an order id.");
   }
 
@@ -278,15 +258,6 @@ export async function chargeBillViaSquare(
   const expectedCents = goodsCents + surchargeCents;
   const actualCents = order.totalMoney?.amount != null ? Number(order.totalMoney.amount) : NaN;
   if (actualCents !== expectedCents) {
-    console.error("square.order_total_mismatch", {
-      billId: bill.id,
-      orderId: order.id,
-      expectedCents,
-      actualCents,
-      goodsCents,
-      surchargeCents,
-      currency,
-    });
     throw new SquarePriceMismatchError(expectedCents, actualCents);
   }
 
@@ -313,23 +284,12 @@ export async function chargeBillViaSquare(
       ...(appFeeCents > 0 ? { appFeeMoney: { amount: BigInt(appFeeCents), currency: toCurrency(currency) } } : {}),
     });
   } catch (e) {
-    const detail = formatSquareError(e);
-    console.error("square.create_payment_failed", {
-      billId: bill.id,
-      orderId: order.id,
-      expectedOrderTotalCents: expectedCents,
-      amountSentCents: goodsCents + surchargeCents,
-      tipCents,
-      appFeeCents,
-      currency,
-      error: detail,
-    });
-    throw new Error(`Square payment failed — ${detail}`);
+    const { kind, friendlyMessage } = classifySquareError(e);
+    throw new SquarePaymentError(`Square payment failed — ${formatSquareError(e)}`, kind, friendlyMessage);
   }
 
   const payment = paymentResponse.payment;
   if (!payment?.id) {
-    console.error("square.create_payment_no_id", { billId: bill.id, orderId: order.id, response: paymentResponse });
     throw new Error("Square did not return a payment id.");
   }
 

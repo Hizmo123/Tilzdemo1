@@ -7,7 +7,13 @@ import { formatCents } from "@/lib/money";
 import { log } from "@/lib/log";
 import { entitlementsForTier } from "@/lib/entitlements";
 import { getVenuePaymentContext } from "@/lib/square/context";
-import { chargeBillViaSquare, refundViaSquare, type SquareChargeLineItem } from "@/lib/square/pay";
+import {
+  chargeBillViaSquare,
+  refundViaSquare,
+  formatSquareError,
+  SquarePaymentError,
+  type SquareChargeLineItem,
+} from "@/lib/square/pay";
 
 // ---- Visit resolution -------------------------------------------------------
 
@@ -1175,18 +1181,23 @@ export async function payBillAmount(
         };
       } catch (e) {
         await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
+        // The FULL Square error (category/code/detail — e.message already
+        // carries it, baked in by chargeBillViaSquare) is logged here, once,
+        // for diagnosing real failures in Vercel logs — never returned to
+        // the customer. Only SquarePaymentError.friendlyMessage crosses back
+        // to the pay sheet; anything else (a non-Square/local error) falls
+        // back to the same generic message.
         const detail = e instanceof Error ? e.message : String(e);
-        console.error("square.pay_bill_amount_failed", { billId: bill.id, error: detail });
         log.warn("payment.square_failed", {
           restaurantId: resolved.visit.restaurantId,
           billId: bill.id,
           error: detail,
         });
-        // The detailed Square error (already formatted as category/code:
-        // detail by chargeBillViaSquare) reaches the client verbatim, not a
-        // generic message — this is what's actually shown in the pay sheet,
-        // and what needs to be visible to diagnose a real failure.
-        return { error: detail };
+        const friendly =
+          e instanceof SquarePaymentError
+            ? e.friendlyMessage
+            : "Your payment couldn't be processed. Please try again.";
+        return { error: friendly };
       }
     } else {
       const result = await provider.createPayment({
@@ -1473,14 +1484,20 @@ export async function payBillItems(
         };
       } catch (e) {
         await releaseItemsReserve(bill.id, reservations, newPaid, expectedPaid, bill.status, bill.paidAt);
+        // See the matching catch in payBillAmount above for why this is the
+        // one log line (full detail, never sent to the client) and why the
+        // return uses friendlyMessage instead.
         const detail = e instanceof Error ? e.message : String(e);
-        console.error("square.pay_bill_items_failed", { billId: bill.id, error: detail });
         log.warn("payment.square_failed", {
           restaurantId: resolved.visit.restaurantId,
           billId: bill.id,
           error: detail,
         });
-        return { error: detail };
+        const friendly =
+          e instanceof SquarePaymentError
+            ? e.friendlyMessage
+            : "Your payment couldn't be processed. Please try again.";
+        return { error: friendly };
       }
     } else {
       const result = await provider.createPayment({
@@ -1704,10 +1721,17 @@ export async function refundBillPayment(
         };
       } catch (e) {
         await releaseRefundReserve(payment.id, newRefunded, expectedRefunded);
+        // formatSquareError, not e.message — refundViaSquare lets the raw
+        // SquareError propagate unformatted (unlike chargeBillViaSquare), so
+        // e.message alone would be Square's generic HTTP-derived text, not
+        // the category/code/detail breakdown this log needs to stay
+        // diagnosable. The refund UI is staff/owner-only, not the customer
+        // pay sheet, so its own generic message here was already safe.
         log.warn("payment.refund_square_failed", {
           restaurantId,
+          billId: payment.billId,
           paymentId: payment.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: formatSquareError(e),
         });
         return { error: "Refund failed. Please try again." };
       }
