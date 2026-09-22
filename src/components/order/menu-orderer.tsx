@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef, useEffect, useMemo } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { formatCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -719,11 +719,20 @@ function ItemSheetBody({
 }) {
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [quantity, setQuantity] = useState(1);
-  const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const reduced = useReducedMotion();
+
+  // Required groups the customer hasn't filled yet, surfaced at the moment
+  // Add is blocked — NOT computed reactively on every render, so a group
+  // that's still empty doesn't show as an error before they've even tried
+  // to submit (see point 5: the "Required" chip is the only always-on cue).
+  const [missingGroupIds, setMissingGroupIds] = useState<Set<string>>(new Set());
+  // Bumped on every blocked attempt so the shake animations (group + button)
+  // retrigger even if the same groups are still missing.
+  const [attempt, setAttempt] = useState(0);
+  const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   function toggle(group: OrderGroup, optionId: string) {
-    setError(null);
     haptic(6);
     setSelected((s) => {
       const cur = s[group.id] ?? [];
@@ -736,6 +745,15 @@ function ItemSheetBody({
       } else {
         if (group.maxSelect > 0 && cur.length >= group.maxSelect) return s;
         next = [...cur, optionId];
+      }
+      // A group that now satisfies its requirement clears its own
+      // highlight/message immediately — no need to wait for another Add tap.
+      if (group.required && next.length > 0 && missingGroupIds.has(group.id)) {
+        setMissingGroupIds((prev) => {
+          const nextSet = new Set(prev);
+          nextSet.delete(group.id);
+          return nextSet;
+        });
       }
       return { ...s, [group.id]: next };
     });
@@ -750,12 +768,14 @@ function ItemSheetBody({
 
   function confirm() {
     if (!item.available) return;
-    for (const g of item.groups) {
-      const c = (selected[g.id] ?? []).length;
-      if (g.required && c < 1) {
-        setError(`Please choose ${g.name}.`);
-        return;
-      }
+    const missing = item.groups.filter((g) => g.required && (selected[g.id] ?? []).length < 1);
+    if (missing.length > 0) {
+      setMissingGroupIds(new Set(missing.map((g) => g.id)));
+      setAttempt((a) => a + 1);
+      haptic([20, 40, 20]);
+      const firstEl = groupRefs.current[missing[0].id];
+      firstEl?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+      return;
     }
     const labelParts = item.groups
       .flatMap((g) => g.options)
@@ -772,6 +792,15 @@ function ItemSheetBody({
       note: note.trim() || undefined,
     });
   }
+
+  const missingGroups = item.groups.filter((g) => missingGroupIds.has(g.id));
+  const missingMessage =
+    missingGroups.length === 0
+      ? null
+      : missingGroups.length === 1
+        ? `Choose ${missingGroups[0].name} to continue`
+        : `Choose ${missingGroups.length} options to continue`;
+  const shakeAnim = reduced ? undefined : { x: [0, -6, 6, -4, 4, 0] };
 
   return (
     <div className="-mx-5 -mt-4">
@@ -796,40 +825,74 @@ function ItemSheetBody({
           <ItemBadges badges={item.badges} allergens={item.allergens} />
         </div>
 
-        {item.groups.map((g) => (
-          <div key={g.id}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-semibold text-sm">{g.name}</span>
-              <span className="text-xs text-muted">
-                {g.required ? "Required" : "Optional"}
-                {g.maxSelect > 1 ? ` · up to ${g.maxSelect}` : ""}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {g.options.map((o) => {
-                const on = (selected[g.id] ?? []).includes(o.id);
-                return (
-                  <motion.button
-                    key={o.id}
-                    type="button"
-                    whileTap={{ scale: 0.95 }}
-                    transition={SPRING_PRESS}
-                    aria-pressed={on}
-                    onClick={() => toggle(g, o.id)}
-                    className={`h-10 px-3.5 rounded-pill text-sm font-medium inline-flex items-center gap-2 transition-[background-color,color,box-shadow] duration-[var(--dur-fast)] ${
-                      on ? "bg-pine text-on-accent shadow-accent" : "bg-surface border border-line text-ink-soft hover:border-line-strong"
-                    }`}
-                  >
-                    {o.name}
-                    {o.priceDeltaCents > 0 && (
-                      <span className={`tabular ${on ? "opacity-85" : "text-muted"}`}>+{formatCents(o.priceDeltaCents, currency)}</span>
+        {item.groups.map((g) => {
+          const missing = missingGroupIds.has(g.id);
+          return (
+            <div
+              key={g.id}
+              ref={(el) => {
+                groupRefs.current[g.id] = el;
+              }}
+              className={`rounded-[var(--radius-md)] transition-colors duration-[var(--dur-fast)] -mx-3 p-3 ${
+                missing ? "bg-danger-soft ring-2 ring-danger/50" : ""
+              }`}
+            >
+              {/* Keyed on `attempt` (not just `missing`) so tapping Add a
+                  second time with the SAME group still unfilled replays the
+                  shake — a plain animate-prop change wouldn't re-fire since
+                  `missing` itself doesn't flip in that case. */}
+              <motion.div
+                key={missing ? attempt : "settled"}
+                animate={missing ? shakeAnim : undefined}
+                transition={{ duration: 0.4 }}
+              >
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <span className="font-semibold text-sm">{g.name}</span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    {g.required ? (
+                      <span
+                        className={`text-[10px] font-semibold uppercase tracking-wide rounded-pill px-2 py-0.5 ${
+                          missing ? "bg-danger text-white" : "bg-surface-2 text-ink-soft"
+                        }`}
+                      >
+                        Required
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted">Optional</span>
                     )}
-                  </motion.button>
-                );
-              })}
+                    {g.maxSelect > 1 && <span className="text-xs text-muted">up to {g.maxSelect}</span>}
+                  </span>
+                </div>
+                {missing && (
+                  <p className="text-xs font-medium text-danger mb-2">Choose {g.name.toLowerCase()}</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {g.options.map((o) => {
+                    const on = (selected[g.id] ?? []).includes(o.id);
+                    return (
+                      <motion.button
+                        key={o.id}
+                        type="button"
+                        whileTap={{ scale: 0.95 }}
+                        transition={SPRING_PRESS}
+                        aria-pressed={on}
+                        onClick={() => toggle(g, o.id)}
+                        className={`h-10 px-3.5 rounded-pill text-sm font-medium inline-flex items-center gap-2 transition-[background-color,color,box-shadow] duration-[var(--dur-fast)] ${
+                          on ? "bg-pine text-on-accent shadow-accent" : "bg-surface border border-line text-ink-soft hover:border-line-strong"
+                        }`}
+                      >
+                        {o.name}
+                        {o.priceDeltaCents > 0 && (
+                          <span className={`tabular ${on ? "opacity-85" : "text-muted"}`}>+{formatCents(o.priceDeltaCents, currency)}</span>
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </motion.div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Quantity</span>
@@ -872,19 +935,29 @@ function ItemSheetBody({
           />
         </div>
 
-        {error && (
-          <motion.p key={error} animate={{ x: [0, -6, 6, -4, 4, 0] }} transition={{ duration: 0.4 }} className="text-sm text-danger">
-            {error}
-          </motion.p>
-        )}
       </div>
 
-      {/* Sticky CTA inside the sheet so it's always reachable. */}
+      {/* Sticky CTA inside the sheet so it's always reachable — this is the
+          ALWAYS-VISIBLE cue on a blocked Add: the customer sees why nothing
+          happened here even before the scroll-to-group above lands. */}
       <div className="sticky bottom-0 inset-x-0 px-5 pt-3 pb-safe glass border-x-0 border-b-0">
-        <Button variant="primary" size="lg" full onClick={confirm} disabled={!item.available} className="justify-between">
-          <span>{item.available ? "Add to order" : "Sold out"}</span>
-          <AnimatedMoney cents={unit * quantity} currency={currency} className="font-display text-lg" />
-        </Button>
+        {missingMessage && (
+          <motion.p
+            key={attempt}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="text-sm font-medium text-danger text-center mb-2"
+          >
+            {missingMessage}
+          </motion.p>
+        )}
+        <motion.div key={`btn-${attempt}`} animate={missingMessage ? shakeAnim : undefined} transition={{ duration: 0.4 }}>
+          <Button variant="primary" size="lg" full onClick={confirm} disabled={!item.available} className="justify-between">
+            <span>{item.available ? "Add to order" : "Sold out"}</span>
+            <AnimatedMoney cents={unit * quantity} currency={currency} className="font-display text-lg" />
+          </Button>
+        </motion.div>
       </div>
     </div>
   );
