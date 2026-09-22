@@ -1926,6 +1926,51 @@ export async function getRecentOrders(
   });
 }
 
+export type OrderHistoryEntry = {
+  id: string;
+  tableLabel: string;
+  status: string;
+  source: string;
+  totalCents: number;
+  servedAt: Date | null;
+  createdAt: Date;
+  items: { id: string; name: string; quantity: number }[];
+};
+
+// Completed orders for the dashboard Orders page's History section — the
+// schema's actual terminal "done" status is SERVED (there's no separate
+// COMPLETED value), so that's what "completed" means here; cancelled orders
+// are a different outcome and aren't included. Capped by count (not a date
+// window like getRecentOrders above), newest first — reuses the
+// [restaurantId, status, servedAt] index also used by getRecentlyServed.
+export async function getOrderHistory(
+  restaurantId: string,
+  limit = 50,
+): Promise<OrderHistoryEntry[]> {
+  const orders = await prisma.order.findMany({
+    where: { restaurantId, status: "SERVED" },
+    orderBy: { servedAt: "desc" },
+    take: limit,
+    include: {
+      items: { orderBy: { createdAt: "asc" } },
+      bill: { include: { table: true } },
+    },
+  });
+
+  return orders.map((o) => ({
+    id: o.id,
+    tableLabel: o.bill.table?.label ?? "Counter",
+    status: o.status,
+    source: o.source,
+    totalCents: o.items
+      .filter((it) => !it.voided)
+      .reduce((sum, it) => sum + it.lineTotalCents, 0),
+    servedAt: o.servedAt,
+    createdAt: o.createdAt,
+    items: o.items.map((it) => ({ id: it.id, name: it.nameSnapshot, quantity: it.quantity })),
+  }));
+}
+
 // ---- Bump / recall ---------------------------------------------------------
 
 // Orders served in the last `minutes`, so the kitchen can recall one bumped by
