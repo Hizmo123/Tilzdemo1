@@ -87,6 +87,12 @@ function reorderSection(
 ): NavEntry[] {
   if (!rank) return items;
   return [...items].sort((a, b) => {
+    // Overview is pinned first regardless of emphasis — it's never in an
+    // EMPHASIS list (there's nothing to "emphasise" it over), so without
+    // this it was the one unranked item a ranked one (e.g. Tables, under
+    // digital_menu) could sort ahead of. Always-first, not just usually.
+    if (a.href === "/dashboard") return -1;
+    if (b.href === "/dashboard") return 1;
     const ra = rank.get(a.href);
     const rb = rank.get(b.href);
     if (ra !== undefined && rb !== undefined) return ra - rb;
