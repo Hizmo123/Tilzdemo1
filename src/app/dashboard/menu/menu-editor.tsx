@@ -235,56 +235,87 @@ function CategoryBlock({
     if (state && !state.error) ref.current?.reset();
   }, [state]);
 
+  // Collapsed by default — a venue with a dozen categories otherwise has to
+  // scroll past every item in every category just to reach the next one.
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-      <h3 className="font-display text-xl font-semibold tracking-tight mb-3 flex items-center gap-2">
-        {category.name}
-      </h3>
-
-      <CategoryOptions category={category} stations={stations} />
-
-      {category.items.length > 0 && (
-        <ul className="divide-y divide-line mb-5">
-          {category.items.map((item) => (
-            <ItemRow key={item.id} item={item} currency={currency} stations={stations} />
-          ))}
-        </ul>
-      )}
-
-      <form
-        ref={ref}
-        action={action}
-        className="grid sm:grid-cols-[1fr_1fr_120px_auto] gap-3 items-end border-t border-line pt-5"
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-3 text-left"
+        aria-expanded={open}
       >
-        <input type="hidden" name="categoryId" value={category.id} />
-        <div>
-          <Label htmlFor={`name-${category.id}`}>Item</Label>
-          <Input
-            id={`name-${category.id}`}
-            name="name"
-            placeholder="Chicken Burger"
-            required
+        <h3 className="font-display text-xl font-semibold tracking-tight flex items-center gap-2 min-w-0">
+          <span className="truncate">{category.name}</span>
+          <span className="shrink-0 text-xs font-normal text-muted bg-paper rounded-full px-2 py-0.5">
+            {category.items.length}
+          </span>
+        </h3>
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          className={`shrink-0 w-4 h-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <path
+            d="M5 7.5L10 12.5L15 7.5"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
-        </div>
-        <div>
-          <Label htmlFor={`desc-${category.id}`}>Description</Label>
-          <Input
-            id={`desc-${category.id}`}
-            name="description"
-            placeholder="Crispy chicken, house sauce"
-          />
-        </div>
-        <div>
-          <Label htmlFor={`price-${category.id}`}>Price</Label>
-          <Input id={`price-${category.id}`} name="price" placeholder="24.00" required />
-        </div>
-        <div>
-          <SubmitButton pendingLabel="…">Add</SubmitButton>
-        </div>
-      </form>
-      {state.error && (
+        </svg>
+      </button>
+
+      {open && (
         <div className="mt-3">
-          <FormMessage tone="error">{state.error}</FormMessage>
+          <CategoryOptions category={category} stations={stations} />
+
+          {category.items.length > 0 && (
+            <ul className="divide-y divide-line mb-5">
+              {category.items.map((item) => (
+                <ItemRow key={item.id} item={item} currency={currency} stations={stations} />
+              ))}
+            </ul>
+          )}
+
+          <form
+            ref={ref}
+            action={action}
+            className="grid sm:grid-cols-[1fr_1fr_120px_auto] gap-3 items-end border-t border-line pt-5"
+          >
+            <input type="hidden" name="categoryId" value={category.id} />
+            <div>
+              <Label htmlFor={`name-${category.id}`}>Item</Label>
+              <Input
+                id={`name-${category.id}`}
+                name="name"
+                placeholder="Chicken Burger"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor={`desc-${category.id}`}>Description</Label>
+              <Input
+                id={`desc-${category.id}`}
+                name="description"
+                placeholder="Crispy chicken, house sauce"
+              />
+            </div>
+            <div>
+              <Label htmlFor={`price-${category.id}`}>Price</Label>
+              <Input id={`price-${category.id}`} name="price" placeholder="24.00" required />
+            </div>
+            <div>
+              <SubmitButton pendingLabel="…">Add</SubmitButton>
+            </div>
+          </form>
+          {state.error && (
+            <div className="mt-3">
+              <FormMessage tone="error">{state.error}</FormMessage>
+            </div>
+          )}
         </div>
       )}
     </div>
