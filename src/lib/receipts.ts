@@ -57,6 +57,21 @@ export type ReceiptData = {
   anyTest: boolean;
 };
 
+// Money-field inputs accept number | bigint defensively — Payment.amountCents
+// etc. are plain Prisma Int columns (always a JS number in practice), but a
+// Square-connected bill's Payment/Refund rows are the one place a bigint
+// (Square's own Money.amount type — see src/lib/square/pay.ts) could in
+// principle reach this boundary before being written to those Int columns.
+// Every money field is coerced to a real number below via money(), and NONE
+// of ReceiptData's fields (which flow into the TaxInvoice server component,
+// and separately into RefundPanel — a CLIENT component, where a bigint would
+// fail to serialise across the server/client boundary entirely) can end up
+// holding a bigint as a result.
+type Cents = number | bigint;
+function money(v: Cents): number {
+  return Number(v);
+}
+
 // Build ReceiptData from a bill's fields. Kept free of Prisma types so it can be
 // called from any server component with a plain shape.
 export function buildReceiptData(input: {
@@ -75,19 +90,19 @@ export function buildReceiptData(input: {
   items: {
     nameSnapshot: string;
     quantity: number;
-    lineTotalCents: number;
+    lineTotalCents: Cents;
     modifiers: unknown;
   }[];
-  totalCents: number;
-  amountPaidCents: number;
-  tipCents: number;
-  refundedCents: number;
+  totalCents: Cents;
+  amountPaidCents: Cents;
+  tipCents: Cents;
+  refundedCents: Cents;
   payments: {
     provider: string;
-    amountCents: number;
-    tipCents: number;
-    surchargeCents: number;
-    refundedCents: number;
+    amountCents: Cents;
+    tipCents: Cents;
+    surchargeCents: Cents;
+    refundedCents: Cents;
     test: boolean;
     createdAt: Date;
   }[];
@@ -111,24 +126,24 @@ export function buildReceiptData(input: {
     items: input.items.map((it) => ({
       name: it.nameSnapshot,
       quantity: it.quantity,
-      lineTotalCents: it.lineTotalCents,
+      lineTotalCents: money(it.lineTotalCents),
       modifiers: Array.isArray(it.modifiers)
         ? (it.modifiers as { name?: string }[])
             .map((m) => m?.name ?? "")
             .filter((s) => s.length > 0)
         : [],
     })),
-    totalCents: input.totalCents,
-    amountPaidCents: input.amountPaidCents,
-    tipCents: input.tipCents,
-    surchargeCents: input.payments.reduce((sum, p) => sum + p.surchargeCents, 0),
-    refundedCents: input.refundedCents,
+    totalCents: money(input.totalCents),
+    amountPaidCents: money(input.amountPaidCents),
+    tipCents: money(input.tipCents),
+    surchargeCents: money(input.payments.reduce((sum, p) => sum + money(p.surchargeCents), 0)),
+    refundedCents: money(input.refundedCents),
     payments: input.payments.map((p) => ({
       provider: p.provider,
-      amountCents: p.amountCents,
-      tipCents: p.tipCents,
-      surchargeCents: p.surchargeCents,
-      refundedCents: p.refundedCents,
+      amountCents: money(p.amountCents),
+      tipCents: money(p.tipCents),
+      surchargeCents: money(p.surchargeCents),
+      refundedCents: money(p.refundedCents),
       test: p.test,
       createdAt: p.createdAt.toISOString(),
     })),

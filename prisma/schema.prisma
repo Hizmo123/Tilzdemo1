@@ -328,14 +328,30 @@ model SquareConnection {
   merchantName    String?
   scopes          String[]
   connectedByUserId String
-  // Not currently set by the disconnect flow (which deletes the row after
-  // revoking at Square) — reserved for a future soft-revoke path.
+  // Not set by the disconnect flow (which deletes the row after revoking at
+  // Square) — set instead by the oauth.authorization.revoked webhook (Phase
+  // 4) when the venue disconnects Tillz from the Square Dashboard side
+  // rather than from Settings -> Integrations, so getVenuePaymentContext
+  // stops treating this connection as usable without deleting the row.
   revokedAt       DateTime?
   // Set by importCatalog() (Phase 2) on a successful reconcile. Null = never
   // imported yet.
   lastCatalogSyncAt DateTime?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+}
+
+// Dedup record for /api/square/webhook (Phase 4) — Square retries webhook
+// deliveries, so every verified event_id is recorded here before it's acted
+// on; a retry of an already-processed event is a no-op. Deliberately NOT
+// cascaded to anything and never read back except by eventId, so this never
+// grows into a real event log.
+model ProcessedSquareWebhook {
+  id         String   @id @default(cuid())
+  eventId    String   @unique
+  type       String
+  merchantId String?
+  receivedAt DateTime @default(now())
 }
 
 // Square catalog <-> Tillz menu id mappings (Phase 2 — import/reconcile only,

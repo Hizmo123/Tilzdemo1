@@ -257,8 +257,18 @@ export function PaySheet({
           ? await payItems(token, itemSelections, tipCents, sourceId)
           : await payBill(token, amount, tipCents, mode, sourceId);
       if (res && "error" in res) {
-        setError(res.error);
-        router.refresh();
+        // Deliberately no router.refresh() here — nothing server-side
+        // changed on a failed payment (the CAS reserve was released), and a
+        // refresh right after setting the error risked the error banner
+        // flashing/disappearing under the resulting re-render. The error
+        // stays until the user edits an input or taps Pay again (both clear
+        // it explicitly) — never auto-cleared, never closes/resets the sheet.
+        // res.error is always a plain customer-facing message by the time it
+        // reaches here (payBillAmount/payBillItems map any Square failure to
+        // a friendly string server-side — the raw category/code/detail never
+        // leaves the server); the fallback below is just a backstop against
+        // an unexpectedly empty string, not a raw-error filter.
+        setError(res.error || "Your payment couldn't be processed. Please try again.");
       } else if (res) {
         onPaid(res.amountPaidCents || optimistic, res.fullyPaid);
         router.refresh();

@@ -80,3 +80,9 @@ revoke all on "MenuItemSquareMap" from anon, authenticated;
 revoke all on "MenuCategorySquareMap" from anon, authenticated;
 revoke all on "ModifierGroupSquareMap" from anon, authenticated;
 revoke all on "ModifierOptionSquareMap" from anon, authenticated;
+
+-- Added with Square Webhooks Phase 4: ProcessedSquareWebhook is an internal
+-- dedup record only, read/written exclusively by /api/square/webhook via
+-- Prisma — same blanket policy as every other table here.
+alter table "ProcessedSquareWebhook" enable row level security;
+revoke all on "ProcessedSquareWebhook" from anon, authenticated;

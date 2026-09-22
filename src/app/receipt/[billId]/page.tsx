@@ -103,18 +103,30 @@ export default async function OwnerReceiptPage({
                 .filter((p) => p.status === "SUCCEEDED")
                 .map((p) => ({
                   id: p.id,
-                  amountCents: p.amountCents,
-                  tipCents: p.tipCents,
-                  surchargeCents: p.surchargeCents,
-                  refundedCents: p.refundedCents,
+                  // Number(...): RefundPanel is a CLIENT component — a
+                  // bigint here would fail to serialise across the server/
+                  // client boundary entirely, not just fail at render.
+                  // amountCents etc. are plain Prisma Int columns today, but
+                  // this is the actual crossing point for a Square-connected
+                  // bill's payment row, so it's coerced defensively here too
+                  // (same reasoning as buildReceiptData in lib/receipts.ts).
+                  amountCents: Number(p.amountCents),
+                  tipCents: Number(p.tipCents),
+                  surchargeCents: Number(p.surchargeCents),
+                  refundedCents: Number(p.refundedCents),
                   currency: p.currency,
                   provider: p.provider,
                   test: p.test,
                   createdAt: p.createdAt.toISOString(),
                 }))}
-              onRefund={(paymentId, amountCents, reason) =>
-                refundPaymentAction(bill.id, paymentId, amountCents, reason)
-              }
+              // A bound Server Action, not an inline closure — the latter is
+              // an "event handler" from the server/client boundary's point
+              // of view and Next.js refuses to pass it to a Client Component
+              // ("Event handlers cannot be passed to Client Component
+              // props"). .bind() on an actual "use server" action is the
+              // supported way to pre-fill billId while still crossing the
+              // boundary as a real Server Action reference.
+              action={refundPaymentAction.bind(null, bill.id)}
             />
           </div>
         )}

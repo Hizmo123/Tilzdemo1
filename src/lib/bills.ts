@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { Prisma, type TenderType, type BillStatus } from "@prisma/client";
+import { Prisma, type TenderType, type BillStatus, type PaymentStatus, type RefundStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getPaymentProvider } from "@/lib/payments";
 import { notifyRestaurant } from "@/lib/realtime";
@@ -7,7 +7,13 @@ import { formatCents } from "@/lib/money";
 import { log } from "@/lib/log";
 import { entitlementsForTier } from "@/lib/entitlements";
 import { getVenuePaymentContext } from "@/lib/square/context";
-import { chargeBillViaSquare, type SquareChargeLineItem } from "@/lib/square/pay";
+import {
+  chargeBillViaSquare,
+  refundViaSquare,
+  formatSquareError,
+  SquarePaymentError,
+  type SquareChargeLineItem,
+} from "@/lib/square/pay";
 
 // ---- Visit resolution -------------------------------------------------------
 
@@ -1098,18 +1104,66 @@ export async function payBillAmount(
         await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
         return { error: "This venue's card payment isn't available right now." };
       }
-      // No set of specific bill items sums to an arbitrary full/equal/custom
-      // amount once partial item-split payments are mixed in, so this is
-      // always a single ad-hoc line for the amount actually being charged —
-      // see the note on ChargeBillViaSquareInput.lineItems for why that's the
-      // only choice that keeps the order total guaranteed exact.
-      const lineItems: SquareChargeLineItem[] = [
+      // Itemise ONLY when this one payment settles the entire bill from a
+      // clean slate — the bill had nothing paid yet (expectedPaid === 0, so
+      // every item's paidQuantity is also still 0 — no item-split payment
+      // could have landed without also moving amountPaidCents) and this
+      // charge covers the full total. That's the one case where the bill's
+      // real non-voided, non-comped line items are GUARANTEED to sum to
+      // exactly `amount` — recompute() only ever sums those into totalCents.
+      // Any other case (a prior partial payment already happened, or this
+      // charge itself is only equal/custom/partial-full) has no set of real
+      // items that sums to an arbitrary partial amount, so it keeps the
+      // single ad-hoc "Bill payment (mode)" line — see the note on
+      // ChargeBillViaSquareInput.lineItems for why that's the only choice
+      // that keeps the order total guaranteed exact in that case.
+      const isFullSinglePayment = expectedPaid === 0 && amount === bill.totalCents;
+      let lineItems: SquareChargeLineItem[] = [
         { name: `Bill payment (${mode})`, quantity: 1, unitPriceCents: amount },
       ];
+      if (isFullSinglePayment) {
+        const payable = bill.items.filter((it) => !it.voided && !it.comped);
+        const menuItemIds = payable.map((it) => it.menuItemId).filter((id): id is string => !!id);
+        const squareMaps = menuItemIds.length
+          ? await prisma.menuItemSquareMap.findMany({ where: { menuItemId: { in: menuItemIds } } })
+          : [];
+        const squareMapByMenuItemId = new Map(squareMaps.map((m) => [m.menuItemId, m]));
+
+        const itemised: SquareChargeLineItem[] = payable.map((it) => {
+          const modifiers = Array.isArray(it.modifiers) ? (it.modifiers as unknown as ModifierSnapshot[]) : [];
+          const note = modifiers.length ? modifiers.map((m) => m.name).join(", ") : undefined;
+          const map = it.menuItemId ? squareMapByMenuItemId.get(it.menuItemId) : undefined;
+          return {
+            name: it.nameSnapshot,
+            quantity: it.quantity,
+            unitPriceCents: it.unitPriceCents,
+            menuItemId: it.menuItemId,
+            squareVariationId: map?.squareVariationId,
+            note,
+          };
+        });
+
+        // Belt and braces: only use the itemised breakdown if it actually
+        // sums to the charged amount — chargeBillViaSquare's own order-total
+        // assertion would catch a mismatch too, but falling back here means
+        // a bug in this itemisation never blocks a real payment; it just
+        // loses the itemised KDS detail for that one charge.
+        const itemisedSum = itemised.reduce((sum, li) => sum + li.unitPriceCents * li.quantity, 0);
+        if (itemisedSum === amount) {
+          lineItems = itemised;
+        } else {
+          log.warn("payment.square_itemise_mismatch", {
+            restaurantId: resolved.visit.restaurantId,
+            billId: bill.id,
+            itemisedSum,
+            amount,
+          });
+        }
+      }
       try {
         const result = await chargeBillViaSquare({
           connection,
-          bill: { id: bill.id },
+          bill: { id: bill.id, tableLabel: resolved.visit.tableLabel },
           lineItems,
           goodsCents: amount,
           tipCents: tip,
@@ -1127,12 +1181,23 @@ export async function payBillAmount(
         };
       } catch (e) {
         await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
+        // The FULL Square error (category/code/detail — e.message already
+        // carries it, baked in by chargeBillViaSquare) is logged here, once,
+        // for diagnosing real failures in Vercel logs — never returned to
+        // the customer. Only SquarePaymentError.friendlyMessage crosses back
+        // to the pay sheet; anything else (a non-Square/local error) falls
+        // back to the same generic message.
+        const detail = e instanceof Error ? e.message : String(e);
         log.warn("payment.square_failed", {
           restaurantId: resolved.visit.restaurantId,
           billId: bill.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: detail,
         });
-        return { error: "Card payment failed. Please try again." };
+        const friendly =
+          e instanceof SquarePaymentError
+            ? e.friendlyMessage
+            : "Your payment couldn't be processed. Please try again.";
+        return { error: friendly };
       }
     } else {
       const result = await provider.createPayment({
@@ -1401,7 +1466,7 @@ export async function payBillItems(
       try {
         const result = await chargeBillViaSquare({
           connection,
-          bill: { id: bill.id },
+          bill: { id: bill.id, tableLabel: resolved.visit.tableLabel },
           lineItems,
           goodsCents: amount,
           tipCents: tip,
@@ -1419,12 +1484,20 @@ export async function payBillItems(
         };
       } catch (e) {
         await releaseItemsReserve(bill.id, reservations, newPaid, expectedPaid, bill.status, bill.paidAt);
+        // See the matching catch in payBillAmount above for why this is the
+        // one log line (full detail, never sent to the client) and why the
+        // return uses friendlyMessage instead.
+        const detail = e instanceof Error ? e.message : String(e);
         log.warn("payment.square_failed", {
           restaurantId: resolved.visit.restaurantId,
           billId: bill.id,
-          error: e instanceof Error ? e.message : String(e),
+          error: detail,
         });
-        return { error: "Card payment failed. Please try again." };
+        const friendly =
+          e instanceof SquarePaymentError
+            ? e.friendlyMessage
+            : "Your payment couldn't be processed. Please try again.";
+        return { error: friendly };
       }
     } else {
       const result = await provider.createPayment({
@@ -1539,6 +1612,17 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
 
 export type RefundActor = { userId: string; email: string };
 
+// Undoes a refundedCents CAS reserve a Square refund call failed to honour —
+// same shape as releaseBillReserve/releaseItemsReserve on the payment side.
+// Guarded by its own CAS (only succeeds if refundedCents is still exactly
+// what the reserve set it to) rather than a blind write.
+async function releaseRefundReserve(paymentId: string, reservedRefunded: number, previousRefunded: number) {
+  await prisma.payment.updateMany({
+    where: { id: paymentId, refundedCents: reservedRefunded },
+    data: { refundedCents: previousRefunded },
+  });
+}
+
 export type RefundOutcome =
   | { ok: true; refundedCents: number; status: "SUCCEEDED" | "PENDING" | "FAILED" }
   | { error: string };
@@ -1606,29 +1690,91 @@ export async function refundBillPayment(
     if (cas.count !== 1) continue; // lost the race — re-read and retry
 
     const idempotencyKey = `refund_${payment.id}_${randomBytes(8).toString("hex")}`;
-    const result = await provider.refundPayment({
-      providerRef: payment.providerRef ?? "",
-      amountCents,
-      idempotencyKey,
-      reason: cleanReason,
-    });
+
+    let refundRow: {
+      status: "PENDING" | "SUCCEEDED" | "FAILED";
+      provider: string;
+      providerRef: string | undefined;
+      test: boolean;
+    };
+
+    if (payment.provider === "square") {
+      const connection = await prisma.squareConnection.findUnique({ where: { restaurantId } });
+      if (!connection) {
+        await releaseRefundReserve(payment.id, newRefunded, expectedRefunded);
+        return { error: "This venue's card payment isn't available right now." };
+      }
+      try {
+        const result = await refundViaSquare({
+          connection,
+          squarePaymentId: payment.providerRef ?? "",
+          amountCents,
+          currency: payment.currency,
+          reason: cleanReason,
+          idempotencyKey,
+        });
+        refundRow = {
+          status: result.status,
+          provider: "square",
+          providerRef: result.providerRef,
+          test: connection.environment !== "production",
+        };
+      } catch (e) {
+        await releaseRefundReserve(payment.id, newRefunded, expectedRefunded);
+        // formatSquareError, not e.message — refundViaSquare lets the raw
+        // SquareError propagate unformatted (unlike chargeBillViaSquare), so
+        // e.message alone would be Square's generic HTTP-derived text, not
+        // the category/code/detail breakdown this log needs to stay
+        // diagnosable. The refund UI is staff/owner-only, not the customer
+        // pay sheet, so its own generic message here was already safe.
+        log.warn("payment.refund_square_failed", {
+          restaurantId,
+          billId: payment.billId,
+          paymentId: payment.id,
+          error: formatSquareError(e),
+        });
+        return { error: "Refund failed. Please try again." };
+      }
+    } else {
+      const result = await provider.refundPayment({
+        providerRef: payment.providerRef ?? "",
+        amountCents,
+        idempotencyKey,
+        reason: cleanReason,
+      });
+      refundRow = {
+        status: result.status,
+        provider: provider.name,
+        providerRef: result.providerRef,
+        test: result.test,
+      };
+    }
 
     await prisma.refund.create({
       data: {
         paymentId: payment.id,
         amountCents,
         reason: cleanReason,
-        status: result.status,
-        provider: provider.name,
-        providerRef: result.providerRef,
+        status: refundRow.status,
+        provider: refundRow.provider,
+        providerRef: refundRow.providerRef,
         idempotencyKey,
         actorUserId: actor.userId,
         actorEmail: actor.email,
-        test: result.test,
+        test: refundRow.test,
       },
     });
 
-    if (result.status === "SUCCEEDED") {
+    // A Square refund can come back FAILED/REJECTED synchronously (not just
+    // via a thrown error) — same rule either way: never leave refundedCents
+    // inflated for a refund that didn't happen. PENDING is left alone (funds
+    // provisionally held); the refund.updated webhook (Phase 4 Task 3)
+    // reconciles it once Square settles on a final status.
+    if (payment.provider === "square" && refundRow.status === "FAILED") {
+      await releaseRefundReserve(payment.id, newRefunded, expectedRefunded);
+    }
+
+    if (refundRow.status === "SUCCEEDED") {
       const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
       const surchargeBound = payment.surchargeCents;
       const tipBound = payment.surchargeCents + payment.tipCents;
@@ -1652,20 +1798,111 @@ export async function refundBillPayment(
     }
 
     await notifyRestaurant(restaurantId);
-    log[result.status === "SUCCEEDED" ? "info" : "warn"]("payment.refunded", {
+    log[refundRow.status === "SUCCEEDED" ? "info" : "warn"]("payment.refunded", {
       restaurantId,
       paymentId: payment.id,
       billId: payment.billId,
       amountCents,
-      provider: provider.name,
-      status: result.status,
-      test: result.test,
+      provider: refundRow.provider,
+      status: refundRow.status,
+      test: refundRow.test,
     });
-    return { ok: true, refundedCents: amountCents, status: result.status };
+    return { ok: true, refundedCents: amountCents, status: refundRow.status };
   }
 
   log.warn("payment.refund_contended", { restaurantId, paymentId: payment.id });
   return { error: "That payment is being updated by someone else. Please try again." };
+}
+
+// ---- Square webhook reconciliation (Phase 4) --------------------------------
+// Both functions are idempotent no-ops if the stored status already matches —
+// safe to call from a webhook handler that may see the same event more than
+// once (dedup in /api/square/webhook is the primary guard; this is the
+// belt-and-braces backstop).
+
+// payment.updated: Square is the source of truth for what actually happened
+// to a payment it processed. Only a transition INTO a failure state needs a
+// write here — Square never re-confirms an already-SUCCEEDED payment in a
+// way Tillz needs to react to, and a PENDING -> SUCCEEDED move needs no bill
+// adjustment (the bill's amountPaidCents was already bumped optimistically
+// when the payment was first reserved).
+export async function syncSquarePaymentStatus(
+  squarePaymentId: string,
+  newStatus: PaymentStatus,
+): Promise<void> {
+  const payment = await prisma.payment.findFirst({
+    where: { provider: "square", providerRef: squarePaymentId },
+  });
+  if (!payment || payment.status === newStatus) return;
+
+  if (newStatus === "FAILED" && payment.status !== "FAILED") {
+    await prisma.$transaction([
+      prisma.bill.update({
+        where: { id: payment.billId },
+        data: {
+          amountPaidCents: { decrement: payment.amountCents },
+          tipCents: { decrement: payment.tipCents },
+        },
+      }),
+      prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } }),
+    ]);
+    log.warn("payment.square_webhook_failed", { paymentId: payment.id, billId: payment.billId });
+  } else {
+    await prisma.payment.update({ where: { id: payment.id }, data: { status: newStatus } });
+  }
+}
+
+// refund.updated: mirrors the SUCCEEDED/FAILED handling refundBillPayment
+// does synchronously, for a refund that was PENDING at request time and only
+// now (via webhook) reaches its final Square status. Reconstructs the same
+// before/after refundedCents window refundBillPayment would have used — the
+// reserve for this specific refund was already applied (and never released,
+// since it was PENDING) when the refund was first requested.
+export async function syncSquareRefundStatus(
+  squareRefundId: string,
+  newStatus: RefundStatus,
+): Promise<void> {
+  const refund = await prisma.refund.findFirst({
+    where: { provider: "square", providerRef: squareRefundId },
+    include: { payment: true },
+  });
+  if (!refund || refund.status === newStatus || refund.status !== "PENDING") return;
+
+  const payment = refund.payment;
+  const newRefunded = payment.refundedCents; // already includes this refund's reserve
+  const previousRefunded = newRefunded - refund.amountCents;
+
+  if (newStatus === "SUCCEEDED") {
+    const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
+    const envelope = payment.amountCents + payment.tipCents + payment.surchargeCents;
+    const surchargeBound = payment.surchargeCents;
+    const tipBound = payment.surchargeCents + payment.tipCents;
+    const tipRefunded =
+      clamp(newRefunded, surchargeBound, tipBound) - clamp(previousRefunded, surchargeBound, tipBound);
+    const goodsRefunded =
+      clamp(newRefunded, tipBound, envelope) - clamp(previousRefunded, tipBound, envelope);
+
+    await prisma.$transaction([
+      prisma.bill.update({
+        where: { id: payment.billId },
+        data: {
+          amountPaidCents: { decrement: goodsRefunded },
+          tipCents: { decrement: tipRefunded },
+          refundedCents: { increment: refund.amountCents },
+        },
+      }),
+      prisma.refund.update({ where: { id: refund.id }, data: { status: "SUCCEEDED" } }),
+    ]);
+  } else if (newStatus === "FAILED") {
+    await prisma.$transaction([
+      prisma.payment.update({
+        where: { id: payment.id },
+        data: { refundedCents: previousRefunded },
+      }),
+      prisma.refund.update({ where: { id: refund.id }, data: { status: "FAILED" } }),
+    ]);
+    log.warn("payment.refund_square_webhook_failed", { paymentId: payment.id, refundId: refund.id });
+  }
 }
 
 // ---- Order history (staff / kitchen) ---------------------------------------

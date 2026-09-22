@@ -19,14 +19,23 @@ export type RefundablePayment = {
 // Lets staff/owners refund a specific payment, full or partial, with a reason.
 // Used from both the staff table screen (an open bill's payments so far) and
 // the owner's bill/tax-invoice view (a paid bill's full payment history) —
-// the actual refund call is injected so each context can wire its own
-// permission-gated server action.
+// each context wires its own permission-gated server action.
+//
+// `action` MUST be an actual Server Action reference — the callers pass
+// their "use server" refund action pre-bound with their own context ids via
+// .bind(null, ...) (e.g. refundPaymentAction.bind(null, billId)), never a
+// plain arrow function/closure defined in the server page. A bound Server
+// Action is specifically what Next.js's server/client boundary allows to
+// cross; a plain function is an "event handler" from the boundary's point of
+// view and fails with "Event handlers cannot be passed to Client Component
+// props" — that's the exact bug this component was written to avoid
+// reintroducing.
 export function RefundPanel({
   payments,
-  onRefund,
+  action,
 }: {
   payments: RefundablePayment[];
-  onRefund: (
+  action: (
     paymentId: string,
     amountCents: number,
     reason: string,
@@ -76,7 +85,7 @@ export function RefundPanel({
     }
     setError(null);
     start(async () => {
-      const res = await onRefund(p.id, cents, reason.trim());
+      const res = await action(p.id, cents, reason.trim());
       if ("error" in res && res.error) {
         setError(res.error);
         return;
