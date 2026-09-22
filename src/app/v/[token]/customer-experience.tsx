@@ -8,6 +8,7 @@ import { addItems, cancelOrder, emailMyReceipt } from "./actions";
 import { PaySheet, type Mode as PayMode } from "./pay-sheet";
 import { EmailReceiptForm } from "@/components/receipt/email-receipt-form";
 import { CallStaff } from "./call-staff";
+import { BrandIntro } from "./brand-intro";
 import { MenuDisplay } from "./menu-display";
 import { MenuOrderer, type OrderCategory } from "@/components/order/menu-orderer";
 import { OrderTracker } from "@/components/order/order-tracker";
@@ -385,8 +386,14 @@ export function CustomerExperience({
 
   // ---- HOME ----
   if (view === "home") {
+    const billLive = !!bill && remaining > 0;
     return (
       <Shell>
+        {/* First-load brand sweep. Decides on mount whether to play (once per
+            tab session per token; never under reduced motion) — mounted only
+            with the landing, so Menu -> Back remounts it but the session
+            guard keeps it from replaying. */}
+        <BrandIntro token={token} />
         <motion.div variants={stagger(0.07, 0.05)} initial="hidden" animate="show" className="max-w-md md:max-w-lg mx-auto pb-10">
           {/* Hero: full-bleed cover (or the brand gradient), venue identity
               overlapping its bottom edge, table as a badge. */}
@@ -504,24 +511,42 @@ export function CustomerExperience({
               </Button>
             </motion.div>
 
+            {/* Two secondary tiles, same chrome as each other: icon top-left,
+                label + detail bottom, resting elevation, press scale. Bill
+                & pay steps up (accent tint, raised shadow, accent icon) the
+                moment there's a live balance; quiet otherwise. */}
             <motion.div variants={fadeUp} className="grid grid-cols-2 gap-3">
               <motion.button
                 type="button"
                 whileTap={{ scale: 0.97 }}
                 transition={SPRING_PRESS}
                 onClick={() => setView("bill")}
-                className="rounded-[var(--radius-lg)] bg-surface border border-line shadow-rest p-4 text-left min-h-[92px] flex flex-col justify-between hover:shadow-raised transition-shadow"
+                className={`rounded-[var(--radius-lg)] p-4 text-left min-h-[92px] flex flex-col justify-between transition-[background-color,box-shadow,border-color] duration-[var(--dur-base)] ${
+                  billLive
+                    ? "bg-pine-tint border border-pine/30 shadow-raised"
+                    : "bg-surface border border-line shadow-rest hover:shadow-raised"
+                }`}
               >
-                <span className="font-display text-base font-semibold leading-tight">{canPay ? "Bill & pay" : "Your bill"}</span>
-                {bill && remaining > 0 ? (
-                  <AnimatedMoney cents={remaining} currency={currency} className="font-display text-xl font-semibold" />
-                ) : (
-                  <span className="text-xs text-muted">{bill && bill.items.length > 0 ? "All paid up" : "Nothing on the tab yet"}</span>
-                )}
+                <span
+                  className={`inline-flex w-8 h-8 items-center justify-center rounded-pill transition-colors duration-[var(--dur-base)] ${
+                    billLive ? "bg-pine text-on-accent" : "bg-surface-2 text-ink-soft"
+                  }`}
+                >
+                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3z" />
+                    <path d="M9 8h6M9 12h6" />
+                  </svg>
+                </span>
+                <span>
+                  <span className="block font-display text-base font-semibold leading-tight">{canPay ? "Bill & pay" : "Your bill"}</span>
+                  {billLive ? (
+                    <AnimatedMoney cents={remaining} currency={currency} className="block font-display text-xl font-semibold mt-0.5" />
+                  ) : (
+                    <span className="block text-xs text-muted mt-0.5">{bill && bill.items.length > 0 ? "All paid up" : "Nothing on the tab yet"}</span>
+                  )}
+                </span>
               </motion.button>
-              <div className="min-h-[92px] [&>div]:h-full [&_button]:h-full [&_button]:rounded-[var(--radius-lg)] [&_button]:flex-col [&_button]:items-start [&_button]:justify-between [&_button]:p-4 [&_button]:text-left">
-                <CallStaff token={token} variant="block" />
-              </div>
+              <CallStaff token={token} variant="tile" />
             </motion.div>
           </div>
 

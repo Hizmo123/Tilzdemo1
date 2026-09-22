@@ -27,7 +27,9 @@ export function CallStaff({
   // same action, just out of the way rather than a full-width row. "pill"
   // is the same compact control placed inline (the menu header) rather than
   // fixed, so it never overlaps the sticky category chips.
-  variant?: "button" | "block" | "fab" | "pill";
+  // "tile" is the table-landing card: same chrome as the Bill & pay tile
+  // beside it (icon, elevation, press), with an in-place confirmation state.
+  variant?: "button" | "block" | "fab" | "pill" | "tile";
 }) {
   const [pending, start] = useTransition();
   const [sent, setSent] = useState(false);
@@ -55,6 +57,47 @@ export function CallStaff({
       >
         <BellIcon className="w-4 h-4" />
         {sent ? "Notified" : pending ? "Notifying…" : "Call staff"}
+      </motion.button>
+    );
+  }
+
+  if (variant === "tile") {
+    return (
+      <motion.button
+        type="button"
+        onClick={call}
+        disabled={pending || sent}
+        whileTap={{ scale: 0.97 }}
+        transition={SPRING_PRESS}
+        aria-live="polite"
+        className={`w-full min-h-[92px] rounded-[var(--radius-lg)] p-4 text-left flex flex-col justify-between transition-[background-color,box-shadow,border-color] duration-[var(--dur-base)] ${
+          sent
+            ? "bg-pine-soft border border-pine/30 shadow-rest"
+            : "bg-surface border border-line shadow-rest hover:shadow-raised"
+        }`}
+      >
+        <span
+          className={`relative inline-flex w-8 h-8 items-center justify-center rounded-pill transition-colors duration-[var(--dur-base)] ${
+            sent ? "bg-pine text-on-accent" : "bg-surface-2 text-ink-soft"
+          }`}
+        >
+          {sent && <span aria-hidden className="absolute inset-0 rounded-pill bg-pine/40 animate-pulse-ring" />}
+          {sent ? (
+            <svg viewBox="0 0 20 20" className="relative w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <motion.path d="M4 10.5l3.5 3.5L16 6" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.35 }} />
+            </svg>
+          ) : (
+            <BellIcon className={`relative w-4 h-4 ${pending ? "animate-pulse" : ""}`} />
+          )}
+        </span>
+        <span>
+          <span className="block font-display text-base font-semibold leading-tight">
+            {sent ? "On our way" : pending ? "Notifying…" : "Call staff"}
+          </span>
+          <span className={`block text-xs mt-0.5 ${sent ? "text-pine-deep" : "text-muted"}`}>
+            {sent ? "Staff have been notified" : "We'll come to your table"}
+          </span>
+        </span>
       </motion.button>
     );
   }
