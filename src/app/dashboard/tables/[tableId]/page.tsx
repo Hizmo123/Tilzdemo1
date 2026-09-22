@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { qrDataUrl, visitUrl } from "@/lib/qr";
 import { QrActions } from "./qr-actions";
 import { NfcSection } from "./nfc-section";
-import { ActivateStandForm } from "./activate-stand-form";
 
 export default async function TableDetailPage({
   params,
@@ -107,7 +106,7 @@ export default async function TableDetailPage({
 
           <QrActions tableId={table.id} active={table.active} />
 
-          {stand ? (
+          {stand && (
             <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
               <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
                 Physical stand
@@ -117,8 +116,6 @@ export default async function TableDetailPage({
                 is active on this table.
               </p>
             </div>
-          ) : (
-            <ActivateStandForm tableId={table.id} />
           )}
 
           {url && <NfcSection url={url} />}
