@@ -2,11 +2,16 @@
 // (spec §65, §106). Formatting is currency-aware via Intl so we don't hardcode
 // "$" anywhere (spec §76).
 
-export function formatCents(cents: number, currency = "AUD"): string {
+// Accepts bigint too — Square's SDK types Money.amount as bigint (see
+// src/lib/square/pay.ts), and mixing bigint with a plain number in `/ 100`
+// throws ("Cannot mix BigInt and other types") rather than formatting
+// anything. Number(cents) is safe here: every real amount is well under
+// Number.MAX_SAFE_INTEGER.
+export function formatCents(cents: number | bigint, currency = "AUD"): string {
   return new Intl.NumberFormat("en-AU", {
     style: "currency",
     currency,
-  }).format(cents / 100);
+  }).format(Number(cents) / 100);
 }
 
 // Parse a user-entered dollar string ("24", "24.5", "$24.50") into integer

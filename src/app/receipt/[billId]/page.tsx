@@ -103,10 +103,17 @@ export default async function OwnerReceiptPage({
                 .filter((p) => p.status === "SUCCEEDED")
                 .map((p) => ({
                   id: p.id,
-                  amountCents: p.amountCents,
-                  tipCents: p.tipCents,
-                  surchargeCents: p.surchargeCents,
-                  refundedCents: p.refundedCents,
+                  // Number(...): RefundPanel is a CLIENT component — a
+                  // bigint here would fail to serialise across the server/
+                  // client boundary entirely, not just fail at render.
+                  // amountCents etc. are plain Prisma Int columns today, but
+                  // this is the actual crossing point for a Square-connected
+                  // bill's payment row, so it's coerced defensively here too
+                  // (same reasoning as buildReceiptData in lib/receipts.ts).
+                  amountCents: Number(p.amountCents),
+                  tipCents: Number(p.tipCents),
+                  surchargeCents: Number(p.surchargeCents),
+                  refundedCents: Number(p.refundedCents),
                   currency: p.currency,
                   provider: p.provider,
                   test: p.test,
