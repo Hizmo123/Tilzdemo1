@@ -1,26 +1,142 @@
 @import "tailwindcss";
 
-/* ---- Tillz design tokens ------------------------------------------------
-   Direction: premium Australian hospitality payments. Warm-neutral paper,
-   deep ink text, a single considered "pine" green as the one bold move.
-   Deliberately not the cream/serif/terracotta AI-default look. */
+/* ---- Tillz design system ------------------------------------------------
+   Every colour below is a CSS custom property so the customer surfaces can
+   re-theme themselves per venue (see src/lib/theme.ts#themeVars — it
+   overrides --color-paper/ink/pine/… on the page root, and every utility
+   here compiles to var(--color-…) so the override cascades). Nothing on a
+   customer page should ever hardcode Tillz's own pine; use the tokens.
+
+   Layers of the system:
+     colour   — paper (page) / surface (cards) / surface-2 (insets) / ink /
+                muted / line, plus the accent ("pine" — the venue's brand
+                colour on customer pages) with -deep/-strong/-soft/-tint/-glow
+                derivatives.
+     type     — display face (Bricolage, or the venue's pick) for headings and
+                money; Inter for UI. Display sizes carry tight tracking.
+     space    — Tailwind's 4px base; section rhythm is generous (8/10/12),
+                internal card spacing is tight (3/4/5).
+     radius   — xs/sm/md/lg/xl/pill, plus --radius-card which the venue
+                controls (sharp/soft/round).
+     shadow   — three resting levels (rest/raised/float) as soft, layered
+                shadows, plus an accent glow for the one primary action.
+     motion   — three durations, an ease-out for UI and an overshoot for
+                playful moments; all transform/opacity only.
+   ------------------------------------------------------------------------ */
 @theme {
+  /* colour */
   --color-ink: #15181b;
   --color-ink-soft: #3a4147;
   --color-muted: #6b7169;
-  --color-paper: #f6f5f1;
+  --color-paper: #f4f3ef;
   --color-surface: #ffffff;
+  --color-surface-2: #eceae4;
   --color-line: #e6e3dc;
+  --color-line-strong: #cfcbc2;
+
   --color-pine: #0f5c42;
   --color-pine-deep: #0b4732;
+  --color-pine-strong: #083324;
   --color-pine-soft: #e3f0ea;
+  --color-pine-tint: rgb(15 92 66 / 0.06);
+  --color-pine-glow: rgb(15 92 66 / 0.38);
+
   --color-danger: #b4442f;
   --color-danger-soft: #f7e6e1;
+  --color-warn: #b7791f;
+  --color-warn-soft: #fbf1dc;
+  --color-success: #1f7a4d;
+  --color-success-soft: #e0f2e8;
 
+  /* type */
   --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-editorial: var(--font-fraunces), Georgia, ui-serif, serif;
 
+  --text-display-xl: 3.25rem;
+  --text-display-xl--line-height: 1;
+  --text-display-xl--letter-spacing: -0.03em;
+  --text-display-lg: 2.5rem;
+  --text-display-lg--line-height: 1.02;
+  --text-display-lg--letter-spacing: -0.028em;
+  --text-display: 2rem;
+  --text-display--line-height: 1.06;
+  --text-display--letter-spacing: -0.025em;
+  --text-display-sm: 1.5rem;
+  --text-display-sm--line-height: 1.12;
+  --text-display-sm--letter-spacing: -0.02em;
+  --text-money: 1.75rem;
+  --text-money--line-height: 1;
+  --text-money--letter-spacing: -0.02em;
+
+  /* radius */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
   --radius-card: 14px;
+
+  /* elevation — layered so they read as light, not as a grey smear */
+  --shadow-rest:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 1px 1px rgb(0 0 0 / 0.03);
+  --shadow-raised:
+    0 1px 2px rgb(0 0 0 / 0.05),
+    0 6px 16px -6px rgb(0 0 0 / 0.12);
+  --shadow-float:
+    0 2px 4px rgb(0 0 0 / 0.06),
+    0 18px 40px -12px rgb(0 0 0 / 0.22);
+  --shadow-accent:
+    0 1px 2px rgb(0 0 0 / 0.06),
+    0 10px 28px -10px var(--color-pine-glow);
+
+  /* motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --animate-shake: shake 400ms var(--ease-soft) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-fade-up: fade-up 400ms var(--ease-out-expo) both;
+  --animate-pop: pop 350ms var(--ease-spring) both;
+  --animate-pulse-ring: pulse-ring 1.8s ease-out infinite;
+
+  @keyframes shake {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.9); opacity: 0.7; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+}
+
+/* Motion durations — used with duration-[var(--dur-base)] etc. and by the
+   motion primitives in src/components/ui/motion.ts. */
+:root {
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 400ms;
+  /* Defaults for the venue-derived tokens themeVars() overrides on customer
+     pages; on the dashboard these fall back to Tillz's own accent. */
+  --on-accent: #ffffff;
+  --accent-gradient: linear-gradient(135deg, var(--color-pine) 0%, var(--color-pine-strong) 100%);
 }
 
 html {
@@ -33,20 +149,92 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01";
 }
 
-/* Visible focus for keyboard users — part of the accessibility floor. */
+/* Visible focus for keyboard users — part of the accessibility floor. Uses
+   the accent, so it re-themes with the venue on customer pages. */
 :focus-visible {
   outline: 2px solid var(--color-pine);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
+/* Tap targets: buttons and links that look small still get a 44px hit area
+   through padding at the call site; this only makes sure nothing shrinks
+   below what a thumb can hit by accident. */
+button,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+@layer utilities {
+  /* Hide native scrollbars on horizontal chip rows — overflow is hinted with
+     .fade-x instead of a scrollbar that never matches the venue's theme. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Soft edge masks on a horizontally scrolling row. */
+  .fade-x {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+    mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+  }
+
+  /* Frosted floating bars (cart bar, sticky headers). */
+  .glass {
+    background-color: color-mix(in srgb, var(--color-surface) 82%, transparent);
+    -webkit-backdrop-filter: saturate(160%) blur(16px);
+    backdrop-filter: saturate(160%) blur(16px);
+    border: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+  }
+
+  /* The venue's accent as a gradient — hero fallbacks, primary CTAs. */
+  .bg-accent-gradient {
+    background-image: var(--accent-gradient);
+  }
+
+  /* Text on the accent, computed per venue (black or white). */
+  .text-on-accent {
+    color: var(--on-accent, #fff);
+  }
+
+  /* Bottom padding that clears the iOS home indicator. */
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  /* Skeleton shimmer surface. */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-2) 0%,
+      color-mix(in srgb, var(--color-surface-2) 60%, var(--color-surface)) 50%,
+      var(--color-surface-2) 100%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Respect the OS motion preference: keep opacity fades (they orient), kill
+   everything that moves. The motion library gets the same instruction via
+   <MotionConfig reducedMotion="user"> in the root provider. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -325,7 +325,16 @@ export function themeVars(a: Appearance): CSSProperties {
     ["--color-line" as string]: pal.line,
     ["--color-pine" as string]: accent,
     ["--color-pine-deep" as string]: darken(accent, 0.16),
+    ["--color-pine-strong" as string]: darken(accent, 0.32),
     ["--color-pine-soft" as string]: softTint(accent, mode === "dark" ? 0.22 : 0.14),
+    // Derived tints for the design system (see globals.css): a barely-there
+    // surface wash, and a glow used as the primary action's shadow colour —
+    // both read from the venue's own accent so a red venue gets a red glow.
+    ["--color-pine-tint" as string]: softTint(accent, mode === "dark" ? 0.1 : 0.06),
+    ["--color-pine-glow" as string]: softTint(accent, 0.38),
+    ["--color-surface-2" as string]: pal.paper,
+    ["--accent-gradient" as string]:
+      `linear-gradient(135deg, ${accent} 0%, ${darken(accent, 0.28)} 100%)`,
     ["--on-accent" as string]: onAccent(accent),
     ["--font-display" as string]: font.display,
     ["--font-sans" as string]: font.sans,

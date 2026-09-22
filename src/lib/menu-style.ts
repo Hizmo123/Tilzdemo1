@@ -84,6 +84,25 @@ export function dividerClass(divider: DividerStyle): string {
   return divider === "line" ? "border-b border-line pb-3" : divider === "space" ? "pb-1" : "";
 }
 
+// Font-ROLE convention for the customer menu screen (every layout — list,
+// grid, magazine, minimal — and both the read-only MenuDisplay and the
+// interactive MenuOrderer/its item sheet): headline-weight text — the page
+// title ("Menu"), category section headers ("Coffee"), item names ("Flat
+// White") and prices — all render in the venue's own --font-display face
+// (Bricolage/Fraunces/Space Grotesk depending on the venue's font choice —
+// see lib/theme.ts's FONT_THEMES). Body copy (item descriptions) and UI
+// chrome (category filter tabs, badges, modifier group labels) stay in
+// --font-sans, since they're navigation/prose, not editorial headline copy.
+//
+// This constant exists so every headline-role element pulls from the SAME
+// class rather than each one hardcoding "font-display" independently — a
+// spot that's missed (as item names were, before this) silently falls back
+// to the ambient body font and reads as a mismatched typeface next to
+// everything else on the same screen, even though the venue only ever
+// chose ONE display face. Use MENU_HEADLINE_FONT anywhere a new
+// headline-role element is added to the menu screen.
+export const MENU_HEADLINE_FONT = "font-display";
+
 export function sectionHeaderClass(style: string): string {
   switch (style as SectionHeaderStyle) {
     case "underline":

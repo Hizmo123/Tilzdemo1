@@ -2,9 +2,14 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "motion/react";
 import { payBill, payItems } from "./actions";
 import { formatCents, dollarsToCents } from "@/lib/money";
-import { Spinner } from "@/components/ui/submit-button";
+import { Sheet } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Chip, SegmentedControl } from "@/components/ui/chip";
+import { AnimatedMoney } from "@/components/ui/animated-number";
+import { SPRING_PRESS, SPRING_SOFT, haptic } from "@/components/ui/motion";
 
 // Square's Web Payments SDK attaches itself to window.Square once its script
 // tag loads — there's no npm package for the browser side (only the server
@@ -62,12 +67,14 @@ export type Mode = "full" | "equal" | "items" | "custom";
 // venue's splitMethods setting contains, not just left out of ALL_MODES.
 const ALL_MODES: Mode[] = ["full", "equal", "items", "custom"];
 const CUSTOMER_VISIBLE_MODES: Mode[] = ["full", "equal", "items"];
+const MODE_LABEL: Record<Mode, string> = { full: "Full", equal: "Equally", items: "Items", custom: "Custom" };
 
 export function PaySheet({
   token,
   currency,
   items,
   remainingCents,
+  totalCents,
   open,
   initialMode = "full",
   tipEnabled = false,
@@ -86,6 +93,9 @@ export function PaySheet({
   currency: string;
   items: BillItem[];
   remainingCents: number;
+  // Whole-bill total — only used to show how many equal seats are already
+  // covered by earlier payments.
+  totalCents?: number;
   open: boolean;
   initialMode?: Mode;
   tipEnabled?: boolean;
@@ -120,6 +130,12 @@ export function PaySheet({
   const [tipCustom, setTipCustom] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [paying, start] = useTransition();
+
+  // The sheet can be opened straight into a mode (e.g. "Split" on the bill).
+  useEffect(() => {
+    if (open) setMode(visibleModes.includes(initialMode) ? initialMode : visibleModes[0] ?? "full");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialMode]);
 
   // ---- Square card field (Phase 3) -----------------------------------------
   const cardRef = useRef<SquareCard | null>(null);
@@ -165,6 +181,9 @@ export function PaySheet({
     Math.ceil(remainingCents / Math.max(1, people)),
     remainingCents,
   );
+  // Seats already covered by earlier payments, for the seats visual only.
+  const paidSoFar = Math.max(0, (totalCents ?? remainingCents) - remainingCents);
+  const seatsPaid = equalShare > 0 ? Math.min(people, Math.floor(paidSoFar / equalShare)) : 0;
 
   // Item split works at the UNIT level: a line of "2× Flat White" becomes two
   // separately-payable units so each person covers their own. Selection keys are
@@ -209,6 +228,8 @@ export function PaySheet({
   const surchargeCents = surchargeEnabled
     ? Math.round((Math.min(payBase, remainingCents) + tipCents) * surchargeBasisPoints / 10000)
     : 0;
+
+  const chargeTotal = Math.min(payBase, remainingCents) + tipCents + surchargeCents;
 
   function pay() {
     const amount = chosenAmount();
@@ -269,6 +290,7 @@ export function PaySheet({
         // leaves the server); the fallback below is just a backstop against
         // an unexpectedly empty string, not a raw-error filter.
         setError(res.error || "Your payment couldn't be processed. Please try again.");
+        haptic([20, 40, 20]);
       } else if (res) {
         onPaid(res.amountPaidCents || optimistic, res.fullyPaid);
         router.refresh();
@@ -276,251 +298,243 @@ export function PaySheet({
     });
   }
 
-  if (!open) return null;
+  const shake = { x: [0, -6, 6, -4, 4, 0] };
 
   return (
-    <div className="fixed inset-0 z-10 flex items-end justify-center bg-ink/30">
-      <div className="w-full max-w-sm bg-surface rounded-t-2xl border-t border-line max-h-[85dvh] overflow-y-auto">
-        <div className="sticky top-0 bg-surface border-b border-line px-5 py-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold tracking-tight">
-            Pay your bill
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-muted hover:text-ink text-sm"
-          >
-            Close
-          </button>
-        </div>
-
-        <div className="px-5 py-4">
-          <p className="text-sm text-muted mb-3">
-            Remaining on this table:{" "}
-            <span className="font-medium text-ink">
-              {formatCents(remainingCents, currency)}
-            </span>
-          </p>
-
-          {/* Mode tabs — only the split methods this venue actually offers */}
-          <div
-            className="grid gap-1 rounded-lg bg-paper p-1 mb-4 text-sm"
-            style={{ gridTemplateColumns: `repeat(${visibleModes.length}, minmax(0, 1fr))` }}
-          >
-            {(
-              [
-                ["full", "Full"],
-                ["equal", "Equally"],
-                ["items", "Items"],
-              ] as [Mode, string][]
-            )
-              .filter(([m]) => visibleModes.includes(m))
-              .map(([m, label]) => (
-              <button
-                key={m}
-                onClick={() => {
-                  setMode(m);
-                  setError(null);
-                }}
-                className={`rounded-md py-1.5 transition-colors ${
-                  mode === m ? "bg-surface shadow-sm font-medium" : "text-muted"
-                }`}
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Pay your bill"
+      size="lg"
+      footer={
+        <div className="space-y-2">
+          <AnimatePresence>
+            {error && (
+              <motion.p
+                key={error}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0, ...shake }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4 }}
+                role="alert"
+                className="rounded-[var(--radius-md)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm"
               >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {mode === "equal" && (
-            <div className="mb-4">
-              <p className="text-sm text-muted mb-2">How many people?</p>
-              <div className="flex items-center gap-3 mb-3">
-                <button
-                  onClick={() => setPeople((p) => Math.max(1, p - 1))}
-                  className="w-9 h-9 rounded-full border border-line text-lg"
-                >
-                  −
-                </button>
-                <span className="w-8 text-center font-medium tabular-nums">
-                  {people}
-                </span>
-                <button
-                  onClick={() => setPeople((p) => Math.min(20, p + 1))}
-                  className="w-9 h-9 rounded-full border border-line text-lg"
-                >
-                  +
-                </button>
-              </div>
-              <p className="text-sm">
-                Each pays{" "}
-                <span className="font-semibold">
-                  {formatCents(equalShare, currency)}
-                </span>
-                <span className="text-muted"> — you&apos;re paying one share</span>
-              </p>
-            </div>
-          )}
-
-          {mode === "items" && (
-            <div className="mb-4 space-y-1">
-              <p className="text-xs text-muted mb-1">
-                Tick the items you&apos;re paying for.
-              </p>
-              {items.every((it) => it.quantity - it.paidQuantity <= 0) ? (
-                <p className="text-sm text-muted py-2">
-                  Every item has been paid for.
-                </p>
-              ) : (
-                items.map((it) => {
-                  const available = it.quantity - it.paidQuantity;
-                  if (available <= 0) return null;
-                  return (
-                    <div key={it.id}>
-                      {Array.from({ length: available }).map((_, u) => {
-                        const key = `${it.id}#${u}`;
-                        return (
-                          <label
-                            key={key}
-                            className="flex items-center gap-3 py-2 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={!!selected[key]}
-                              onChange={(e) =>
-                                setSelected((s) => ({
-                                  ...s,
-                                  [key]: e.target.checked,
-                                }))
-                              }
-                              className="w-4 h-4 accent-pine"
-                            />
-                            <span className="flex-1 text-sm">
-                              {it.nameSnapshot}
-                            </span>
-                            <span className="text-sm tabular-nums">
-                              {formatCents(it.unitPriceCents, currency)}
-                            </span>
-                          </label>
-                        );
-                      })}
-                      {it.paidQuantity > 0 && (
-                        <p className="text-xs text-muted pl-7 pb-1">
-                          {it.paidQuantity} already paid
-                        </p>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-              <p className="text-sm pt-2 border-t border-line">
-                Your total:{" "}
-                <span className="font-semibold">
-                  {formatCents(itemsTotal, currency)}
-                </span>
-              </p>
-            </div>
-          )}
-
-          {tipEnabled && (
-            <div className="mb-4">
-              <p className="text-sm text-muted mb-2">Add a tip?</p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setTipPreset(tipPreset === null ? "custom" : null)}
-                  className={`rounded-lg border px-3 py-2 text-sm ${
-                    tipPreset === null ? "border-pine bg-pine-soft" : "border-line"
-                  }`}
-                >
-                  No tip
-                </button>
-                {tipPresets.map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setTipPreset(p)}
-                    className={`rounded-lg border px-3 py-2 text-sm ${
-                      tipPreset === p ? "border-pine bg-pine-soft" : "border-line"
-                    }`}
-                  >
-                    {p}%
-                  </button>
-                ))}
-                <button
-                  onClick={() => setTipPreset("custom")}
-                  className={`rounded-lg border px-3 py-2 text-sm ${
-                    tipPreset === "custom" ? "border-pine bg-pine-soft" : "border-line"
-                  }`}
-                >
-                  Custom
-                </button>
-              </div>
-              {tipPreset === "custom" && (
-                <div className="relative mt-2">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
-                    $
-                  </span>
-                  <input
-                    inputMode="decimal"
-                    value={tipCustom}
-                    onChange={(e) => setTipCustom(e.target.value)}
-                    placeholder="5.00"
-                    className="w-full rounded-lg border border-line bg-surface pl-7 pr-3.5 py-2.5 focus:border-pine focus:outline-none"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {surchargeCents > 0 && (
-            <p className="mb-3 flex justify-between text-sm text-muted rounded-lg bg-paper px-3.5 py-2.5">
-              <span>Card surcharge</span>
-              <span className="tabular-nums text-ink">
-                +{formatCents(surchargeCents, currency)}
-              </span>
-            </p>
-          )}
-
-          {squareEnabled && (
-            <div className="mb-4">
-              <p className="text-sm text-muted mb-2">Card details</p>
-              <div
-                id="square-card-container"
-                className="rounded-lg border border-line bg-surface px-3.5 py-2.5 min-h-[44px]"
-              />
-              {squareStatus === "loading" && (
-                <p className="text-xs text-muted mt-1.5">Loading card form…</p>
-              )}
-              {squareStatus === "error" && (
-                <p className="text-xs text-danger mt-1.5">
-                  Couldn&apos;t load the card form. Please refresh and try again.
-                </p>
-              )}
-            </div>
-          )}
-
-          {error && (
-            <p className="mb-3 rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
-              {error}
-            </p>
-          )}
-
-          <button
+                {error}
+              </motion.p>
+            )}
+          </AnimatePresence>
+          <Button
+            variant="primary"
+            size="lg"
+            full
             onClick={pay}
             disabled={paying || (squareEnabled && squareStatus !== "ready")}
-            className="w-full rounded-xl bg-pine text-white py-3.5 font-medium hover:opacity-90 disabled:opacity-60 transition-opacity flex items-center justify-center gap-2"
+            loading={paying}
+            className="justify-between"
           >
-            {paying && <Spinner />}
-            {paying
-              ? "Processing…"
-              : `Pay ${formatCents(Math.min(payBase, remainingCents) + tipCents + surchargeCents, currency)}${
-                  tipCents > 0 ? ` (incl. ${formatCents(tipCents, currency)} tip)` : ""
-                }${squareEnabled ? "" : " · test"}`}
-          </button>
-          <p className="text-center text-[11px] text-muted mt-3">
+            <span>{paying ? "Processing…" : squareEnabled ? "Pay now" : "Pay now · test"}</span>
+            <AnimatedMoney cents={chargeTotal} currency={currency} className="font-display text-lg" />
+          </Button>
+          <p className="text-center text-[11px] text-muted">
+            {tipCents > 0 ? `Includes ${formatCents(tipCents, currency)} tip. ` : ""}
             {squareEnabled
               ? "Amounts are capped at the remaining balance."
               : "Test payment — no real money moves. Amounts are capped at the remaining balance."}
           </p>
         </div>
+      }
+    >
+      <div className="space-y-5">
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm text-muted">Remaining on this table</span>
+          <span className="font-display text-lg font-semibold tabular">{formatCents(remainingCents, currency)}</span>
+        </div>
+
+        {visibleModes.length > 1 && (
+          <SegmentedControl
+            options={visibleModes.map((m) => ({ value: m, label: MODE_LABEL[m] }))}
+            value={mode}
+            onChange={(m) => {
+              setMode(m);
+              setError(null);
+              haptic(6);
+            }}
+          />
+        )}
+
+        {mode === "full" && (
+          <p className="text-sm text-ink-soft">You&apos;re paying the whole remaining balance.</p>
+        )}
+
+        {mode === "equal" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">How many people?</span>
+              <div className="inline-flex items-center rounded-pill border border-line bg-surface h-11">
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.85 }}
+                  transition={SPRING_PRESS}
+                  onClick={() => setPeople((p) => Math.max(1, p - 1))}
+                  className="w-11 h-11 flex items-center justify-center text-lg leading-none"
+                  aria-label="Fewer people"
+                >
+                  −
+                </motion.button>
+                <span className="w-6 text-center text-sm font-semibold tabular">{people}</span>
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.85 }}
+                  transition={SPRING_PRESS}
+                  onClick={() => setPeople((p) => Math.min(20, p + 1))}
+                  className="w-11 h-11 flex items-center justify-center text-lg leading-none"
+                  aria-label="More people"
+                >
+                  +
+                </motion.button>
+              </div>
+            </div>
+
+            {/* Seats: filled = already paid by someone, accent = you. */}
+            <div className="flex flex-wrap gap-2" aria-hidden>
+              {Array.from({ length: people }).map((_, i) => {
+                const paidSeat = i < seatsPaid;
+                const you = i === seatsPaid;
+                return (
+                  <motion.span
+                    key={i}
+                    layout
+                    initial={{ scale: 0.6, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={SPRING_SOFT}
+                    className={`w-9 h-9 rounded-pill flex items-center justify-center text-xs font-semibold ${
+                      you
+                        ? "bg-pine text-on-accent shadow-accent"
+                        : paidSeat
+                          ? "bg-ink text-surface"
+                          : "bg-surface-2 text-muted"
+                    }`}
+                  >
+                    {you ? "You" : paidSeat ? "✓" : i + 1}
+                  </motion.span>
+                );
+              })}
+            </div>
+
+            <p className="text-sm">
+              Each pays <span className="font-semibold tabular">{formatCents(equalShare, currency)}</span>
+              <span className="text-muted"> — you&apos;re paying one share</span>
+            </p>
+          </div>
+        )}
+
+        {mode === "items" && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Tap what you&apos;re paying for.</p>
+            {items.every((it) => it.quantity - it.paidQuantity <= 0) ? (
+              <p className="text-sm text-muted py-2">Every item has been paid for.</p>
+            ) : (
+              <div className="space-y-2">
+                {items.flatMap((it) => {
+                  const available = it.quantity - it.paidQuantity;
+                  return Array.from({ length: available }).map((_, u) => {
+                    const key = `${it.id}#${u}`;
+                    const on = !!selected[key];
+                    return (
+                      <motion.button
+                        key={key}
+                        type="button"
+                        whileTap={{ scale: 0.98 }}
+                        transition={SPRING_PRESS}
+                        aria-pressed={on}
+                        onClick={() => {
+                          haptic(6);
+                          setSelected((s) => ({ ...s, [key]: !s[key] }));
+                        }}
+                        className={`w-full flex items-center gap-3 rounded-[var(--radius-md)] px-3.5 py-3 text-left transition-[background-color,box-shadow,border-color] duration-[var(--dur-fast)] ${
+                          on ? "bg-pine-soft border border-pine/40 shadow-rest" : "bg-surface border border-line"
+                        }`}
+                      >
+                        <span
+                          className={`w-6 h-6 rounded-pill flex items-center justify-center shrink-0 transition-colors ${
+                            on ? "bg-pine text-on-accent" : "border border-line-strong"
+                          }`}
+                        >
+                          {on && (
+                            <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <motion.path d="M5 10.5l3.2 3.2L15 7" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.25 }} />
+                            </svg>
+                          )}
+                        </span>
+                        <span className={`flex-1 text-sm ${on ? "font-semibold" : ""}`}>{it.nameSnapshot}</span>
+                        <span className="text-sm tabular">{formatCents(it.unitPriceCents, currency)}</span>
+                      </motion.button>
+                    );
+                  });
+                })}
+              </div>
+            )}
+            <div className="flex justify-between text-sm pt-2 border-t border-line">
+              <span className="text-muted">Your items</span>
+              <AnimatedMoney cents={itemsTotal} currency={currency} className="font-semibold" />
+            </div>
+          </div>
+        )}
+
+        {tipEnabled && (
+          <div>
+            <p className="text-sm font-medium mb-2">Add a tip?</p>
+            <div className="flex flex-wrap gap-2">
+              <Chip selected={tipPreset === null} onClick={() => setTipPreset(null)}>
+                No tip
+              </Chip>
+              {tipPresets.map((p) => (
+                <Chip key={p} selected={tipPreset === p} onClick={() => setTipPreset(p)}>
+                  {p}%
+                </Chip>
+              ))}
+              <Chip selected={tipPreset === "custom"} onClick={() => setTipPreset("custom")}>
+                Custom
+              </Chip>
+            </div>
+            {tipPreset === "custom" && (
+              <div className="relative mt-2">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">$</span>
+                <input
+                  inputMode="decimal"
+                  value={tipCustom}
+                  onChange={(e) => setTipCustom(e.target.value)}
+                  placeholder="5.00"
+                  className="w-full rounded-[var(--radius-md)] border border-line bg-surface pl-7 pr-3.5 py-2.5 focus:border-pine focus:outline-none"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {surchargeCents > 0 && (
+          <p className="flex justify-between text-sm text-muted rounded-[var(--radius-md)] bg-surface-2 px-3.5 py-2.5">
+            <span>Card surcharge</span>
+            <span className="tabular text-ink">+{formatCents(surchargeCents, currency)}</span>
+          </p>
+        )}
+
+        {squareEnabled && (
+          <motion.div key={error ? "err" : "ok"} animate={error ? shake : { x: 0 }} transition={{ duration: 0.4 }}>
+            <p className="text-sm font-medium mb-2">Card details</p>
+            <div
+              id="square-card-container"
+              className={`rounded-[var(--radius-md)] border bg-surface px-3.5 py-2.5 min-h-[48px] transition-colors ${
+                error ? "border-danger" : "border-line"
+              }`}
+            />
+            {squareStatus === "loading" && <p className="text-xs text-muted mt-1.5">Loading secure card form…</p>}
+            {squareStatus === "error" && (
+              <p className="text-xs text-danger mt-1.5">Couldn&apos;t load the card form. Please refresh and try again.</p>
+            )}
+          </motion.div>
+        )}
       </div>
-    </div>
+    </Sheet>
   );
 }

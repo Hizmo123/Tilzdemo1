@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
-import { getKitchenOrders, type OrderStatusName } from "@/lib/bills";
+import { getKitchenOrders, getOrderHistory, type OrderStatusName } from "@/lib/bills";
+import { formatCents } from "@/lib/money";
 import { LiveRefresh } from "../live-refresh";
 import { DashboardTicket } from "./dashboard-ticket";
 
@@ -36,8 +37,11 @@ export default async function OrdersPage() {
   }
 
   const restaurant = authz.membership.organization.restaurants[0];
-  const orders = restaurant ? await getKitchenOrders(restaurant.id) : [];
+  const [orders, history] = restaurant
+    ? await Promise.all([getKitchenOrders(restaurant.id), getOrderHistory(restaurant.id)])
+    : [[], []];
   const now = Date.now();
+  const currency = restaurant?.currency ?? "AUD";
 
   const tickets = orders.map((o) => ({
     id: o.id,
@@ -54,7 +58,7 @@ export default async function OrdersPage() {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <LiveRefresh restaurantId={restaurant?.id ?? null} />
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">
@@ -77,6 +81,50 @@ export default async function OrdersPage() {
           ))}
         </div>
       )}
+
+      <div>
+        <h2 className="font-display text-xl font-semibold tracking-tight mb-1">
+          History
+        </h2>
+        <p className="text-muted mb-4">
+          The last {history.length} served order{history.length === 1 ? "" : "s"}.
+        </p>
+
+        {history.length === 0 ? (
+          <div className="rounded-[var(--radius-card)] border border-dashed border-line bg-surface p-8 text-center">
+            <p className="text-muted">No served orders yet.</p>
+          </div>
+        ) : (
+          <div className="rounded-[var(--radius-card)] border border-line bg-surface divide-y divide-line overflow-hidden">
+            {history.map((o) => (
+              <div key={o.id} className="flex items-center justify-between gap-4 px-5 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {o.tableLabel}
+                    <span className="ml-2 text-xs font-normal text-muted">
+                      {o.items.map((it) => `${it.quantity}× ${it.name}`).join(", ")}
+                    </span>
+                  </p>
+                  <p className="text-xs text-muted mt-0.5">
+                    {(o.servedAt ?? o.createdAt).toLocaleString("en-AU", {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="tabular-nums text-sm font-medium">
+                    {formatCents(o.totalCents, currency)}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wide bg-paper text-muted px-1.5 py-0.5 rounded">
+                    {o.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

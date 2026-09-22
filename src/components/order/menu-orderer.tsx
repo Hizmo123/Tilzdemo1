@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition, useRef, useEffect, useMemo } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { formatCents } from "@/lib/money";
-import { Spinner } from "@/components/ui/submit-button";
-import { BADGE_META, type BadgeKey } from "@/lib/menu-badges";
+import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
+import { AnimatedMoney, AnimatedInt } from "@/components/ui/animated-number";
+import { SPRING, SPRING_PRESS, SPRING_SOFT, easeOut, haptic } from "@/components/ui/motion";
+import { CategoryNav, sectionId, useScrollSpy } from "./category-tabs";
+import { ItemBadges, PhotoFallback } from "@/app/v/[token]/menu-display";
 import {
   resolveCardStyle,
   resolveTypeScale,
@@ -13,6 +18,8 @@ import {
   dividerClass,
   sectionHeaderClass,
   menuButtonClass,
+  MENU_HEADLINE_FONT,
+  type CardStyle,
 } from "@/lib/menu-style";
 
 export type OrderOption = { id: string; name: string; priceDeltaCents: number };
@@ -41,29 +48,6 @@ export type OrderCategory = {
   items: OrderMenuItem[];
 };
 
-// Small coloured chips for an item's merchandising badges. Unrecognised
-// values (schema drift, a badge removed from the app since it was set) are
-// silently skipped rather than rendered raw.
-function ItemBadges({ badges }: { badges: string[] }) {
-  const known = badges.filter((b): b is BadgeKey => b in BADGE_META);
-  if (known.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {known.map((b) => {
-        const meta = BADGE_META[b];
-        return (
-          <span
-            key={b}
-            className={`text-[10px] font-medium rounded-full px-2 py-0.5 ${meta.className}`}
-          >
-            {meta.label}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 export type CartLine = {
   key: string;
   menuItemId: string;
@@ -78,6 +62,8 @@ export type CartLine = {
   // match back to the right item.
   note?: string;
 };
+
+type TypeSize = ReturnType<typeof resolveTypeScale>;
 
 // A self-contained "browse menu → choose options → build cart → send" surface.
 // onSubmit receives the cart lines (and an optional order note) and returns an
@@ -131,6 +117,7 @@ export function MenuOrderer({
   const addBtnClass = menuButtonClass(buttonShape, buttonFill);
   const isMagazine = layout === "magazine";
   const isMinimal = layout === "minimal";
+  const isGrid = layout === "grid";
   const [cart, setCart] = useState<CartLine[]>([]);
   const [sheetItem, setSheetItem] = useState<OrderMenuItem | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +125,9 @@ export function MenuOrderer({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [note, setNote] = useState("");
   const [pending, start] = useTransition();
+  // Bumped every time something lands in the cart, so the cart bar can
+  // pulse in acknowledgement.
+  const [bump, setBump] = useState(0);
   // Stable idempotency key for the current order. Kept across retries — and
   // across an offline gap — so a resend of a failed submit can never create a
   // duplicate on the server, no matter how many times the client retries it.
@@ -145,6 +135,9 @@ export function MenuOrderer({
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storageKey = persistKey ? `tillz_cart_${persistKey}` : null;
   const hydratedRef = useRef(false);
+
+  const ids = useMemo(() => menu.map((c) => c.id), [menu]);
+  const { activeId, scrollTo } = useScrollSpy(ids);
 
   // Rehydrate once on mount — not in the useState initializer, since that
   // runs during SSR/hydration where localStorage doesn't exist (or wouldn't
@@ -184,6 +177,25 @@ export function MenuOrderer({
   const count = cart.reduce((a, l) => a + l.quantity, 0);
   const subtotal = cart.reduce((a, l) => a + l.unitCents * l.quantity, 0);
 
+  // Units of an item in the cart with NO options — what the inline stepper
+  // on a simple item's card shows and edits.
+  const simpleQty = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of cart) if (l.optionIds.length === 0) m.set(l.menuItemId, (m.get(l.menuItemId) ?? 0) + l.quantity);
+    return m;
+  }, [cart]);
+  // Any units at all (configured or not) — the badge on a modifier item's "+".
+  const anyQty = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of cart) m.set(l.menuItemId, (m.get(l.menuItemId) ?? 0) + l.quantity);
+    return m;
+  }, [cart]);
+
+  function added() {
+    setBump((b) => b + 1);
+    haptic();
+  }
+
   function addSimple(item: OrderMenuItem) {
     setCart((c) => {
       const existing = c.find(
@@ -206,10 +218,23 @@ export function MenuOrderer({
         },
       ];
     });
+    added();
+  }
+
+  function removeSimple(item: OrderMenuItem) {
+    setCart((c) =>
+      c
+        .map((l) =>
+          l.menuItemId === item.id && l.optionIds.length === 0 ? { ...l, quantity: l.quantity - 1 } : l,
+        )
+        .filter((l) => l.quantity > 0),
+    );
+    haptic(6);
   }
 
   function addConfigured(line: CartLine) {
     setCart((c) => [...c, line]);
+    added();
   }
 
   function changeQty(key: string, delta: number) {
@@ -224,7 +249,7 @@ export function MenuOrderer({
     setCart((c) => c.map((l) => (l.key === key ? { ...l, note: lineNote } : l)));
   }
 
-  // Fired by the sticky button. With reviewStep, open the review sheet; without
+  // Fired by the cart bar. With reviewStep, open the review sheet; without
   // it (staff), send straight away.
   function primaryAction() {
     if (cart.length === 0) return;
@@ -314,443 +339,402 @@ export function MenuOrderer({
     }
   }
 
+  const topImages = cs.imagePosition === "top";
+
   return (
     <div className="pb-32">
-      {cart.length > 0 && (
-        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-4 mb-6">
-          <h3 className="text-sm font-medium text-muted mb-2">Your selection</h3>
-          <ul className="space-y-2">
-            {cart.map((l) => (
-              <li key={l.key} className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium">{l.name}</span>
-                  {l.optionLabel && (
-                    <span className="block text-xs text-muted">{l.optionLabel}</span>
-                  )}
-                </div>
-                <span className="text-sm tabular-nums text-muted">
-                  {formatCents(l.unitCents * l.quantity, currency)}
-                </span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => changeQty(l.key, -1)}
-                    className="w-7 h-7 rounded-full border border-line text-base leading-none"
-                  >
-                    −
-                  </button>
-                  <span className="w-4 text-center text-sm tabular-nums">
-                    {l.quantity}
-                  </span>
-                  <button
-                    onClick={() => changeQty(l.key, 1)}
-                    className="w-7 h-7 rounded-full border border-line text-base leading-none"
-                  >
-                    +
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <CategoryNav categories={menu} activeId={activeId} onSelect={scrollTo} />
 
-      <div className={isMagazine ? "space-y-10" : "space-y-6"}>
+      <div className={`pt-4 ${isMagazine ? "space-y-12" : "space-y-9"}`}>
         {menu.map((cat) => (
-          <section key={cat.id}>
+          <section key={cat.id} id={sectionId(cat.id)} className="scroll-mt-28">
             <h3
-              style={{ fontSize: isMagazine ? `calc(${ts.categoryHeader} + 4px)` : ts.categoryHeader }}
-              className={`font-display font-semibold tracking-tight mb-3 flex items-center gap-1.5 ${sectionHeaderClass(sectionHeaderStyle)}`}
+              style={{ fontSize: isMagazine ? `calc(${ts.categoryHeader} + 6px)` : ts.categoryHeader }}
+              className={`${MENU_HEADLINE_FONT} font-semibold tracking-tight mb-3.5 flex items-center gap-2 ${sectionHeaderClass(sectionHeaderStyle)}`}
             >
               {cat.icon && <span aria-hidden>{cat.icon}</span>}
               {cat.name}
             </h3>
 
             {isMinimal ? (
-              <div className={dividerClass(cs.divider) ? "divide-y divide-line" : "space-y-1"}>
+              <div className={dividerClass(cs.divider) ? "divide-y divide-line" : ""}>
                 {cat.items.map((item) => (
-                  <div key={item.id} className="flex items-baseline justify-between gap-3 py-2">
-                    <div className="min-w-0">
-                      <span
-                        style={{ fontSize: ts.itemName }}
-                        className={`font-medium ${item.available ? "" : "text-muted"}`}
-                      >
-                        {item.name}
-                      </span>
-                      {!item.available && (
-                        <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted">
-                          Sold out
-                        </span>
-                      )}
-                      {item.description && (
-                        <p style={{ fontSize: ts.itemDesc }} className="text-muted mt-0.5">
-                          {item.description}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span style={{ fontSize: ts.itemPrice }} className="font-medium tabular-nums">
-                        {formatCents(item.priceCents, currency)}
-                      </span>
-                      {item.available && (
-                        <button
-                          onClick={() =>
-                            item.groups.length > 0 ? setSheetItem(item) : addSimple(item)
-                          }
-                          className={`text-xs font-medium px-2.5 py-1 ${addBtnClass}`}
-                        >
-                          Add
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : layout === "grid" || cs.imagePosition === "top" ? (
-              <div className="grid grid-cols-2 gap-3">
-                {cat.items.map((item) => (
-                  <div
+                  <MinimalRow
                     key={item.id}
-                    className={`rounded-[var(--radius-card)] bg-surface overflow-hidden flex flex-col ${cardBorderClass(cs.border)} ${cardShadowClass(cs.shadow)}`}
-                  >
-                    <div className={`bg-paper relative ${aspectClass(cs.imageAspect)}`}>
-                      {item.imageUrl ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          src={item.imageUrl}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-muted text-xs">
-                          {cat.icon || "No photo"}
-                        </div>
-                      )}
-                      {!item.available && (
-                        <span className="absolute top-2 left-2 text-[10px] uppercase tracking-wide bg-surface/90 text-muted px-1.5 py-0.5 rounded">
-                          Sold out
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-3 flex-1 flex flex-col">
-                      <span
-                        style={{ fontSize: ts.itemName }}
-                        className={`font-medium ${item.available ? "" : "text-muted"}`}
-                      >
-                        {item.name}
-                      </span>
-                      <ItemBadges badges={item.badges} />
-                      <p style={{ fontSize: ts.itemPrice }} className="font-medium mt-1.5 tabular-nums">
-                        {formatCents(item.priceCents, currency)}
-                      </p>
-                      {item.available && (
-                        <button
-                          onClick={() =>
-                            item.groups.length > 0 ? setSheetItem(item) : addSimple(item)
-                          }
-                          className={`mt-2 py-1.5 text-sm font-medium ${addBtnClass}`}
-                        >
-                          Add
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                    item={item}
+                    ts={ts}
+                    currency={currency}
+                    simpleQty={simpleQty.get(item.id) ?? 0}
+                    anyQty={anyQty.get(item.id) ?? 0}
+                    addBtnClass={addBtnClass}
+                    onOpen={() => setSheetItem(item)}
+                    onAdd={() => (item.groups.length > 0 ? setSheetItem(item) : addSimple(item))}
+                    onRemove={() => removeSimple(item)}
+                  />
                 ))}
               </div>
             ) : (
-              <ul className="space-y-2">
+              <div
+                className={
+                  isGrid || topImages
+                    ? "grid grid-cols-2 md:grid-cols-3 gap-3"
+                    : `grid gap-3 md:grid-cols-2 ${isMagazine ? "sm:gap-4" : ""}`
+                }
+              >
                 {cat.items.map((item) => (
-                  <li
+                  <ItemCard
                     key={item.id}
-                    className={`rounded-[var(--radius-card)] bg-surface p-4 flex items-start gap-3 ${cardBorderClass(cs.border)} ${cardShadowClass(cs.shadow)}`}
-                  >
-                    {item.imageUrl && cs.imagePosition === "left" && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={item.imageUrl}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        className="w-16 h-16 rounded-lg object-cover shrink-0"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          style={{ fontSize: ts.itemName }}
-                          className={`font-medium ${item.available ? "" : "text-muted"}`}
-                        >
-                          {item.name}
-                        </span>
-                        {!item.available && (
-                          <span className="text-[10px] uppercase tracking-wide bg-paper text-muted px-1.5 py-0.5 rounded">
-                            Sold out
-                          </span>
-                        )}
-                      </div>
-                      {item.description && (
-                        <p style={{ fontSize: ts.itemDesc }} className="text-muted mt-0.5">
-                          {item.description}
-                        </p>
-                      )}
-                      <ItemBadges badges={item.badges} />
-                      {item.allergens.length > 0 && (
-                        <p className="text-[11px] text-muted mt-1">
-                          Contains: {item.allergens.join(", ")}
-                        </p>
-                      )}
-                      <p style={{ fontSize: ts.itemPrice }} className="font-medium mt-1 tabular-nums">
-                        {formatCents(item.priceCents, currency)}
-                      </p>
-                    </div>
-                    {item.available && (
-                      <button
-                        onClick={() =>
-                          item.groups.length > 0
-                            ? setSheetItem(item)
-                            : addSimple(item)
-                        }
-                        className={`shrink-0 px-4 py-2 text-sm font-medium ${addBtnClass}`}
-                      >
-                        Add
-                      </button>
-                    )}
-                  </li>
+                    item={item}
+                    cs={cs}
+                    ts={ts}
+                    currency={currency}
+                    simpleQty={simpleQty.get(item.id) ?? 0}
+                    anyQty={anyQty.get(item.id) ?? 0}
+                    addBtnClass={addBtnClass}
+                    onOpen={() => setSheetItem(item)}
+                    onAdd={() => (item.groups.length > 0 ? setSheetItem(item) : addSimple(item))}
+                    onRemove={() => removeSimple(item)}
+                  />
                 ))}
-              </ul>
+              </div>
             )}
           </section>
         ))}
       </div>
 
       {retrying && (
-        <p className="mt-4 rounded-lg bg-amber-50 text-amber-800 px-3.5 py-2.5 text-sm">
+        <p className="mt-4 rounded-[var(--radius-md)] bg-warn-soft text-warn px-3.5 py-2.5 text-sm">
           Couldn&apos;t send — retrying as soon as you&apos;re back online…
         </p>
       )}
-      {error && (
-        <p className="mt-4 rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
+      {error && !reviewOpen && (
+        <p className="mt-4 rounded-[var(--radius-md)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
           {error}
         </p>
       )}
 
-      {count > 0 && (
-        <div className="fixed bottom-0 inset-x-0 border-t border-line bg-surface/95 backdrop-blur px-5 py-4">
-          <div className="max-w-sm mx-auto">
-            <button
-              onClick={primaryAction}
-              disabled={pending}
-              className={`w-full py-3.5 font-medium disabled:opacity-60 flex items-center justify-center gap-2 ${menuButtonClass(buttonShape, buttonFill)}`}
+      {/* Floating cart bar — springs in when the first item lands. */}
+      <AnimatePresence>
+        {count > 0 && (
+          <motion.div
+            key="cartbar"
+            initial={{ y: 96, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 96, opacity: 0, transition: easeOut(0.2) }}
+            transition={SPRING}
+            className="fixed bottom-0 inset-x-0 z-30 px-4 pb-safe pt-3 pointer-events-none"
+          >
+            <motion.div
+              key={bump}
+              initial={bump > 0 ? { scale: 0.97 } : false}
+              animate={{ scale: 1 }}
+              transition={SPRING}
+              className="max-w-md md:max-w-lg mx-auto pointer-events-auto"
             >
-              {(pending || retrying) && <Spinner />}
-              <span>
-                {retrying ? "Retrying…" : pending ? "Sending…" : submitLabel(count)}
-              </span>
-              <span className="tabular-nums opacity-90">
-                {formatCents(subtotal, currency)}
-              </span>
-            </button>
-          </div>
-        </div>
-      )}
+              <Button
+                variant="primary"
+                size="lg"
+                full
+                onClick={primaryAction}
+                disabled={pending}
+                loading={pending || retrying}
+                className="justify-between px-4"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="min-w-7 h-7 px-2 rounded-pill bg-white/20 text-on-accent flex items-center justify-center text-sm font-semibold tabular">
+                    <AnimatedInt value={count} />
+                  </span>
+                  <span>{retrying ? "Retrying…" : pending ? "Sending…" : submitLabel(count)}</span>
+                </span>
+                <AnimatedMoney cents={subtotal} currency={currency} className={`${MENU_HEADLINE_FONT} text-lg`} />
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {sheetItem && (
-        <ModifierSheet
-          item={sheetItem}
-          currency={currency}
-          onClose={() => setSheetItem(null)}
-          onConfirm={(line) => {
-            addConfigured(line);
-            setSheetItem(null);
-          }}
-        />
-      )}
+      <ItemSheet
+        item={sheetItem}
+        currency={currency}
+        onClose={() => setSheetItem(null)}
+        onConfirm={(line) => {
+          addConfigured(line);
+          setSheetItem(null);
+        }}
+      />
 
-      {reviewOpen && (
-        <ReviewSheet
-          cart={cart}
-          currency={currency}
-          subtotal={subtotal}
-          note={note}
-          setNote={setNote}
-          pending={pending}
-          retrying={retrying}
-          error={error}
-          onChangeQty={changeQty}
-          onChangeNote={changeLineNote}
-          onClose={() => setReviewOpen(false)}
-          onPlace={send}
-        />
-      )}
+      <ReviewSheet
+        open={reviewOpen}
+        cart={cart}
+        currency={currency}
+        subtotal={subtotal}
+        note={note}
+        setNote={setNote}
+        pending={pending}
+        retrying={retrying}
+        error={error}
+        onChangeQty={changeQty}
+        onChangeNote={changeLineNote}
+        onClose={() => setReviewOpen(false)}
+        onPlace={send}
+      />
     </div>
   );
 }
 
-// The customer's review-and-confirm step: last look at the order, adjust
-// quantities, add a note for the kitchen, then place it.
-function ReviewSheet({
-  cart,
-  currency,
-  subtotal,
-  note,
-  setNote,
-  pending,
-  retrying,
-  error,
-  onChangeQty,
-  onChangeNote,
-  onClose,
-  onPlace,
+// ---- Add control: "+" that morphs into a stepper once the item's in the
+// cart. Items with modifiers keep the "+" (each add is a fresh configuration
+// via the sheet) and show a count badge instead.
+function AddControl({
+  item,
+  simpleQty,
+  anyQty,
+  addBtnClass,
+  onAdd,
+  onRemove,
+  size = "md",
 }: {
-  cart: CartLine[];
-  currency: string;
-  subtotal: number;
-  note: string;
-  setNote: (v: string) => void;
-  pending: boolean;
-  retrying: boolean;
-  error: string | null;
-  onChangeQty: (key: string, delta: number) => void;
-  onChangeNote: (key: string, note: string) => void;
-  onClose: () => void;
-  onPlace: () => void;
+  item: OrderMenuItem;
+  simpleQty: number;
+  anyQty: number;
+  addBtnClass: string;
+  onAdd: () => void;
+  onRemove: () => void;
+  size?: "sm" | "md";
 }) {
-  const [noteOpenFor, setNoteOpenFor] = useState<string | null>(null);
+  const dim = size === "sm" ? "h-9 min-w-9" : "h-10 min-w-10";
+  if (!item.available) return null;
+  const hasGroups = item.groups.length > 0;
+
+  if (!hasGroups && simpleQty > 0) {
+    return (
+      <motion.div
+        layout
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={SPRING}
+        className={`inline-flex items-center rounded-pill bg-pine text-on-accent shadow-accent ${dim}`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.85 }}
+          transition={SPRING_PRESS}
+          onClick={onRemove}
+          aria-label={`Remove one ${item.name}`}
+          className={`${dim} flex items-center justify-center text-lg leading-none`}
+        >
+          −
+        </motion.button>
+        <span className="min-w-5 text-center text-sm font-semibold tabular">
+          <AnimatedInt value={simpleQty} />
+        </span>
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.85 }}
+          transition={SPRING_PRESS}
+          onClick={onAdd}
+          aria-label={`Add one more ${item.name}`}
+          className={`${dim} flex items-center justify-center text-lg leading-none`}
+        >
+          +
+        </motion.button>
+      </motion.div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-30 flex items-end justify-center bg-ink/40">
-      <div className="w-full max-w-sm bg-surface rounded-t-2xl border-t border-line max-h-[88dvh] overflow-y-auto">
-        <div className="sticky top-0 bg-surface border-b border-line px-5 py-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold tracking-tight">
-            Review your order
-          </h2>
-          <button onClick={onClose} className="text-muted hover:text-ink text-sm">
-            Close
-          </button>
+    <motion.button
+      layout
+      type="button"
+      whileTap={{ scale: 0.85 }}
+      transition={SPRING_PRESS}
+      onClick={(e) => {
+        e.stopPropagation();
+        onAdd();
+      }}
+      aria-label={hasGroups ? `Choose options for ${item.name}` : `Add ${item.name}`}
+      className={`relative ${dim} w-auto px-0 aspect-square flex items-center justify-center text-xl leading-none font-medium ${addBtnClass}`}
+    >
+      +
+      {hasGroups && anyQty > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-pill bg-ink text-surface text-[11px] font-semibold flex items-center justify-center tabular">
+          {anyQty}
+        </span>
+      )}
+    </motion.button>
+  );
+}
+
+type CardProps = {
+  item: OrderMenuItem;
+  ts: TypeSize;
+  currency: string;
+  simpleQty: number;
+  anyQty: number;
+  addBtnClass: string;
+  onOpen: () => void;
+  onAdd: () => void;
+  onRemove: () => void;
+};
+
+function ItemCard({ item, cs, ...p }: CardProps & { cs: CardStyle }) {
+  const { ts, currency } = p;
+  const showImage = cs.imagePosition !== "none";
+  const top = cs.imagePosition === "top";
+
+  const imageEl = showImage ? (
+    <div
+      className={`relative overflow-hidden shrink-0 bg-surface-2 ${
+        top ? `w-full ${aspectClass(cs.imageAspect)}` : "w-[72px] h-[72px] rounded-[var(--radius-md)]"
+      }`}
+    >
+      {item.imageUrl ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={item.imageUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className={`absolute inset-0 w-full h-full object-cover ${item.available ? "" : "grayscale opacity-60"}`}
+        />
+      ) : (
+        <PhotoFallback name={item.name} />
+      )}
+      {!item.available && top && (
+        <span className="absolute top-2 left-2 text-[10px] uppercase tracking-wide bg-surface/90 text-muted px-2 py-0.5 rounded-pill">
+          Sold out
+        </span>
+      )}
+    </div>
+  ) : null;
+
+  const textEl = (
+    <div className="flex-1 min-w-0">
+      <span style={{ fontSize: ts.itemName }} className={`${MENU_HEADLINE_FONT} block font-semibold leading-snug ${item.available ? "" : "text-muted"}`}>
+        {item.name}
+      </span>
+      {item.description && (
+        <p style={{ fontSize: ts.itemDesc }} className="text-muted mt-0.5 line-clamp-2">
+          {item.description}
+        </p>
+      )}
+      {!item.available && !top && (
+        <span className="inline-block mt-1 text-[10px] uppercase tracking-wide bg-surface-2 text-muted px-2 py-0.5 rounded-pill">
+          Sold out
+        </span>
+      )}
+      <ItemBadges badges={item.badges} allergens={item.allergens} />
+    </div>
+  );
+
+  const priceEl = (
+    <span style={{ fontSize: ts.itemPrice }} className={`${MENU_HEADLINE_FONT} font-semibold tabular`}>
+      {formatCents(item.priceCents, currency)}
+    </span>
+  );
+
+  const shell = `rounded-[var(--radius-card)] bg-surface text-left ${cardBorderClass(cs.border)} ${cardShadowClass(cs.shadow)} ${
+    item.available ? "cursor-pointer active:scale-[0.99] transition-transform duration-[var(--dur-fast)]" : ""
+  }`;
+
+  if (top) {
+    return (
+      <div role="button" tabIndex={0} onClick={p.onOpen} onKeyDown={(e) => e.key === "Enter" && p.onOpen()} className={`${shell} overflow-hidden flex flex-col`}>
+        {imageEl}
+        <div className="p-3.5 flex-1 flex flex-col">
+          {textEl}
+          <div className="mt-3 flex items-center justify-between gap-2">
+            {priceEl}
+            <AddControl item={item} simpleQty={p.simpleQty} anyQty={p.anyQty} addBtnClass={p.addBtnClass} onAdd={p.onAdd} onRemove={p.onRemove} size="sm" />
+          </div>
         </div>
+      </div>
+    );
+  }
 
-        <div className="px-5 py-4 space-y-4">
-          <ul className="space-y-3">
-            {cart.map((l) => {
-              const noteOpen = noteOpenFor === l.key || !!l.note;
-              return (
-                <li key={l.key}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium">{l.name}</span>
-                      {l.optionLabel && (
-                        <span className="block text-xs text-muted">
-                          {l.optionLabel}
-                        </span>
-                      )}
-                      {!noteOpen && (
-                        <button
-                          onClick={() => setNoteOpenFor(l.key)}
-                          className="text-xs text-muted hover:text-ink underline mt-0.5"
-                        >
-                          Add a note
-                        </button>
-                      )}
-                    </div>
-                    <span className="text-sm tabular-nums text-muted shrink-0">
-                      {formatCents(l.unitCents * l.quantity, currency)}
-                    </span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => onChangeQty(l.key, -1)}
-                        className="w-7 h-7 rounded-full border border-line text-base leading-none"
-                      >
-                        −
-                      </button>
-                      <span className="w-4 text-center text-sm tabular-nums">
-                        {l.quantity}
-                      </span>
-                      <button
-                        onClick={() => onChangeQty(l.key, 1)}
-                        className="w-7 h-7 rounded-full border border-line text-base leading-none"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                  {noteOpen && (
-                    <input
-                      autoFocus={noteOpenFor === l.key}
-                      value={l.note ?? ""}
-                      onChange={(e) => onChangeNote(l.key, e.target.value)}
-                      maxLength={140}
-                      placeholder="e.g. no fries"
-                      className="mt-1.5 w-full rounded-md border border-line bg-paper px-2.5 py-1.5 text-xs focus:border-pine focus:outline-none"
-                    />
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-
-          <div>
-            <label className="text-sm text-muted block mb-1">
-              Note for the whole order{" "}
-              <span className="text-xs">(optional — for a specific item, use &quot;Add a note&quot; above)</span>
-            </label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={200}
-              rows={2}
-              placeholder="e.g. no onion, allergy to nuts"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none resize-none"
-            />
-          </div>
-
-          <div className="flex justify-between font-medium border-t border-line pt-3">
-            <span>Total</span>
-            <span className="tabular-nums">{formatCents(subtotal, currency)}</span>
-          </div>
-
-          {retrying && (
-            <p className="rounded-lg bg-amber-50 text-amber-800 px-3.5 py-2.5 text-sm">
-              Couldn&apos;t send — retrying as soon as you&apos;re back online…
-            </p>
-          )}
-          {error && (
-            <p className="rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
-              {error}
-            </p>
-          )}
-
-          <button
-            onClick={onPlace}
-            disabled={pending || cart.length === 0}
-            className="w-full rounded-xl bg-pine text-[color:var(--on-accent,#fff)] py-3.5 font-medium hover:bg-pine-deep disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {(pending || retrying) && <Spinner />}
-            {retrying ? "Retrying…" : pending ? "Placing order…" : "Place order"}
-          </button>
+  return (
+    <div role="button" tabIndex={0} onClick={p.onOpen} onKeyDown={(e) => e.key === "Enter" && p.onOpen()} className={`${shell} p-3.5 flex items-start gap-3.5`}>
+      {imageEl}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {textEl}
+        <div className="mt-2.5 flex items-center justify-between gap-2">
+          {priceEl}
+          <AddControl item={item} simpleQty={p.simpleQty} anyQty={p.anyQty} addBtnClass={p.addBtnClass} onAdd={p.onAdd} onRemove={p.onRemove} />
         </div>
       </div>
     </div>
   );
 }
 
-function ModifierSheet({
+function MinimalRow({ item, ...p }: CardProps) {
+  const { ts, currency } = p;
+  return (
+    <div role="button" tabIndex={0} onClick={p.onOpen} onKeyDown={(e) => e.key === "Enter" && p.onOpen()} className="flex items-center justify-between gap-3 py-3 cursor-pointer">
+      <div className="min-w-0 flex-1">
+        <span style={{ fontSize: ts.itemName }} className={`${MENU_HEADLINE_FONT} font-semibold ${item.available ? "" : "text-muted"}`}>
+          {item.name}
+        </span>
+        {!item.available && <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">Sold out</span>}
+        {item.description && (
+          <p style={{ fontSize: ts.itemDesc }} className="text-muted mt-0.5">
+            {item.description}
+          </p>
+        )}
+      </div>
+      <span style={{ fontSize: ts.itemPrice }} className={`${MENU_HEADLINE_FONT} font-semibold tabular shrink-0`}>
+        {formatCents(item.priceCents, currency)}
+      </span>
+      <AddControl item={item} simpleQty={p.simpleQty} anyQty={p.anyQty} addBtnClass={p.addBtnClass} onAdd={p.onAdd} onRemove={p.onRemove} size="sm" />
+    </div>
+  );
+}
+
+// ---- Item sheet: photo, story, modifiers as pills, live price, add. ---------
+function ItemSheet({
   item,
   currency,
   onClose,
   onConfirm,
 }: {
-  item: OrderMenuItem;
+  item: OrderMenuItem | null;
   currency: string;
   onClose: () => void;
   onConfirm: (line: CartLine) => void;
 }) {
+  return (
+    <Sheet open={!!item} onClose={onClose} size="lg">
+      {item && <ItemSheetBody key={item.id} item={item} currency={currency} onConfirm={onConfirm} />}
+    </Sheet>
+  );
+}
+
+function ItemSheetBody({
+  item,
+  currency,
+  onConfirm,
+}: {
+  item: OrderMenuItem;
+  currency: string;
+  onConfirm: (line: CartLine) => void;
+}) {
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [quantity, setQuantity] = useState(1);
-  const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const reduced = useReducedMotion();
+
+  // Required groups the customer hasn't filled yet, surfaced at the moment
+  // Add is blocked — NOT computed reactively on every render, so a group
+  // that's still empty doesn't show as an error before they've even tried
+  // to submit (see point 5: the "Required" chip is the only always-on cue).
+  const [missingGroupIds, setMissingGroupIds] = useState<Set<string>>(new Set());
+  // Bumped on every blocked attempt so the shake animations (group + button)
+  // retrigger even if the same groups are still missing.
+  const [attempt, setAttempt] = useState(0);
+  const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   function toggle(group: OrderGroup, optionId: string) {
-    setError(null);
+    haptic(6);
     setSelected((s) => {
       const cur = s[group.id] ?? [];
       const has = cur.includes(optionId);
@@ -762,6 +746,15 @@ function ModifierSheet({
       } else {
         if (group.maxSelect > 0 && cur.length >= group.maxSelect) return s;
         next = [...cur, optionId];
+      }
+      // A group that now satisfies its requirement clears its own
+      // highlight/message immediately — no need to wait for another Add tap.
+      if (group.required && next.length > 0 && missingGroupIds.has(group.id)) {
+        setMissingGroupIds((prev) => {
+          const nextSet = new Set(prev);
+          nextSet.delete(group.id);
+          return nextSet;
+        });
       }
       return { ...s, [group.id]: next };
     });
@@ -775,12 +768,15 @@ function ModifierSheet({
   const unit = item.priceCents + delta;
 
   function confirm() {
-    for (const g of item.groups) {
-      const c = (selected[g.id] ?? []).length;
-      if (g.required && c < 1) {
-        setError(`Please choose ${g.name}.`);
-        return;
-      }
+    if (!item.available) return;
+    const missing = item.groups.filter((g) => g.required && (selected[g.id] ?? []).length < 1);
+    if (missing.length > 0) {
+      setMissingGroupIds(new Set(missing.map((g) => g.id)));
+      setAttempt((a) => a + 1);
+      haptic([20, 40, 20]);
+      const firstEl = groupRefs.current[missing[0].id];
+      firstEl?.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "center" });
+      return;
     }
     const labelParts = item.groups
       .flatMap((g) => g.options)
@@ -798,103 +794,296 @@ function ModifierSheet({
     });
   }
 
+  const missingGroups = item.groups.filter((g) => missingGroupIds.has(g.id));
+  const missingMessage =
+    missingGroups.length === 0
+      ? null
+      : missingGroups.length === 1
+        ? `Choose ${missingGroups[0].name} to continue`
+        : `Choose ${missingGroups.length} options to continue`;
+  const shakeAnim = reduced ? undefined : { x: [0, -6, 6, -4, 4, 0] };
+
   return (
-    <div className="fixed inset-0 z-20 flex items-end justify-center bg-ink/30">
-      <div className="w-full max-w-sm bg-surface rounded-t-2xl border-t border-line max-h-[85dvh] overflow-y-auto">
-        <div className="sticky top-0 bg-surface border-b border-line px-5 py-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold tracking-tight">
-            {item.name}
-          </h2>
-          <button onClick={onClose} className="text-muted hover:text-ink text-sm">
-            Close
-          </button>
+    <div className="-mx-5 -mt-4">
+      <div className="relative aspect-[4/3] bg-surface-2 overflow-hidden">
+        {item.imageUrl ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img src={item.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <PhotoFallback name={item.name} />
+        )}
+      </div>
+
+      <div className="px-5 pt-4 pb-32 space-y-5">
+        <div>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className={`${MENU_HEADLINE_FONT} text-display-sm font-semibold`}>{item.name}</h2>
+            <span className={`${MENU_HEADLINE_FONT} text-lg font-semibold tabular shrink-0`}>
+              {formatCents(item.priceCents, currency)}
+            </span>
+          </div>
+          {item.description && <p className="text-sm text-ink-soft mt-1.5 leading-relaxed">{item.description}</p>}
+          <ItemBadges badges={item.badges} allergens={item.allergens} />
         </div>
 
-        <div className="px-5 py-4 space-y-5">
-          {item.groups.map((g) => (
-            <div key={g.id}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-sm">{g.name}</span>
-                <span className="text-xs text-muted">
-                  {g.required ? "Required" : "Optional"}
-                  {g.maxSelect > 1 ? ` · up to ${g.maxSelect}` : ""}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {g.options.map((o) => {
-                  const on = (selected[g.id] ?? []).includes(o.id);
-                  return (
-                    <button
-                      key={o.id}
-                      onClick={() => toggle(g, o.id)}
-                      className={`w-full flex items-center justify-between rounded-lg border px-3.5 py-2.5 text-sm transition-colors ${
-                        on ? "border-pine bg-pine-soft" : "border-line bg-surface"
-                      }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span
-                          className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                            on ? "border-pine bg-pine" : "border-line"
-                          }`}
-                        >
-                          {on && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </span>
-                        {o.name}
+        {item.groups.map((g) => {
+          const missing = missingGroupIds.has(g.id);
+          return (
+            <div
+              key={g.id}
+              ref={(el) => {
+                groupRefs.current[g.id] = el;
+              }}
+              className={`rounded-[var(--radius-md)] transition-colors duration-[var(--dur-fast)] -mx-3 p-3 ${
+                missing ? "bg-danger-soft ring-2 ring-danger/50" : ""
+              }`}
+            >
+              {/* Keyed on `attempt` (not just `missing`) so tapping Add a
+                  second time with the SAME group still unfilled replays the
+                  shake — a plain animate-prop change wouldn't re-fire since
+                  `missing` itself doesn't flip in that case. */}
+              <motion.div
+                key={missing ? attempt : "settled"}
+                animate={missing ? shakeAnim : undefined}
+                transition={{ duration: 0.4 }}
+              >
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <span className="font-semibold text-sm">{g.name}</span>
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    {g.required ? (
+                      <span
+                        className={`text-[10px] font-semibold uppercase tracking-wide rounded-pill px-2 py-0.5 ${
+                          missing ? "bg-danger text-white" : "bg-surface-2 text-ink-soft"
+                        }`}
+                      >
+                        Required
                       </span>
-                      {o.priceDeltaCents > 0 && (
-                        <span className="text-muted tabular-nums">
-                          +{formatCents(o.priceDeltaCents, currency)}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+                    ) : (
+                      <span className="text-xs text-muted">Optional</span>
+                    )}
+                    {g.maxSelect > 1 && <span className="text-xs text-muted">up to {g.maxSelect}</span>}
+                  </span>
+                </div>
+                {missing && (
+                  <p className="text-xs font-medium text-danger mb-2">Choose {g.name.toLowerCase()}</p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {g.options.map((o) => {
+                    const on = (selected[g.id] ?? []).includes(o.id);
+                    return (
+                      <motion.button
+                        key={o.id}
+                        type="button"
+                        whileTap={{ scale: 0.95 }}
+                        transition={SPRING_PRESS}
+                        aria-pressed={on}
+                        onClick={() => toggle(g, o.id)}
+                        className={`h-10 px-3.5 rounded-pill text-sm font-medium inline-flex items-center gap-2 transition-[background-color,color,box-shadow] duration-[var(--dur-fast)] ${
+                          on ? "bg-pine text-on-accent shadow-accent" : "bg-surface border border-line text-ink-soft hover:border-line-strong"
+                        }`}
+                      >
+                        {o.name}
+                        {o.priceDeltaCents > 0 && (
+                          <span className={`tabular ${on ? "opacity-85" : "text-muted"}`}>+{formatCents(o.priceDeltaCents, currency)}</span>
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </motion.div>
             </div>
-          ))}
+          );
+        })}
 
-          {error && <p className="text-sm text-danger">{error}</p>}
-
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Quantity</span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                className="w-8 h-8 rounded-full border border-line text-lg leading-none"
-              >
-                −
-              </button>
-              <span className="w-5 text-center tabular-nums">{quantity}</span>
-              <button
-                onClick={() => setQuantity((q) => Math.min(20, q + 1))}
-                className="w-8 h-8 rounded-full border border-line text-lg leading-none"
-              >
-                +
-              </button>
-            </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium">Quantity</span>
+          <div className="inline-flex items-center rounded-pill border border-line bg-surface h-11">
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.85 }}
+              onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+              className="w-11 h-11 flex items-center justify-center text-lg leading-none"
+              aria-label="Decrease quantity"
+            >
+              −
+            </motion.button>
+            <span className="w-6 text-center text-sm font-semibold tabular">
+              <AnimatedInt value={quantity} />
+            </span>
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.85 }}
+              onClick={() => setQuantity((q) => Math.min(20, q + 1))}
+              className="w-11 h-11 flex items-center justify-center text-lg leading-none"
+              aria-label="Increase quantity"
+            >
+              +
+            </motion.button>
           </div>
-
-          <div>
-            <label className="text-sm text-muted mb-1.5 block">
-              Special requests (optional)
-            </label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. no onion, extra spicy"
-              rows={2}
-              className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm focus:border-pine focus:outline-none resize-none"
-            />
-          </div>
-
-          <button
-            onClick={confirm}
-            className="w-full rounded-xl bg-pine text-white py-3 font-medium hover:bg-pine-deep"
-          >
-            Add · {formatCents(unit * quantity, currency)}
-          </button>
         </div>
+
+        <div>
+          <label className="text-sm font-medium block mb-1.5">
+            Special requests <span className="text-muted font-normal">(optional)</span>
+          </label>
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. no onion, extra spicy"
+            rows={2}
+            maxLength={140}
+            className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 text-sm focus:border-pine focus:outline-none resize-none"
+          />
+        </div>
+
+      </div>
+
+      {/* Sticky CTA inside the sheet so it's always reachable — this is the
+          ALWAYS-VISIBLE cue on a blocked Add: the customer sees why nothing
+          happened here even before the scroll-to-group above lands. */}
+      <div className="sticky bottom-0 inset-x-0 px-5 pt-3 pb-safe glass border-x-0 border-b-0">
+        {missingMessage && (
+          <motion.p
+            key={attempt}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="text-sm font-medium text-danger text-center mb-2"
+          >
+            {missingMessage}
+          </motion.p>
+        )}
+        <motion.div key={`btn-${attempt}`} animate={missingMessage ? shakeAnim : undefined} transition={{ duration: 0.4 }}>
+          <Button variant="primary" size="lg" full onClick={confirm} disabled={!item.available} className="justify-between">
+            <span>{item.available ? "Add to order" : "Sold out"}</span>
+            <AnimatedMoney cents={unit * quantity} currency={currency} className={`${MENU_HEADLINE_FONT} text-lg`} />
+          </Button>
+        </motion.div>
       </div>
     </div>
+  );
+}
+
+// ---- Review-and-confirm: last look, adjust, note for the kitchen, place. ---
+function ReviewSheet({
+  open,
+  cart,
+  currency,
+  subtotal,
+  note,
+  setNote,
+  pending,
+  retrying,
+  error,
+  onChangeQty,
+  onChangeNote,
+  onClose,
+  onPlace,
+}: {
+  open: boolean;
+  cart: CartLine[];
+  currency: string;
+  subtotal: number;
+  note: string;
+  setNote: (v: string) => void;
+  pending: boolean;
+  retrying: boolean;
+  error: string | null;
+  onChangeQty: (key: string, delta: number) => void;
+  onChangeNote: (key: string, note: string) => void;
+  onClose: () => void;
+  onPlace: () => void;
+}) {
+  const [noteOpenFor, setNoteOpenFor] = useState<string | null>(null);
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Review your order"
+      footer={
+        <div className="space-y-2">
+          {retrying && (
+            <p className="rounded-[var(--radius-md)] bg-warn-soft text-warn px-3.5 py-2.5 text-sm">
+              Couldn&apos;t send — retrying as soon as you&apos;re back online…
+            </p>
+          )}
+          {error && (
+            <motion.p key={error} animate={{ x: [0, -6, 6, -4, 4, 0] }} transition={{ duration: 0.4 }} className="rounded-[var(--radius-md)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
+              {error}
+            </motion.p>
+          )}
+          <Button variant="primary" size="lg" full onClick={onPlace} disabled={pending || cart.length === 0} loading={pending || retrying} className="justify-between">
+            <span>{retrying ? "Retrying…" : pending ? "Placing order…" : "Place order"}</span>
+            <AnimatedMoney cents={subtotal} currency={currency} className={`${MENU_HEADLINE_FONT} text-lg`} />
+          </Button>
+        </div>
+      }
+    >
+      <ul className="divide-y divide-line">
+        <AnimatePresence initial={false}>
+          {cart.map((l) => {
+            const noteOpen = noteOpenFor === l.key || !!l.note;
+            return (
+              <motion.li
+                key={l.key}
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: -24, transition: easeOut(0.18) }}
+                transition={SPRING_SOFT}
+                className="py-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold">{l.name}</span>
+                    {l.optionLabel && <span className="block text-xs text-muted">{l.optionLabel}</span>}
+                    {!noteOpen && (
+                      <button type="button" onClick={() => setNoteOpenFor(l.key)} className="text-xs text-muted hover:text-ink underline underline-offset-2 mt-0.5">
+                        Add a note
+                      </button>
+                    )}
+                  </div>
+                  <span className="text-sm tabular text-ink-soft shrink-0">{formatCents(l.unitCents * l.quantity, currency)}</span>
+                  <div className="inline-flex items-center rounded-pill border border-line bg-surface h-9 shrink-0">
+                    <motion.button type="button" whileTap={{ scale: 0.85 }} onClick={() => onChangeQty(l.key, -1)} className="w-9 h-9 flex items-center justify-center leading-none" aria-label={`Remove one ${l.name}`}>
+                      −
+                    </motion.button>
+                    <span className="w-5 text-center text-sm font-semibold tabular">{l.quantity}</span>
+                    <motion.button type="button" whileTap={{ scale: 0.85 }} onClick={() => onChangeQty(l.key, 1)} className="w-9 h-9 flex items-center justify-center leading-none" aria-label={`Add one more ${l.name}`}>
+                      +
+                    </motion.button>
+                  </div>
+                </div>
+                {noteOpen && (
+                  <input
+                    autoFocus={noteOpenFor === l.key}
+                    value={l.note ?? ""}
+                    onChange={(e) => onChangeNote(l.key, e.target.value)}
+                    maxLength={140}
+                    placeholder="e.g. no fries"
+                    className="mt-2 w-full rounded-[var(--radius-sm)] border border-line bg-surface-2 px-3 py-2 text-xs focus:border-pine focus:outline-none"
+                  />
+                )}
+              </motion.li>
+            );
+          })}
+        </AnimatePresence>
+      </ul>
+
+      <div className="mt-4">
+        <label className="text-sm font-medium block mb-1.5">
+          Note for the whole order{" "}
+          <span className="text-xs text-muted font-normal">(optional — for one item, use &quot;Add a note&quot; above)</span>
+        </label>
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          maxLength={200}
+          rows={2}
+          placeholder="e.g. no onion, allergy to nuts"
+          className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 text-sm focus:border-pine focus:outline-none resize-none"
+        />
+      </div>
+    </Sheet>
   );
 }

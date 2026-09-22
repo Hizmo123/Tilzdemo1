@@ -139,6 +139,7 @@ export default async function VisitPage({
   return (
     <CustomerExperience
       token={token}
+      restaurantId={visit.restaurantId}
       restaurantName={visit.restaurantName}
       locationName={visit.locationName}
       tableLabel={visit.tableLabel}
