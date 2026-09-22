@@ -5,6 +5,7 @@ import Image from "next/image";
 import { formatCents } from "@/lib/money";
 import { BADGE_META, type BadgeKey } from "@/lib/menu-badges";
 import type { OrderCategory } from "@/components/order/menu-orderer";
+import { CategoryTabs } from "@/components/order/category-tabs";
 import {
   resolveCardStyle,
   resolveTypeScale,
@@ -190,35 +191,11 @@ export function MenuDisplay({
 
   return (
     <div className={isMagazine ? "space-y-10" : "space-y-6"}>
-      {menu.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-          <button
-            type="button"
-            onClick={() => setActiveCategoryId(null)}
-            className={`shrink-0 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
-              activeCategoryId === null
-                ? "border-pine bg-pine-soft text-pine-deep"
-                : "border-line text-muted hover:border-ink/30"
-            }`}
-          >
-            All
-          </button>
-          {menu.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setActiveCategoryId(cat.id)}
-              className={`shrink-0 rounded-full border px-3.5 py-1.5 text-sm transition-colors ${
-                activeCategoryId === cat.id
-                  ? "border-pine bg-pine-soft text-pine-deep"
-                  : "border-line text-muted hover:border-ink/30"
-              }`}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      )}
+      <CategoryTabs
+        categories={menu}
+        activeCategoryId={activeCategoryId}
+        onChange={setActiveCategoryId}
+      />
 
       {visibleCategories.map((cat) => (
         <section key={cat.id}>

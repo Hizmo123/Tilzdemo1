@@ -14,6 +14,7 @@ import {
   sectionHeaderClass,
   menuButtonClass,
 } from "@/lib/menu-style";
+import { CategoryTabs } from "./category-tabs";
 
 export type OrderOption = { id: string; name: string; priceDeltaCents: number };
 export type OrderGroup = {
@@ -132,6 +133,11 @@ export function MenuOrderer({
   const isMagazine = layout === "magazine";
   const isMinimal = layout === "minimal";
   const [cart, setCart] = useState<CartLine[]>([]);
+  // Client-side only — no refetch, and it never touches the cart. null = "All".
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+  const visibleMenu = activeCategoryId
+    ? menu.filter((cat) => cat.id === activeCategoryId)
+    : menu;
   const [sheetItem, setSheetItem] = useState<OrderMenuItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
@@ -355,7 +361,13 @@ export function MenuOrderer({
       )}
 
       <div className={isMagazine ? "space-y-10" : "space-y-6"}>
-        {menu.map((cat) => (
+        <CategoryTabs
+          categories={menu}
+          activeCategoryId={activeCategoryId}
+          onChange={setActiveCategoryId}
+        />
+
+        {visibleMenu.map((cat) => (
           <section key={cat.id}>
             <h3
               style={{ fontSize: isMagazine ? `calc(${ts.categoryHeader} + 4px)` : ts.categoryHeader }}
