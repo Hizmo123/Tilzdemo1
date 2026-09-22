@@ -14,6 +14,7 @@ import {
   cardShadowClass,
   dividerClass,
   sectionHeaderClass,
+  MENU_HEADLINE_FONT,
   type CardStyle,
 } from "@/lib/menu-style";
 
@@ -88,10 +89,10 @@ function ItemCard({ item, cs, ts, currency }: { item: Item; cs: CardStyle; ts: T
   const textEl = (
     <div className="flex-1 min-w-0">
       <div className="flex items-start justify-between gap-2">
-        <span style={{ fontSize: ts.itemName }} className={`font-semibold leading-snug ${item.available ? "" : "text-muted"}`}>
+        <span style={{ fontSize: ts.itemName }} className={`${MENU_HEADLINE_FONT} font-semibold leading-snug ${item.available ? "" : "text-muted"}`}>
           {item.name}
         </span>
-        <span style={{ fontSize: ts.itemPrice }} className="font-display font-semibold tabular shrink-0">
+        <span style={{ fontSize: ts.itemPrice }} className={`${MENU_HEADLINE_FONT} font-semibold tabular shrink-0`}>
           {formatCents(item.priceCents, currency)}
         </span>
       </div>
@@ -129,7 +130,7 @@ function MinimalRow({ item, ts, currency }: { item: Item; ts: TypeSize; currency
   return (
     <div className="flex items-baseline justify-between gap-4 py-3">
       <div className="min-w-0">
-        <span style={{ fontSize: ts.itemName }} className={`font-semibold ${item.available ? "" : "text-muted"}`}>
+        <span style={{ fontSize: ts.itemName }} className={`${MENU_HEADLINE_FONT} font-semibold ${item.available ? "" : "text-muted"}`}>
           {item.name}
         </span>
         {!item.available && (
@@ -142,7 +143,7 @@ function MinimalRow({ item, ts, currency }: { item: Item; ts: TypeSize; currency
         )}
       </div>
       <span className="flex-1 border-b border-dotted border-line-strong translate-y-[-4px] min-w-4" aria-hidden />
-      <span style={{ fontSize: ts.itemPrice }} className="font-display font-semibold tabular shrink-0">
+      <span style={{ fontSize: ts.itemPrice }} className={`${MENU_HEADLINE_FONT} font-semibold tabular shrink-0`}>
         {formatCents(item.priceCents, currency)}
       </span>
     </div>
@@ -186,7 +187,7 @@ export function MenuDisplay({
           <section key={cat.id} id={sectionId(cat.id)} className="scroll-mt-28">
             <h3
               style={{ fontSize: isMagazine ? `calc(${ts.categoryHeader} + 6px)` : ts.categoryHeader }}
-              className={`font-display font-semibold tracking-tight mb-3.5 flex items-center gap-2 ${sectionHeaderClass(sectionHeaderStyle)}`}
+              className={`${MENU_HEADLINE_FONT} font-semibold tracking-tight mb-3.5 flex items-center gap-2 ${sectionHeaderClass(sectionHeaderStyle)}`}
             >
               {cat.icon && <span aria-hidden>{cat.icon}</span>}
               {cat.name}

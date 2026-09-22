@@ -18,6 +18,7 @@ import {
   dividerClass,
   sectionHeaderClass,
   menuButtonClass,
+  MENU_HEADLINE_FONT,
   type CardStyle,
 } from "@/lib/menu-style";
 
@@ -349,7 +350,7 @@ export function MenuOrderer({
           <section key={cat.id} id={sectionId(cat.id)} className="scroll-mt-28">
             <h3
               style={{ fontSize: isMagazine ? `calc(${ts.categoryHeader} + 6px)` : ts.categoryHeader }}
-              className={`font-display font-semibold tracking-tight mb-3.5 flex items-center gap-2 ${sectionHeaderClass(sectionHeaderStyle)}`}
+              className={`${MENU_HEADLINE_FONT} font-semibold tracking-tight mb-3.5 flex items-center gap-2 ${sectionHeaderClass(sectionHeaderStyle)}`}
             >
               {cat.icon && <span aria-hidden>{cat.icon}</span>}
               {cat.name}
@@ -445,7 +446,7 @@ export function MenuOrderer({
                   </span>
                   <span>{retrying ? "Retrying…" : pending ? "Sending…" : submitLabel(count)}</span>
                 </span>
-                <AnimatedMoney cents={subtotal} currency={currency} className="font-display text-lg" />
+                <AnimatedMoney cents={subtotal} currency={currency} className={`${MENU_HEADLINE_FONT} text-lg`} />
               </Button>
             </motion.div>
           </motion.div>
@@ -610,7 +611,7 @@ function ItemCard({ item, cs, ...p }: CardProps & { cs: CardStyle }) {
 
   const textEl = (
     <div className="flex-1 min-w-0">
-      <span style={{ fontSize: ts.itemName }} className={`block font-semibold leading-snug ${item.available ? "" : "text-muted"}`}>
+      <span style={{ fontSize: ts.itemName }} className={`${MENU_HEADLINE_FONT} block font-semibold leading-snug ${item.available ? "" : "text-muted"}`}>
         {item.name}
       </span>
       {item.description && (
@@ -628,7 +629,7 @@ function ItemCard({ item, cs, ...p }: CardProps & { cs: CardStyle }) {
   );
 
   const priceEl = (
-    <span style={{ fontSize: ts.itemPrice }} className="font-display font-semibold tabular">
+    <span style={{ fontSize: ts.itemPrice }} className={`${MENU_HEADLINE_FONT} font-semibold tabular`}>
       {formatCents(item.priceCents, currency)}
     </span>
   );
@@ -671,7 +672,7 @@ function MinimalRow({ item, ...p }: CardProps) {
   return (
     <div role="button" tabIndex={0} onClick={p.onOpen} onKeyDown={(e) => e.key === "Enter" && p.onOpen()} className="flex items-center justify-between gap-3 py-3 cursor-pointer">
       <div className="min-w-0 flex-1">
-        <span style={{ fontSize: ts.itemName }} className={`font-semibold ${item.available ? "" : "text-muted"}`}>
+        <span style={{ fontSize: ts.itemName }} className={`${MENU_HEADLINE_FONT} font-semibold ${item.available ? "" : "text-muted"}`}>
           {item.name}
         </span>
         {!item.available && <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">Sold out</span>}
@@ -681,7 +682,7 @@ function MinimalRow({ item, ...p }: CardProps) {
           </p>
         )}
       </div>
-      <span style={{ fontSize: ts.itemPrice }} className="font-display font-semibold tabular shrink-0">
+      <span style={{ fontSize: ts.itemPrice }} className={`${MENU_HEADLINE_FONT} font-semibold tabular shrink-0`}>
         {formatCents(item.priceCents, currency)}
       </span>
       <AddControl item={item} simpleQty={p.simpleQty} anyQty={p.anyQty} addBtnClass={p.addBtnClass} onAdd={p.onAdd} onRemove={p.onRemove} size="sm" />
@@ -816,8 +817,8 @@ function ItemSheetBody({
       <div className="px-5 pt-4 pb-32 space-y-5">
         <div>
           <div className="flex items-start justify-between gap-3">
-            <h2 className="font-display text-display-sm font-semibold">{item.name}</h2>
-            <span className="font-display text-lg font-semibold tabular shrink-0">
+            <h2 className={`${MENU_HEADLINE_FONT} text-display-sm font-semibold`}>{item.name}</h2>
+            <span className={`${MENU_HEADLINE_FONT} text-lg font-semibold tabular shrink-0`}>
               {formatCents(item.priceCents, currency)}
             </span>
           </div>
@@ -955,7 +956,7 @@ function ItemSheetBody({
         <motion.div key={`btn-${attempt}`} animate={missingMessage ? shakeAnim : undefined} transition={{ duration: 0.4 }}>
           <Button variant="primary" size="lg" full onClick={confirm} disabled={!item.available} className="justify-between">
             <span>{item.available ? "Add to order" : "Sold out"}</span>
-            <AnimatedMoney cents={unit * quantity} currency={currency} className="font-display text-lg" />
+            <AnimatedMoney cents={unit * quantity} currency={currency} className={`${MENU_HEADLINE_FONT} text-lg`} />
           </Button>
         </motion.div>
       </div>
@@ -1013,7 +1014,7 @@ function ReviewSheet({
           )}
           <Button variant="primary" size="lg" full onClick={onPlace} disabled={pending || cart.length === 0} loading={pending || retrying} className="justify-between">
             <span>{retrying ? "Retrying…" : pending ? "Placing order…" : "Place order"}</span>
-            <AnimatedMoney cents={subtotal} currency={currency} className="font-display text-lg" />
+            <AnimatedMoney cents={subtotal} currency={currency} className={`${MENU_HEADLINE_FONT} text-lg`} />
           </Button>
         </div>
       }
