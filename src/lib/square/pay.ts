@@ -351,3 +351,60 @@ export async function refundViaSquare(input: RefundViaSquareInput): Promise<Refu
     providerRef: refund.id,
   };
 }
+
+export type CancelOrderFulfillmentResult = { ok: true } | { ok: false; error: string };
+
+// Cancels the single PICKUP fulfillment on a Square order created by
+// chargeBillViaSquare — deliberately NOT the order itself. Square rejects
+// cancelling an order once a payment has been processed against it
+// ("Orders cannot be canceled after payments have been processed"), so the
+// order stays as-is; only its fulfillment state moves to CANCELED, which is
+// what actually clears it off the venue's Square KDS/POS.
+//
+// Callers must only invoke this AFTER the payment has already been
+// refunded — this is cosmetic cleanup on the Square side, not what makes
+// the customer whole, and is treated as best-effort by design (see
+// cancelCustomerOrder in lib/bills.ts): the customer already has their
+// money back regardless of whether this call succeeds.
+export async function cancelSquareOrderFulfillment(
+  connection: SquareConnection,
+  squareOrderId: string,
+  // A fresh base per attempt — same derive-a-short-key pattern as every
+  // other Square call here, never reused across calls.
+  idempotencyKeyBase: string,
+): Promise<CancelOrderFulfillmentResult> {
+  if (!connection.locationId) {
+    return { ok: false, error: "Square connection has no location selected." };
+  }
+  const client = await squareClientFor(connection);
+
+  // UpdateOrder requires the order's CURRENT version — sending a stale one
+  // is rejected, so this always fetches fresh immediately before updating
+  // rather than trusting any version cached earlier in the request.
+  let current;
+  try {
+    const res = await client.orders.get({ orderId: squareOrderId });
+    current = res.order;
+  } catch (e) {
+    return { ok: false, error: `fetch failed — ${formatSquareError(e)}` };
+  }
+  const fulfillmentUid = current?.fulfillments?.[0]?.uid;
+  if (!current || current.version == null || !fulfillmentUid) {
+    return { ok: false, error: "Square order or its fulfillment could not be found." };
+  }
+
+  try {
+    await client.orders.update({
+      orderId: squareOrderId,
+      order: {
+        locationId: connection.locationId,
+        version: current.version,
+        fulfillments: [{ uid: fulfillmentUid, state: "CANCELED" }],
+      },
+      idempotencyKey: squareIdempotencyKey(idempotencyKeyBase, "order"),
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: `update failed — ${formatSquareError(e)}` };
+  }
+}

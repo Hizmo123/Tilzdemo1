@@ -10,6 +10,7 @@ import { getVenuePaymentContext } from "@/lib/square/context";
 import {
   chargeBillViaSquare,
   refundViaSquare,
+  cancelSquareOrderFulfillment,
   formatSquareError,
   SquarePaymentError,
   type SquareChargeLineItem,
@@ -1583,6 +1584,12 @@ export async function payBillItems(
 // kitchen hasn't started it (status still SUBMITTED). Removes the order's items
 // from the bill and recomputes the total. Once the kitchen taps "Start
 // preparing", it can no longer be cancelled from the phone (staff handle it).
+// Shared "can't be cancelled" message for BOTH native and Square-connected
+// venues — the customer never sees Square-specific language, whichever path
+// actually gated the cancel (see cancelSquareCustomerOrder below, which
+// reuses this exact string).
+const ORDER_ALREADY_PREPARING_ERROR = "This order is already being prepared and can't be cancelled here.";
+
 export async function cancelCustomerOrder(token: string, orderId: string) {
   const resolved = await resolveVisit(token);
   if (!resolved.ok) return { error: "This table is no longer available." };
@@ -1592,7 +1599,26 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
   });
   if (!order) return { error: "Order not found." };
   if (order.status !== "SUBMITTED" && order.status !== "PENDING") {
-    return { error: "This order is already being prepared and can't be cancelled here." };
+    return { error: ORDER_ALREADY_PREPARING_ERROR };
+  }
+
+  // Square Connect is prepay-only: an order only ever reaches SUBMITTED on a
+  // Square-connected venue by being released by a real Square payment (see
+  // releasePaidOrders). Cancelling it here must undo that payment and clear
+  // the Square side, not just delete local rows — handled by the dedicated
+  // path below, gated on the fulfillment still being PROPOSED (i.e. this
+  // order's status is still exactly SUBMITTED, not PREPARING+ per the
+  // order.fulfillment.updated sync in syncSquareFulfillmentStatus).
+  // A still-PENDING order (awaiting payment/approval) was never charged, so
+  // it always cancels the plain local way below, Square venue or not.
+  if (order.status === "SUBMITTED") {
+    const bill = await prisma.bill.findUnique({
+      where: { id: order.billId },
+      select: { id: true, squareOrderId: true },
+    });
+    if (bill?.squareOrderId) {
+      return cancelSquareCustomerOrder(resolved.visit.restaurantId, bill.id, bill.squareOrderId, order.id);
+    }
   }
 
   await prisma.$transaction(async (tx) => {
@@ -1605,6 +1631,115 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
   });
 
   await notifyRestaurant(resolved.visit.restaurantId);
+  return { ok: true as const };
+}
+
+// Square-aware branch of cancelCustomerOrder. Refunds the FULL Square
+// payment behind this order group first, THEN (best-effort) cancels the
+// order's fulfillment on Square, and only then touches local state — never
+// the other way around, so a failed refund never leaves an order silently
+// gone with no money back.
+async function cancelSquareCustomerOrder(
+  restaurantId: string,
+  billId: string,
+  squareOrderId: string,
+  orderId: string,
+) {
+  // Task 0 finding: releasePaidOrders releases every awaitingPayment order
+  // on a bill TOGETHER, in one batch, the moment a single payment fully
+  // pays it — a customer can send several carts before paying, each its
+  // own Order row, all gated on the same one Square payment/order. Square
+  // has no notion of "cancel part of an already-paid order" (only refund
+  // and/or cancel the whole fulfillment), so cancelling one order from that
+  // group means cancelling — and refunding — the WHOLE group.
+  //
+  // Known limitation (documented, not fixed here — see
+  // syncSquareFulfillmentStatus): Bill.squareOrderId holds only the most
+  // recent Square order for this bill. If the group intended is from an
+  // EARLIER payment that's since been superseded by a second Square
+  // payment on the same still-open bill, this will incorrectly group
+  // against the newer order instead. Narrow, real-world-rare edge case
+  // that would need an Order -> Payment link to close properly.
+  const group = await prisma.order.findMany({
+    where: { billId, status: "SUBMITTED" },
+  });
+  if (!group.some((o) => o.id === orderId)) {
+    // Shouldn't happen — the caller already confirmed orderId is SUBMITTED
+    // on this exact bill a moment ago. Defensive only.
+    return { error: "Order not found." };
+  }
+
+  const payment = await prisma.payment.findFirst({
+    where: { billId, provider: "square", squareOrderId, status: "SUCCEEDED" },
+  });
+  if (!payment) {
+    log.error("order.square_cancel_no_payment", { restaurantId, billId, squareOrderId });
+    return { error: "Couldn't cancel this order. Please ask staff for help." };
+  }
+
+  const connection = await prisma.squareConnection.findUnique({ where: { restaurantId } });
+  if (!connection) {
+    return { error: "Couldn't cancel this order. Please ask staff for help." };
+  }
+
+  // Full refund of whatever's still outstanding on this payment (goods +
+  // tip + surcharge) — a customer-initiated cancel gives back everything
+  // charged for this order group. Reuses refundBillPayment exactly as
+  // staff refunds do; no duplicated Square refund logic.
+  const envelope = payment.amountCents + payment.tipCents + payment.surchargeCents;
+  const refundable = envelope - payment.refundedCents;
+  if (refundable <= 0) {
+    return { error: "This order has already been refunded." };
+  }
+
+  const refundResult = await refundBillPayment(payment.id, restaurantId, refundable, "Customer cancelled order", {
+    userId: "system:customer-cancel",
+    email: "customer-cancel@tillz.internal",
+  });
+
+  // Refund didn't succeed (an error, or a non-final PENDING/FAILED status) —
+  // STOP. Do not touch local state; nothing has moved, the customer keeps
+  // their order and can retry, or ask staff for help. A PENDING Square
+  // refund resolves later via the refund.updated webhook, at which point a
+  // retried cancel here will find refundable <= 0 and short-circuit above,
+  // or succeed once Square settles it.
+  if ("error" in refundResult || refundResult.status !== "SUCCEEDED") {
+    log.warn("order.square_cancel_refund_not_succeeded", {
+      restaurantId,
+      billId,
+      paymentId: payment.id,
+      result: "error" in refundResult ? refundResult.error : refundResult.status,
+    });
+    return { error: "Couldn't cancel this order. Please try again or ask staff for help." };
+  }
+
+  // Refund succeeded — the customer already has their money back. From here
+  // the Square fulfillment-cancel is deliberately best-effort: proceed with
+  // the local cancel regardless of whether it succeeds, and only log a
+  // warning if it doesn't, so the venue can notice the stray (refunded, but
+  // still showing as active) order on their own Square KDS/POS and clear it
+  // by hand. Blocking the customer's cancel on Square's cooperation here —
+  // after they already have their money back — would be the wrong trade-off.
+  const cancelIdemBase = `fulfcancel_${billId}_${randomBytes(8).toString("hex")}`;
+  const fulfillmentResult = await cancelSquareOrderFulfillment(connection, squareOrderId, cancelIdemBase);
+  if (!fulfillmentResult.ok) {
+    log.warn("order.square_fulfillment_cancel_failed", {
+      restaurantId,
+      billId,
+      squareOrderId,
+      error: fulfillmentResult.error,
+    });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const o of group) {
+      await tx.billItem.deleteMany({ where: { orderId: o.id } });
+      await tx.order.update({ where: { id: o.id }, data: { status: "CANCELLED" } });
+    }
+    await recompute(tx, billId);
+  });
+
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
 
@@ -1903,6 +2038,75 @@ export async function syncSquareRefundStatus(
     ]);
     log.warn("payment.refund_square_webhook_failed", { paymentId: payment.id, refundId: refund.id });
   }
+}
+
+// order.fulfillment.updated: one-way inbound sync from a Square-connected
+// venue's own POS/KDS into the customer-facing tracker on Tillz. Tillz never
+// pushes status back to Square — this only lets Square-side kitchen actions
+// move the same order forward on the customer's phone.
+const SQUARE_FULFILLMENT_TO_ORDER_STATUS: Partial<Record<string, OrderStatusName>> = {
+  // Received, kitchen hasn't accepted yet — stays SUBMITTED, not PREPARING.
+  // Collapsing this into PREPARING would make both the customer's "Received"
+  // status AND the cancel window (cancelCustomerOrder only allows
+  // SUBMITTED/PENDING) meaningless for every Square-connected order.
+  PROPOSED: "SUBMITTED",
+  // Accepted / actively being made.
+  RESERVED: "PREPARING",
+  PREPARED: "READY",
+  COMPLETED: "SERVED",
+  // CANCELED/FAILED deliberately absent: a mistaken or unrelated cancel on
+  // the Square side shouldn't silently kill a customer's order tracker.
+  // Logged by the caller instead of mapped here.
+};
+
+export async function syncSquareFulfillmentStatus(
+  squareOrderId: string,
+  newState: string,
+): Promise<void> {
+  if (newState === "CANCELED" || newState === "FAILED") {
+    log.warn("order.square_fulfillment_terminal_ignored", { squareOrderId, newState });
+    return;
+  }
+
+  const mapped = SQUARE_FULFILLMENT_TO_ORDER_STATUS[newState];
+  if (!mapped) {
+    log.warn("order.square_fulfillment_unknown_state", { squareOrderId, newState });
+    return;
+  }
+
+  // squareOrderId is only ever set on a Bill created through the Square
+  // Connect flow — this lookup is itself the guard that keeps native/
+  // non-Square bills untouched by this sync. (Known limitation: Bill.
+  // squareOrderId holds only the MOST RECENT Square order for this bill —
+  // if the same still-open bill is paid a second time via Square, the
+  // earlier order's fulfillment webhook stops matching once the field is
+  // overwritten. Acceptable today since a fulfillment update on that
+  // earlier order arrives fast, well before a plausible second payment.)
+  const bill = await prisma.bill.findFirst({
+    where: { squareOrderId },
+    include: { orders: true },
+  });
+  if (!bill) {
+    log.info("order.square_fulfillment_no_matching_bill", { squareOrderId, newState });
+    return;
+  }
+
+  let restaurantId: string | null = null;
+  for (const order of bill.orders) {
+    const from = order.status as OrderStatusName;
+    // Forward-only, via the same NEXT_STATUSES rules every other status
+    // change on an order goes through — an order already at or past the
+    // mapped status (e.g. already SERVED) is silently skipped, never
+    // downgraded or errored.
+    if (!canTransition(from, mapped)) continue;
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: mapped, servedAt: mapped === "SERVED" ? new Date() : order.servedAt },
+    });
+    restaurantId = order.restaurantId;
+  }
+
+  if (restaurantId) await notifyRestaurant(restaurantId);
 }
 
 // ---- Order history (staff / kitchen) ---------------------------------------
