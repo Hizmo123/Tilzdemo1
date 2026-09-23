@@ -6,7 +6,7 @@ import { env } from "@/lib/env";
 import { log } from "@/lib/log";
 import { appBaseUrl } from "@/lib/urls";
 import { mapSquareStatus, mapSquareRefundStatus } from "@/lib/square/pay";
-import { syncSquarePaymentStatus, syncSquareRefundStatus } from "@/lib/bills";
+import { syncSquarePaymentStatus, syncSquareRefundStatus, syncSquareFulfillmentStatus } from "@/lib/bills";
 
 // Square webhook deliveries — the ONLY way Tillz learns about a payment/
 // refund that changes status asynchronously (after the initial synchronous
@@ -105,6 +105,27 @@ export async function POST(request: NextRequest) {
         // from Square (Phase 3 only pushes orders one-way for POS/KDS
         // visibility), so there's nothing to reconcile here yet.
         break;
+      case "order.fulfillment.updated": {
+        // Inbound-only sync: reflects a Square-side kitchen/POS status
+        // change on the customer-facing tracker. See
+        // syncSquareFulfillmentStatus for the state mapping and the
+        // forward-only guard. Requires "order.fulfillment.updated" to be
+        // added to the Square webhook subscription (Developer Console) —
+        // it isn't one of the events originally subscribed to.
+        const fulfillmentEvent = body.data?.object?.order_fulfillment_updated as
+          | { order_id?: string; fulfillment_update?: { fulfillment_uid?: string; old_state?: string; new_state?: string }[] }
+          | undefined;
+        const orderId = fulfillmentEvent?.order_id;
+        // Tillz only ever creates one fulfillment per Square order, so no
+        // uid filtering is needed — but a payload can still list more than
+        // one update entry; the last one is the current state.
+        const updates = fulfillmentEvent?.fulfillment_update ?? [];
+        const newState = updates.at(-1)?.new_state;
+        if (orderId && newState) {
+          await syncSquareFulfillmentStatus(orderId, newState);
+        }
+        break;
+      }
       default:
         break;
     }
