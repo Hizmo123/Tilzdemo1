@@ -5,6 +5,7 @@ import type { PlanTier } from "@prisma/client";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { mockSubscriptionData } from "@/lib/plan-subscription";
 
 export type BillingState = { error?: string; ok?: boolean };
 
@@ -23,12 +24,7 @@ export async function subscribe(tier: PlanTier): Promise<BillingState> {
 
   await prisma.organization.update({
     where: { id: org.id },
-    data: {
-      plan: tier,
-      planStatus: "active",
-      cardLast4: null,
-      subscribedAt: new Date(),
-    },
+    data: mockSubscriptionData(tier),
   });
 
   await audit({

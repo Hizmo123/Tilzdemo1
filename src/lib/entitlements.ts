@@ -20,96 +20,13 @@ import { EXTRA_VENUE_PRICE_CENTS } from "@/lib/plans";
 // tables, stations, or venues; it only blocks creating new ones past the
 // (now lower) limit.
 
-const GRACE_PERIOD_DAYS = 7;
-
-export type Entitlements = {
-  tier: PlanTier;
-  ordering: boolean; // false only for LITE — no tables, no bills, no KDS.
-  tableLimit: number | null; // null = unlimited
-  kdsStationLimit: number | null;
-  venueLimit: number | null;
-  analyticsWindowDays: number | null; // null = full history, 0 = none
-  showTillzBranding: boolean;
-  prioritySupport: boolean;
-  // Lapsed-subscription state (spec B4). `lapsed` alone doesn't stop
-  // anything — existing service and read access keep running through the
-  // grace period. Only `orderingBlocked` (lapsed AND past the grace period)
-  // should ever gate a customer placing a NEW order; nothing else checks it.
-  lapsed: boolean;
-  graceEndsAt: Date | null;
-  orderingBlocked: boolean;
-};
-
-const TIER_LIMITS: Record<
-  PlanTier,
-  {
-    ordering: boolean;
-    tableLimit: number | null;
-    kdsStationLimit: number | null;
-    venueLimit: number | null;
-    analyticsWindowDays: number | null;
-    showTillzBranding: boolean;
-    prioritySupport: boolean;
-  }
-> = {
-  LITE: {
-    ordering: false,
-    tableLimit: 0,
-    kdsStationLimit: 0,
-    venueLimit: 1,
-    analyticsWindowDays: 0,
-    showTillzBranding: true,
-    prioritySupport: false,
-  },
-  BASIC: {
-    ordering: true,
-    tableLimit: 25,
-    kdsStationLimit: 2,
-    venueLimit: 1,
-    analyticsWindowDays: 14,
-    showTillzBranding: true,
-    prioritySupport: false,
-  },
-  GROWTH: {
-    ordering: true,
-    tableLimit: null,
-    kdsStationLimit: null,
-    venueLimit: 1,
-    analyticsWindowDays: null,
-    showTillzBranding: false,
-    prioritySupport: false,
-  },
-  PRO: {
-    ordering: true,
-    tableLimit: null,
-    kdsStationLimit: null,
-    venueLimit: 3,
-    analyticsWindowDays: null,
-    showTillzBranding: false,
-    prioritySupport: true,
-  },
-};
-
-export function entitlementsForTier(
-  tier: PlanTier,
-  lapse: { lapsedAt: Date | null } = { lapsedAt: null },
-): Entitlements {
-  const base = TIER_LIMITS[tier] ?? TIER_LIMITS.LITE;
-  const lapsedAt = lapse.lapsedAt;
-  const lapsed = lapsedAt !== null;
-  const graceEndsAt = lapsedAt
-    ? new Date(lapsedAt.getTime() + GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000)
-    : null;
-  const orderingBlocked = graceEndsAt !== null && graceEndsAt.getTime() < Date.now();
-
-  return {
-    tier,
-    ...base,
-    lapsed,
-    graceEndsAt,
-    orderingBlocked,
-  };
-}
+// The tier table itself (TIER_LIMITS), entitlementsForTier and
+// entitlementsLabel live in lib/entitlements-core.ts — the Prisma-free half
+// of this module — so client components can read tier rules without pulling
+// the database client into their bundle. Re-exported here so every existing
+// server-side import keeps working unchanged.
+import { entitlementsForTier, entitlementsLabel, type Entitlements } from "@/lib/entitlements-core";
+export { entitlementsForTier, entitlementsLabel, type Entitlements };
 
 export async function getEntitlements(organizationId: string): Promise<Entitlements> {
   const org = await prisma.organization.findUnique({
@@ -235,17 +152,4 @@ export async function isOrgSubscribed(organizationId: string): Promise<boolean> 
 
   const ent = entitlementsForTier(org.plan, { lapsedAt: org.subscriptionLapsedAt });
   return !ent.orderingBlocked;
-}
-
-export function entitlementsLabel(tier: PlanTier): string {
-  switch (tier) {
-    case "LITE":
-      return "Lite";
-    case "BASIC":
-      return "Basic";
-    case "GROWTH":
-      return "Growth";
-    case "PRO":
-      return "Pro";
-  }
 }

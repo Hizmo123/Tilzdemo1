@@ -1,6 +1,8 @@
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
 import { sameEveryDayHours, weekdayWeekendHours } from "@/lib/hours";
+import { ChoiceCard } from "./choice";
 
 export type HoursPresetMode = "same" | "weekday_weekend" | "later";
 
@@ -34,92 +36,90 @@ export function CompactHoursPicker({
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-2">
-        <PresetRow
-          active={mode === "same"}
+      <div role="radiogroup" className="grid gap-2">
+        <ChoiceCard
+          selected={mode === "same"}
           onClick={() => pick("same")}
           title="Same every day"
           desc="One set of hours, every day of the week."
         />
-        <PresetRow
-          active={mode === "weekday_weekend"}
+        <ChoiceCard
+          selected={mode === "weekday_weekend"}
           onClick={() => pick("weekday_weekend")}
           title="Weekdays + weekend"
           desc="Different hours Monday–Friday vs Saturday–Sunday."
         />
-        <PresetRow
-          active={mode === "later"}
+        <ChoiceCard
+          selected={mode === "later"}
           onClick={() => pick("later")}
           title="I'll set this later"
           desc="Always open for now — customers can order anytime."
         />
       </div>
 
-      {mode === "same" && (
-        <TimeRange
-          label="Open"
-          value={weekday}
-          onChange={(v) => {
-            onWeekdayChange(v);
-            onModeChange("same", sameEveryDayHours(v.open, v.close));
-          }}
-        />
-      )}
+      <AnimatePresence initial={false} mode="wait">
+        {mode === "same" && (
+          <Reveal key="same">
+            <TimeRange
+              label="Open"
+              value={weekday}
+              onChange={(v) => {
+                onWeekdayChange(v);
+                onModeChange("same", sameEveryDayHours(v.open, v.close));
+              }}
+            />
+          </Reveal>
+        )}
 
-      {mode === "weekday_weekend" && (
-        <div className="space-y-3">
-          <TimeRange
-            label="Monday – Friday"
-            value={weekday}
-            onChange={(v) => {
-              onWeekdayChange(v);
-              onModeChange(
-                "weekday_weekend",
-                weekdayWeekendHours(v.open, v.close, weekend.open, weekend.close),
-              );
-            }}
-          />
-          <TimeRange
-            label="Saturday – Sunday"
-            value={weekend}
-            onChange={(v) => {
-              onWeekendChange(v);
-              onModeChange(
-                "weekday_weekend",
-                weekdayWeekendHours(weekday.open, weekday.close, v.open, v.close),
-              );
-            }}
-          />
-        </div>
-      )}
+        {mode === "weekday_weekend" && (
+          <Reveal key="split">
+            <div className="space-y-3">
+              <TimeRange
+                label="Monday – Friday"
+                value={weekday}
+                onChange={(v) => {
+                  onWeekdayChange(v);
+                  onModeChange(
+                    "weekday_weekend",
+                    weekdayWeekendHours(v.open, v.close, weekend.open, weekend.close),
+                  );
+                }}
+              />
+              <TimeRange
+                label="Saturday – Sunday"
+                value={weekend}
+                onChange={(v) => {
+                  onWeekendChange(v);
+                  onModeChange(
+                    "weekday_weekend",
+                    weekdayWeekendHours(weekday.open, weekday.close, v.open, v.close),
+                  );
+                }}
+              />
+            </div>
+          </Reveal>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function PresetRow({
-  active,
-  onClick,
-  title,
-  desc,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  desc: string;
-}) {
+function Reveal({ children }: { children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`w-full text-left rounded-[var(--radius-card)] border-2 p-3.5 transition-colors ${
-        active ? "border-pine bg-pine-soft" : "border-line hover:border-ink/20"
-      }`}
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className="rounded-[var(--radius-card)] border border-line bg-surface shadow-rest p-3.5"
     >
-      <span className="block text-sm font-medium">{title}</span>
-      <span className="block text-xs text-muted mt-0.5">{desc}</span>
-    </button>
+      {children}
+    </motion.div>
   );
 }
+
+const TIME_INPUT =
+  "h-10 rounded-[var(--radius-sm)] border border-line bg-surface px-2.5 text-sm shadow-rest focus:outline-none focus:border-pine focus:ring-[3px] focus:ring-pine/20 transition-[border-color,box-shadow] duration-[var(--dur-fast)]";
 
 function TimeRange({
   label,
@@ -135,16 +135,18 @@ function TimeRange({
       <span className="w-28 shrink-0 text-muted">{label}</span>
       <input
         type="time"
+        aria-label={`${label} opens`}
         value={value.open}
         onChange={(e) => onChange({ ...value, open: e.target.value })}
-        className="rounded-md border border-line bg-surface px-2 py-1.5 text-sm focus:border-pine focus:outline-none"
+        className={TIME_INPUT}
       />
       <span className="text-muted">–</span>
       <input
         type="time"
+        aria-label={`${label} closes`}
         value={value.close}
         onChange={(e) => onChange({ ...value, close: e.target.value })}
-        className="rounded-md border border-line bg-surface px-2 py-1.5 text-sm focus:border-pine focus:outline-none"
+        className={TIME_INPUT}
       />
     </div>
   );

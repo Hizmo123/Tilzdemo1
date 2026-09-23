@@ -5,6 +5,27 @@
 // in dashboard/settings/constants.ts). Both the wizard and the settings page
 // import from here so the two never drift apart.
 
+import type { PlanTier } from "@prisma/client";
+import { entitlementsForTier } from "@/lib/entitlements-core";
+import type { MenuLayout } from "@/lib/menu-style";
+
+// Literal tuple of PlanTier for zod enums / iteration (the Prisma enum type
+// itself isn't iterable at runtime on the client).
+export const PLAN_TIER_VALUES = ["LITE", "BASIC", "GROWTH", "PRO"] as const;
+
+// Does this tier include live ordering at all? Lite is menu-only, so the
+// wizard skips every ordering/payment step for it. Reads the real tier
+// table — never a second copy of the rule.
+export function planAllowsOrdering(tier: PlanTier): boolean {
+  return entitlementsForTier(tier).ordering;
+}
+
+// Which payment rails the venue chose in the wizard's Payments step.
+//   square — their own Square account via OAuth Connect (payments settle
+//            there; orders appear on their Square POS/KDS).
+//   tillz  — Tillz's own flow (mock today, Stripe later). No Square needed.
+export type PaymentPath = "square" | "tillz";
+
 export type IconKey =
   | "cafe"
   | "restaurant"
@@ -133,6 +154,10 @@ export type OnboardingAnswers = {
   language: string;
   restaurantName: string;
   venueType: string;
+  // Chosen in the "Choose your plan" step. Ignored (the org's existing tier
+  // is used instead) when the wizard is adding a venue to an existing org.
+  plan: PlanTier;
+  paymentPath: PaymentPath;
   experienceMode: ExperienceModeKey;
   customerOrdering: boolean;
   customerPayment: boolean;
@@ -155,6 +180,12 @@ export type OnboardingAnswers = {
   brandColor: string;
   tagline: string;
   logoUrl: string | null;
+  // Hero photo for the customer landing page (Restaurant.coverUrl). Null =
+  // the accent-gradient fallback the Phase 1 hero already draws.
+  coverUrl: string | null;
+  // One of MENU_LAYOUTS (lib/menu-style.ts). The finer card-style axes stay
+  // in Settings; the wizard only picks the preset.
+  menuLayout: MenuLayout;
   abn: string;
   currency: string;
   timezone: string;
@@ -175,6 +206,12 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     language: "en",
     restaurantName: "",
     venueType: "cafe",
+    // BASIC, not LITE: a draft saved before the plan step existed already
+    // answered the experience step under the assumption that ordering was
+    // available, and Lite would silently strip that. Basic is the cheapest
+    // tier that keeps those answers coherent.
+    plan: "BASIC",
+    paymentPath: "tillz",
     experienceMode: "order_and_pay",
     ...EXPERIENCE_MODES.order_and_pay.settings,
     tableCount: 10,
@@ -194,6 +231,8 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     brandColor: "",
     tagline: "",
     logoUrl: null,
+    coverUrl: null,
+    menuLayout: "list",
     abn: "",
     currency: "AUD",
     timezone: "Australia/Sydney",

@@ -2,12 +2,19 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTenantContext } from "@/lib/auth";
 import { canCreateVenue } from "@/lib/entitlements";
+import { getOnboardingDraft } from "@/lib/onboarding-draft";
+import { getPendingSquareSummary } from "@/lib/square/pending";
+import { parseSquareResult } from "@/app/onboarding/square-result";
 import { AddVenueFlow } from "./add-venue-flow";
 
 export const dynamic = "force-dynamic";
 
-export default async function AddVenuePage() {
-  const { membership } = await getTenantContext();
+export default async function AddVenuePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ square?: string; reason?: string }>;
+}) {
+  const { user, membership } = await getTenantContext();
   if (!membership) redirect("/onboarding");
 
   // The real authority — re-checked again inside
@@ -35,11 +42,27 @@ export default async function AddVenuePage() {
     );
   }
 
+  // Same resume machinery as first-run onboarding: the wizard saves a draft
+  // before leaving for Square OAuth and picks it back up on return here.
+  const [draft, pendingSquare, sp] = await Promise.all([
+    getOnboardingDraft(user.id),
+    getPendingSquareSummary(user.id),
+    searchParams,
+  ]);
+  const squareResult = parseSquareResult(sp);
+
   return (
     <AddVenueFlow
       organizationId={membership.organizationId}
+      orgPlan={membership.organization.plan}
       requiresPayment={"requiresPayment" in check && check.requiresPayment === true}
       addonPriceLabel={"addonPriceLabel" in check ? check.addonPriceLabel : undefined}
+      initialDraft={draft}
+      initialSquare={pendingSquare}
+      squareResult={squareResult}
+      // Coming back from Square means they already confirmed the add-on
+      // (if any) before they left — don't make them confirm it twice.
+      skipConfirm={squareResult !== null || draft !== null}
     />
   );
 }
