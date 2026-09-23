@@ -27,6 +27,7 @@ export async function KitchenBoardData({
   stationFilter,
   view,
   definedStations,
+  readOnly = false,
 }: {
   slug: string;
   restaurantId: string;
@@ -37,6 +38,8 @@ export async function KitchenBoardData({
   stationFilter?: string;
   view?: string;
   definedStations: string[];
+  // Connect-tier orgs: Square owns the kitchen — see kitchen-ticket.tsx.
+  readOnly?: boolean;
 }) {
   const prepay = paymentTiming === "before";
   const passView = !lockedStation && view === "pass";
@@ -232,7 +235,7 @@ export async function KitchenBoardData({
                 </div>
               )
             ) : (
-              <KitchenBoard slug={slug} tickets={tickets} />
+              <KitchenBoard slug={slug} tickets={tickets} readOnly={readOnly} />
             )}
 
             {/* Recall / re-fire recently-served */}

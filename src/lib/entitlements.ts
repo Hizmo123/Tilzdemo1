@@ -153,3 +153,48 @@ export async function isOrgSubscribed(organizationId: string): Promise<boolean> 
   const ent = entitlementsForTier(org.plan, { lapsedAt: org.subscriptionLapsedAt });
   return !ent.orderingBlocked;
 }
+
+export type PublishReadiness =
+  | { ready: true }
+  | { ready: false; reason: "unsubscribed" }
+  // CONNECT only: isOrgSubscribed alone isn't enough to go live — there's
+  // no charge to be "subscribed" to on this tier, so its actual live-or-not
+  // precondition is a working Square connection instead. Also the state a
+  // previously-published Connect venue falls into if the owner disconnects
+  // Square (or revokes it from Square's own dashboard — see the
+  // oauth.authorization.revoked webhook) after going live: existing orders
+  // already fail their Square charge with a friendly error either way
+  // (chargeBillViaSquare requires the connection), so this is the publish-
+  // time half of "unable to take orders until reconnected", not a new
+  // runtime block on its own.
+  | { ready: false; reason: "square_disconnected" };
+
+// The single source of truth for "can this org's venue actually go live" —
+// publishRestaurant uses this as the real gate; dashboard/page.tsx uses it
+// to decide what PublishControl shows. Composes isOrgSubscribed (unchanged,
+// still the generic billing check other callers use on its own) with a
+// CONNECT-specific Square check, rather than folding Square into
+// isOrgSubscribed itself — "subscribed" and "has a working Square
+// connection" are different preconditions that happen to both gate publish.
+export async function getPublishReadiness(organizationId: string): Promise<PublishReadiness> {
+  const subscribed = await isOrgSubscribed(organizationId);
+  if (!subscribed) return { ready: false, reason: "unsubscribed" };
+
+  const ent = await getEntitlements(organizationId);
+  if (ent.requiresSquare) {
+    const restaurant = await prisma.restaurant.findFirst({
+      where: { organizationId },
+      select: { id: true },
+    });
+    const connection = restaurant
+      ? await prisma.squareConnection.findUnique({
+          where: { restaurantId: restaurant.id },
+          select: { revokedAt: true, locationId: true },
+        })
+      : null;
+    if (!connection || connection.revokedAt || !connection.locationId) {
+      return { ready: false, reason: "square_disconnected" };
+    }
+  }
+  return { ready: true };
+}

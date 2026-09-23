@@ -11,13 +11,23 @@ import type { MenuLayout } from "@/lib/menu-style";
 
 // Literal tuple of PlanTier for zod enums / iteration (the Prisma enum type
 // itself isn't iterable at runtime on the client).
-export const PLAN_TIER_VALUES = ["LITE", "BASIC", "GROWTH", "PRO"] as const;
+export const PLAN_TIER_VALUES = ["LITE", "BASIC", "GROWTH", "PRO", "CONNECT"] as const;
 
 // Does this tier include live ordering at all? Lite is menu-only, so the
 // wizard skips every ordering/payment step for it. Reads the real tier
 // table — never a second copy of the rule.
 export function planAllowsOrdering(tier: PlanTier): boolean {
   return entitlementsForTier(tier).ordering;
+}
+
+// Connect's whole model IS a Square connection — there's no Tillz-payments
+// fallback on this tier. Drives: the wizard forcing customerOrdering/
+// customerPayment on and always showing the Payments step, that step
+// locking to the Square path and blocking Next/finish without an active
+// connection + chosen location, and (server-side) the publish gate
+// additionally requiring that connection stay live.
+export function planRequiresSquare(tier: PlanTier): boolean {
+  return entitlementsForTier(tier).requiresSquare;
 }
 
 // Which payment rails the venue chose in the wizard's Payments step.

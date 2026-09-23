@@ -15,6 +15,7 @@ import { defaultCardStyle } from "@/lib/menu-style";
 import {
   defaultOnboardingAnswers,
   planAllowsOrdering,
+  planRequiresSquare,
   EXPERIENCE_MODES,
   type OnboardingAnswers,
   type OnboardingDraftPayload,
@@ -94,11 +95,15 @@ const STEP_TITLES: Record<StepId, string> = {
 function activeSteps(a: OnboardingAnswers, fixedPlan?: PlanTier): StepId[] {
   const tier = fixedPlan ?? a.plan;
   const ordering = planAllowsOrdering(tier);
+  // Connect's whole model is a Square connection, so its Payments step is
+  // never skippable — shown regardless of the customerPayment toggle
+  // (choosePlan forces that toggle on anyway, but this doesn't rely on it).
+  const squareMandatory = planRequiresSquare(tier);
   const steps: StepId[] = ["location", "venue"];
   if (!fixedPlan) steps.push("plan");
   if (ordering) {
     steps.push("experience");
-    if (a.customerPayment) steps.push("payments");
+    if (a.customerPayment || squareMandatory) steps.push("payments");
     steps.push("tables");
   }
   steps.push("hours", "menu");
@@ -169,6 +174,18 @@ export function OnboardingWizard({
     const ordering = planAllowsOrdering(plan);
     if (!ordering) {
       update({ plan, experienceMode: "digital_menu", ...EXPERIENCE_MODES.digital_menu.settings });
+    } else if (planRequiresSquare(plan)) {
+      // Connect's product IS "orders + payments go to your Square" — force
+      // both on regardless of what a previously-chosen tier's custom
+      // toggles left them at, and lock the Payments step to the Square
+      // path so it never silently offers the Tillz-payments alternative.
+      update({
+        plan,
+        paymentPath: "square",
+        experienceMode: answers.experienceMode === "digital_menu" ? "order_and_pay" : answers.experienceMode,
+        customerOrdering: true,
+        customerPayment: true,
+      });
     } else if (answers.experienceMode === "digital_menu" && !planAllowsOrdering(answers.plan)) {
       update({ plan, experienceMode: "order_and_pay", ...EXPERIENCE_MODES.order_and_pay.settings });
     } else {
@@ -181,6 +198,7 @@ export function OnboardingWizard({
   const stepId = steps[clampedStep];
   const last = steps.length - 1;
   const ordering = planAllowsOrdering(fixedPlan ?? answers.plan);
+  const squareMandatory = planRequiresSquare(fixedPlan ?? answers.plan);
 
   // Landing back from Square: make sure we're on the Payments step (the
   // draft normally puts us there already — this covers a failed draft save),
@@ -215,8 +233,12 @@ export function OnboardingWizard({
     if (id === "venue" && answers.restaurantName.trim().length < 2) {
       return "Enter your venue's name.";
     }
-    if (id === "payments" && answers.paymentPath === "square") {
-      if (!square) return "Connect your Square account, or choose Tillz payments to continue.";
+    if (id === "payments" && (squareMandatory || answers.paymentPath === "square")) {
+      if (!square) {
+        return squareMandatory
+          ? "Connect your Square account to continue — required on the Connect plan."
+          : "Connect your Square account, or choose Tillz payments to continue.";
+      }
       if (!square.locationId) return "Choose which Square location this venue is.";
     }
     return null;
@@ -376,15 +398,27 @@ export function OnboardingWizard({
                     paymentTiming: answers.paymentTiming,
                     staffApproval: answers.staffApproval,
                   }}
-                  onChange={(mode: ExperienceModeKey, settings) => update({ experienceMode: mode, ...settings })}
+                  onChange={(mode: ExperienceModeKey, settings) =>
+                    // Connect can't turn ordering/payment off via Custom —
+                    // the whole tier is "orders + payments go to Square".
+                    update({
+                      experienceMode: mode,
+                      ...settings,
+                      ...(squareMandatory ? { customerOrdering: true, customerPayment: true } : {}),
+                    })
+                  }
                 />
               </StepFrame>
             )}
 
             {stepId === "payments" && (
               <StepFrame
-                title="How will you take payments?"
-                subtitle="Connect the Square account you already use, or run on Tillz's own payment flow. You can change this later in Settings → Integrations."
+                title={squareMandatory ? "Connect Square" : "How will you take payments?"}
+                subtitle={
+                  squareMandatory
+                    ? "Connect runs entirely on your own Square account — this step is required to finish setting up."
+                    : "Connect the Square account you already use, or run on Tillz's own payment flow. You can change this later in Settings → Integrations."
+                }
               >
                 <PaymentsStep
                   answers={answers}
@@ -393,6 +427,7 @@ export function OnboardingWizard({
                   onSquareChange={setSquare}
                   squareResult={squareResult}
                   returnTo={returnTo}
+                  mandatory={squareMandatory}
                   onBeforeRedirect={async () => {
                     // Square's consent screen leaves the wizard; the draft is
                     // how we come back to exactly this step with everything

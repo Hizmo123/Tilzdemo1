@@ -23,6 +23,12 @@ export type Entitlements = {
   // of a Square-connected charge (chargeBillViaSquare) — see
   // TIER_LIMITS below for why this is 0 everywhere except CONNECT.
   appFeeBps: number;
+  // true only for CONNECT: the entire tier IS a Square connection — there
+  // is no Tillz-payments fallback. Onboarding makes the Connect step
+  // mandatory (see lib/onboarding-options.ts#planRequiresSquare), and the
+  // publish gate (isOrgSubscribed) additionally requires an active,
+  // non-revoked SquareConnection before a Connect org can go live.
+  requiresSquare: boolean;
   // Lapsed-subscription state (spec B4). `lapsed` alone doesn't stop
   // anything — existing service and read access keep running through the
   // grace period. Only `orderingBlocked` (lapsed AND past the grace period)
@@ -49,6 +55,7 @@ const TIER_LIMITS: Record<
     showTillzBranding: boolean;
     prioritySupport: boolean;
     appFeeBps: number;
+    requiresSquare: boolean;
   }
 > = {
   LITE: {
@@ -60,6 +67,7 @@ const TIER_LIMITS: Record<
     showTillzBranding: true,
     prioritySupport: false,
     appFeeBps: 0,
+    requiresSquare: false,
   },
   BASIC: {
     ordering: true,
@@ -70,6 +78,7 @@ const TIER_LIMITS: Record<
     showTillzBranding: true,
     prioritySupport: false,
     appFeeBps: 0,
+    requiresSquare: false,
   },
   GROWTH: {
     ordering: true,
@@ -80,6 +89,7 @@ const TIER_LIMITS: Record<
     showTillzBranding: false,
     prioritySupport: false,
     appFeeBps: 0,
+    requiresSquare: false,
   },
   PRO: {
     ordering: true,
@@ -90,6 +100,7 @@ const TIER_LIMITS: Record<
     showTillzBranding: false,
     prioritySupport: true,
     appFeeBps: 0,
+    requiresSquare: false,
   },
   // Unlimited tables (kdsStationLimit: 0, tableLimit: null) — no Tillz KDS
   // burden either way, since Square owns the kitchen for this tier (see
@@ -103,6 +114,7 @@ const TIER_LIMITS: Record<
     showTillzBranding: true,
     prioritySupport: false,
     appFeeBps: 200, // 2% — the org's only revenue relationship with Tillz on this tier.
+    requiresSquare: true,
   },
 };
 

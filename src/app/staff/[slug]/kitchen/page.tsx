@@ -97,6 +97,7 @@ export default async function KitchenPage({
           stationFilter={stationFilter}
           view={view}
           definedStations={restaurant.kitchenStations}
+          readOnly={ent.requiresSquare}
         />
       </Suspense>
     </main>

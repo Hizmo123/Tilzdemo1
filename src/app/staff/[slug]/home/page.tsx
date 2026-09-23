@@ -122,7 +122,11 @@ export default async function StaffHomePage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {roleCan(staff.role, "orders:manage") && (
+          {/* Connect-tier: no cash-drawer/counter workflow applies — Square
+              handles the venue's own in-person payments if they use one.
+              (Kitchen stays — see kitchen-ticket.tsx's read-only treatment
+              instead of hiding it outright.) */}
+          {roleCan(staff.role, "orders:manage") && !ent.requiresSquare && (
             <Link
               href={`/staff/${slug}/counter`}
               className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
@@ -130,7 +134,7 @@ export default async function StaffHomePage({
               Counter
             </Link>
           )}
-          {roleCan(staff.role, "orders:manage") && (
+          {roleCan(staff.role, "orders:manage") && !ent.requiresSquare && (
             <Link
               href={`/staff/${slug}/register`}
               className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"

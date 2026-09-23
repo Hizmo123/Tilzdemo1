@@ -114,10 +114,19 @@ function reorderSection(
 // bounced back, not just kept from seeing the link.
 const ORDERING_FREE_HREFS = new Set(["/dashboard", "/dashboard/menu", "/dashboard/billing", "/dashboard/settings"]);
 
+// Connect-tier orgs: Square owns the kitchen, not Tillz — the "Kitchen
+// screen" nav item (device setup instructions + QR for Tillz's own kitchen
+// terminal) is a dead end on this tier, same nav-hiding-only pattern as
+// ORDERING_FREE_HREFS above. The real boundary is dashboard/kitchen's own
+// layout.tsx redirect — a Connect user typing the URL directly must still
+// be bounced back, not just kept from seeing the link.
+const CONNECT_HIDDEN_HREFS = new Set(["/dashboard/kitchen"]);
+
 function buildVisibleSections(
   experienceMode: string | null,
   role: Role | null,
   ordering: boolean,
+  squareOwnsKitchen: boolean,
 ): NavSection[] {
   const emphasis = experienceMode ? EMPHASIS[experienceMode] : undefined;
   const rank = emphasis ? new Map(emphasis.map((href, i) => [href, i])) : null;
@@ -128,7 +137,8 @@ function buildVisibleSections(
       items: reorderSection(section.items, rank).filter(
         (item) =>
           (item.perm === null || (role && roleCan(role, item.perm))) &&
-          (ordering || ORDERING_FREE_HREFS.has(item.href)),
+          (ordering || ORDERING_FREE_HREFS.has(item.href)) &&
+          !(squareOwnsKitchen && CONNECT_HIDDEN_HREFS.has(item.href)),
       ),
     }))
     .filter((section) => section.items.length > 0);
@@ -195,6 +205,7 @@ export default async function DashboardLayout({
     restaurant?.experienceMode ?? null,
     role,
     entitlements?.ordering ?? true,
+    entitlements?.requiresSquare ?? false,
   );
 
   // Square catalog link — only when this venue actually has a connection

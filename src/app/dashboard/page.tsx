@@ -6,7 +6,7 @@ import { formatCents } from "@/lib/money";
 import { startOfTodayInTz } from "@/lib/time";
 import { countOpenRequests } from "@/lib/requests";
 import { getSetupChecklist } from "@/lib/setup-checklist";
-import { getEntitlements, isOrgSubscribed } from "@/lib/entitlements";
+import { getEntitlements, isOrgSubscribed, getPublishReadiness } from "@/lib/entitlements";
 import { PublicMenuLink } from "@/components/dashboard/public-menu-link";
 import { PublishControl } from "@/components/dashboard/publish-control";
 import { CreateRestaurantForm } from "./create-restaurant-form";
@@ -160,7 +160,16 @@ export default async function DashboardHome() {
   const salesToday = paidToday._sum.totalCents ?? 0;
   const ordersToday = paidToday._count;
   const checklistRemaining = checklist.filter((c) => !c.done);
-  const subscribed = await isOrgSubscribed(restaurant.organizationId);
+  // isOrgSubscribed alone still drives everything BUT PublishControl below
+  // (the mock-billing "active plan" check other callers want on its own);
+  // readiness additionally covers Connect's Square-connection precondition,
+  // which isOrgSubscribed deliberately doesn't fold in — see
+  // getPublishReadiness's doc comment.
+  const [subscribed, readiness] = await Promise.all([
+    isOrgSubscribed(restaurant.organizationId),
+    getPublishReadiness(restaurant.organizationId),
+  ]);
+  const squareDisconnected = !readiness.ready && readiness.reason === "square_disconnected";
 
   return (
     <div className="space-y-8">
@@ -177,7 +186,7 @@ export default async function DashboardHome() {
         <ReplayTourButton className="shrink-0 mt-2" />
       </div>
 
-      <PublishControl published={restaurant.published} subscribed={subscribed} />
+      <PublishControl published={restaurant.published} subscribed={subscribed} squareDisconnected={squareDisconnected} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Today's sales" value={formatCents(salesToday, currency)} />

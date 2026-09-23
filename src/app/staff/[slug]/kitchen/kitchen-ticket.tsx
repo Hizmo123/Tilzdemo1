@@ -47,10 +47,17 @@ export function KitchenTicket({
   slug,
   ticket,
   shortcutNumber,
+  // Connect-tier orgs: Square owns the kitchen, not Tillz — see the
+  // matching comment on dashboard/orders/dashboard-ticket.tsx. Only
+  // Start/Ready/Served/Cancel are hidden (the status-advance controls);
+  // 86 and re-fire stay, since those don't pretend to move an order's
+  // status and remain genuinely useful for staff working the floor.
+  readOnly = false,
 }: {
   slug: string;
   ticket: Ticket;
   shortcutNumber?: number;
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -197,24 +204,30 @@ export function KitchenTicket({
 
       {error && <p className="text-xs text-danger mb-2">{error}</p>}
 
-      <div className="flex gap-2">
-        {next && (
+      {readOnly ? (
+        <p className="text-sm text-muted text-center py-2.5 border-t border-line">
+          Synced from your Square kitchen
+        </p>
+      ) : (
+        <div className="flex gap-2">
+          {next && (
+            <button
+              disabled={pending}
+              onClick={() => move(next.to)}
+              className="flex-1 rounded-lg bg-pine text-white py-3 text-base font-medium hover:bg-pine-deep disabled:opacity-50 min-h-[48px]"
+            >
+              {pending ? "…" : next.label}
+            </button>
+          )}
           <button
             disabled={pending}
-            onClick={() => move(next.to)}
-            className="flex-1 rounded-lg bg-pine text-white py-3 text-base font-medium hover:bg-pine-deep disabled:opacity-50 min-h-[48px]"
+            onClick={() => move("CANCELLED")}
+            className="rounded-lg border border-line px-3 py-3 text-sm text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50 min-h-[48px]"
           >
-            {pending ? "…" : next.label}
+            Cancel
           </button>
-        )}
-        <button
-          disabled={pending}
-          onClick={() => move("CANCELLED")}
-          className="rounded-lg border border-line px-3 py-3 text-sm text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50 min-h-[48px]"
-        >
-          Cancel
-        </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
