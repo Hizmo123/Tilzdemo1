@@ -12,6 +12,7 @@ import { PublishControl } from "@/components/dashboard/publish-control";
 import { CreateRestaurantForm } from "./create-restaurant-form";
 import { LiveRefresh } from "./live-refresh";
 import { LoadSampleButton } from "./sample/load-sample-button";
+import { ReplayTourButton } from "@/components/tour/replay-tour-button";
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -58,13 +59,16 @@ export default async function DashboardHome() {
     const subscribedLite = await isOrgSubscribed(restaurant.organizationId);
     return (
       <div className="space-y-8">
-        <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
-            {restaurant.name}
-          </h1>
-          <p className="text-muted mt-1">
-            {location.name} · {currency} · {restaurant.timezone}
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-display text-3xl font-semibold tracking-tight">
+              {restaurant.name}
+            </h1>
+            <p className="text-muted mt-1">
+              {location.name} · {currency} · {restaurant.timezone}
+            </p>
+          </div>
+          <ReplayTourButton className="shrink-0 mt-2" />
         </div>
 
         <PublishControl published={restaurant.published} subscribed={subscribedLite} />
@@ -161,13 +165,16 @@ export default async function DashboardHome() {
   return (
     <div className="space-y-8">
       <LiveRefresh restaurantId={restaurant.id} />
-      <div>
-        <h1 className="font-display text-3xl font-semibold tracking-tight">
-          {restaurant.name}
-        </h1>
-        <p className="text-muted mt-1">
-          {location.name} · {currency} · {restaurant.timezone}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">
+            {restaurant.name}
+          </h1>
+          <p className="text-muted mt-1">
+            {location.name} · {currency} · {restaurant.timezone}
+          </p>
+        </div>
+        <ReplayTourButton className="shrink-0 mt-2" />
       </div>
 
       <PublishControl published={restaurant.published} subscribed={subscribed} />
