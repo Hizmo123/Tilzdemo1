@@ -22,7 +22,7 @@ export function SquareCard({ connection }: { connection: Connection | null }) {
   const environmentLabel = connection?.environment === "production" ? "Production" : "Sandbox";
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
+    <div data-tour="square" className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-semibold tracking-tight">Square</h2>

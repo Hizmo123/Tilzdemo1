@@ -183,7 +183,7 @@ export default async function DashboardHome() {
       </div>
 
       {checklistRemaining.length > 0 && (
-        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
+        <div data-tour="checklist" className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
           <h2 className="font-display text-base font-semibold tracking-tight mb-3">
             Finish setting up
           </h2>
