@@ -363,7 +363,7 @@ async function createOrderWithItems(
     cleanNote: string | null;
     idemKey: string | null;
   },
-): Promise<{ orderId: string; added: number }> {
+): Promise<{ orderId: string; added: number; skippedMenuItemIds: string[] }> {
   const { billId, tableId, restaurantId, lines, source, cleanNote, idemKey } = args;
 
   // Allocate a human order number (atomic per-venue counter) and read the
@@ -442,10 +442,17 @@ async function createOrderWithItems(
     station: string | null;
     note: string | null;
   }[] = [];
+  // Tracked so the caller can tell the customer WHICH lines never made it
+  // onto the ticket, instead of the success screen claiming every item they
+  // tapped went to the kitchen (see addItemsForTable/addItemsToBill below).
+  const skippedMenuItemIds: string[] = [];
 
   for (const line of lines) {
     const item = itemById.get(line.menuItemId);
-    if (!item) continue; // silently skip unavailable/foreign items
+    if (!item) {
+      skippedMenuItemIds.push(line.menuItemId); // deleted/86'd/foreign item
+      continue;
+    }
 
     const resolved = resolveModifiers(item, line.optionIds ?? []);
     if ("error" in resolved) throw new LineError(resolved.error); // rolls back the whole send
@@ -479,7 +486,7 @@ async function createOrderWithItems(
   if (added === 0) throw new EmptySend();
 
   await recompute(tx, billId);
-  return { orderId: order.id, added };
+  return { orderId: order.id, added, skippedMenuItemIds };
 }
 
 // Adds menu items to a table's open bill, priced from the DB. Used by both
@@ -522,6 +529,7 @@ export async function addItemsForTable(
   for (let attempt = 0; attempt < 3; attempt++) {
     let orderIdForLog = "";
     let addedForLog = 0;
+    let skippedMenuItemIdsForLog: string[] = [];
     try {
       await prisma.$transaction(async (tx) => {
         // Find-or-create the single open bill for this table.
@@ -561,6 +569,7 @@ export async function addItemsForTable(
         });
         orderIdForLog = result.orderId;
         addedForLog = result.added;
+        skippedMenuItemIdsForLog = result.skippedMenuItemIds;
       });
 
       await notifyRestaurant(restaurantId);
@@ -571,14 +580,18 @@ export async function addItemsForTable(
         source,
         lineCount: addedForLog,
       });
-      return { ok: true as const };
+      // skippedMenuItemIds: lines that were requested but silently dropped
+      // (deleted/86'd since the customer's cart was built) — the caller
+      // needs this to avoid telling the customer every item they tapped
+      // made it to the kitchen when some didn't.
+      return { ok: true as const, skippedMenuItemIds: skippedMenuItemIdsForLog };
     } catch (e) {
       if (e instanceof LineError) return { error: e.reason };
       if (e instanceof EmptySend) return { error: "Those items aren't available." };
       if (isUniqueViolation(e)) {
         // Two identical submits raced: the other one won, so this is a
         // duplicate, not a failure — report success.
-        if (uniqueTargetIncludes(e, "clientRequestId")) return { ok: true as const };
+        if (uniqueTargetIncludes(e, "clientRequestId")) return { ok: true as const, skippedMenuItemIds: [] };
         // Two carts raced to open this table's bill — re-read and retry.
         if (attempt < 2) continue;
       }
@@ -639,17 +652,28 @@ export async function addItemsToCounterBill(
   restaurantId: string,
   items: AddItem[],
   note?: string,
+  clientRequestId?: string,
 ) {
   const cleanNote = note?.trim().slice(0, 200) || null;
+  const idemKey = clientRequestId?.trim() || null;
 
   const lines = items.filter(
     (i) => i.menuItemId && Number.isInteger(i.quantity) && i.quantity > 0,
   );
   if (lines.length === 0) return { error: "Nothing to add." };
 
+  // Idempotency: same reasoning as addItemsForTable — if this exact submit
+  // already landed (double-tap, retried request after a dropped response),
+  // don't ring it up twice.
+  if (idemKey) {
+    const existing = await prisma.order.findUnique({ where: { clientRequestId: idemKey } });
+    if (existing) return { ok: true as const };
+  }
+
   try {
     let orderIdForLog = "";
     let addedForLog = 0;
+    let skippedMenuItemIdsForLog: string[] = [];
     await prisma.$transaction(async (tx) => {
       const bill = await tx.bill.findFirst({
         where: {
@@ -668,10 +692,11 @@ export async function addItemsToCounterBill(
         lines,
         source: "STAFF",
         cleanNote,
-        idemKey: null,
+        idemKey,
       });
       orderIdForLog = result.orderId;
       addedForLog = result.added;
+      skippedMenuItemIdsForLog = result.skippedMenuItemIds;
     });
 
     await notifyRestaurant(restaurantId);
@@ -682,10 +707,15 @@ export async function addItemsToCounterBill(
       source: "STAFF",
       lineCount: addedForLog,
     });
-    return { ok: true as const };
+    return { ok: true as const, skippedMenuItemIds: skippedMenuItemIdsForLog };
   } catch (e) {
     if (e instanceof LineError) return { error: e.reason };
     if (e instanceof EmptySend) return { error: "Those items aren't available." };
+    if (isUniqueViolation(e) && uniqueTargetIncludes(e, "clientRequestId")) {
+      // Two identical submits raced: the other one won, so this is a
+      // duplicate, not a failure — report success (same as addItemsForTable).
+      return { ok: true as const };
+    }
     log.error("order.create_failed", {
       restaurantId,
       billId,
@@ -818,24 +848,68 @@ export function canTransition(
   return NEXT_STATUSES[from]?.includes(to) ?? false;
 }
 
+// Pure decision for advanceOrderStatus's multi-station SERVED gating below —
+// isolated so it's unit-testable without a database. A single-station order
+// (the common case) or a call with no confirming station (an unlocked/expo
+// board) always reports "all served" immediately, preserving the original
+// whole-order behavior exactly. Only a genuinely multi-station order gates
+// on every represented station confirming before reporting fully served.
+export function resolveStationServedTransition(
+  itemStations: (string | null)[],
+  alreadyServed: string[],
+  confirmingStation: string | null,
+): { stationsServed: string[]; allStationsServed: boolean } {
+  const allStations = [...new Set(itemStations.filter((s): s is string => !!s))];
+  if (allStations.length <= 1 || !confirmingStation) {
+    return { stationsServed: alreadyServed, allStationsServed: true };
+  }
+  const merged = [...new Set([...alreadyServed, confirmingStation])];
+  return { stationsServed: merged, allStationsServed: allStations.every((s) => merged.includes(s)) };
+}
+
 // Advances an order's status, restaurant-scoped so a caller can only touch their
 // own venue's tickets. Validates the transition. Sets servedAt on SERVED.
+//
+// `station` is the CALLER's own station (server-derived from their staff
+// session — see staff/[slug]/kitchen/page.tsx's lockedStation — never a
+// client-supplied value), used only to gate the terminal SERVED transition
+// on a multi-station order: see resolveStationServedTransition above for
+// why that transition specifically needed per-station confirmation, not
+// SUBMITTED->PREPARING or PREPARING->READY.
 export async function advanceOrderStatus(
   orderId: string,
   restaurantId: string,
   to: OrderStatusName,
+  station: string | null = null,
 ) {
   const order = await prisma.order.findFirst({
     where: { id: orderId, restaurantId },
-    include: { bill: true },
+    include: { bill: true, items: { select: { station: true } } },
   });
   if (!order) return { error: "Order not found." };
   if (!canTransition(order.status as OrderStatusName, to)) {
     return { error: "That status change isn't allowed." };
   }
+
+  if (to === "SERVED") {
+    const { stationsServed, allStationsServed } = resolveStationServedTransition(
+      order.items.map((it) => it.station),
+      order.stationsServed,
+      station,
+    );
+    await prisma.order.update({
+      where: { id: order.id },
+      data: allStationsServed
+        ? { status: to, servedAt: new Date(), stationsServed }
+        : { stationsServed },
+    });
+    await notifyRestaurant(restaurantId);
+    return { ok: true as const };
+  }
+
   await prisma.order.update({
     where: { id: order.id },
-    data: { status: to, servedAt: to === "SERVED" ? new Date() : order.servedAt },
+    data: { status: to },
   });
 
   await notifyRestaurant(restaurantId);
@@ -2580,6 +2654,10 @@ export async function setMenuItemAvailable(
   });
   if (!item) return { error: "Item not found." };
   await prisma.menuItem.update({ where: { id: item.id }, data: { available } });
+  // 86'ing an item from the kitchen board needs to reach every other live
+  // screen immediately (a waiter mid-order on the same item, another
+  // station's board) — this update never broadcast at all before.
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }
 

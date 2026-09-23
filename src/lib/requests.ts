@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { resolveVisit } from "@/lib/bills";
+import { notifyRestaurant } from "@/lib/realtime";
 
 export type RequestTypeName =
   | "WATER"
@@ -35,6 +36,10 @@ export async function createCustomerRequest(
       note: note?.slice(0, 200) || null,
     },
   });
+  // "Call staff" (and every other request type) needs to actually reach a
+  // live staff screen — this never broadcast at all before, so a request
+  // only ever showed up on the next unrelated page load/poll.
+  await notifyRestaurant(resolved.visit.restaurantId);
   return { ok: true as const };
 }
 
@@ -72,5 +77,6 @@ export async function updateRequestStatus(
       completedAt: to === "COMPLETED" ? new Date() : req.completedAt,
     },
   });
+  await notifyRestaurant(restaurantId);
   return { ok: true as const };
 }

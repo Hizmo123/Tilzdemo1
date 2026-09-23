@@ -22,8 +22,10 @@ export function CounterOrderPanel({
 
   async function onSubmit(
     lines: { menuItemId: string; quantity: number; optionIds: string[] }[],
+    note?: string,
+    clientRequestId?: string,
   ) {
-    const res = await addCounterItems(slug, billId, lines);
+    const res = await addCounterItems(slug, billId, lines, note, clientRequestId);
     if (!("error" in res)) router.refresh();
     return res;
   }

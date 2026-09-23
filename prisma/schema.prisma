@@ -887,6 +887,18 @@ model Order {
   updatedAt    DateTime    @updatedAt
   servedAt     DateTime?
   items        BillItem[]
+  // Which prep stations have confirmed THEIR portion of this ticket served.
+  // A multi-station order (e.g. grill + bar items on one ticket) shares one
+  // Order.status — advanceOrderStatus used to let ANY single station's
+  // "Mark served" button flip the WHOLE order to SERVED, instantly removing
+  // it from getKitchenOrders for every other station even if their items
+  // were never touched. For a multi-station order, advanceOrderStatus now
+  // only actually transitions to SERVED once every station represented
+  // among the order's items appears here; until then it records the
+  // station's confirmation and leaves status (and the ticket's visibility
+  // to the remaining stations) unchanged. Irrelevant for a single-station
+  // order, where the original whole-order behavior is preserved exactly.
+  stationsServed String[]  @default([])
 
   // Covers getKitchenOrders' WHERE restaurantId = ? AND status IN (...)
   // ORDER BY createdAt — the exact shape of every kitchen-screen load.

@@ -24,7 +24,12 @@ export async function advanceOrder(
   if (!roleCan(session.staff.role, "kitchen:manage"))
     return { error: "Your role can't update the kitchen." };
 
-  const res = await advanceOrderStatus(orderId, session.restaurant.id, to);
+  // Server-derived, same as the kitchen page's own lockedStation — never a
+  // client-supplied value. Only meaningful for the SERVED transition on a
+  // multi-station order; see resolveStationServedTransition in lib/bills.ts.
+  const station = session.staff.role === "KITCHEN" ? session.staff.assignedStation : null;
+
+  const res = await advanceOrderStatus(orderId, session.restaurant.id, to, station);
   if ("error" in res) return res;
 
   revalidatePath(`/staff/${slug}/kitchen`);

@@ -25,6 +25,8 @@ export async function staffAddItems(
   slug: string,
   tableId: string,
   items: AddItem[],
+  note?: string,
+  clientRequestId?: string,
 ) {
   const session = await requireStaffForSlug(slug);
   if (!session) return { error: "Your session has ended. Please sign in again." };
@@ -57,6 +59,8 @@ export async function staffAddItems(
     },
     items,
     "STAFF",
+    note,
+    clientRequestId,
   );
   if ("error" in res) return res;
 

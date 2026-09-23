@@ -141,6 +141,7 @@ export function CustomerExperience({
   const [view, setView] = useState<View>("home");
   const [paid, setPaid] = useState<Paid | null>(null);
   const [placed, setPlaced] = useState<Placed | null>(null);
+  const [placedSkippedCount, setPlacedSkippedCount] = useState(0);
   const [payOpen, setPayOpen] = useState(false);
   const allowedModes = (["full", "equal", "items", "custom"] as PayMode[]).filter((m) =>
     splitMethods.includes(m),
@@ -175,8 +176,9 @@ export function CustomerExperience({
     return res;
   }
 
-  function handlePlaced(summary: Placed) {
+  function handlePlaced(summary: Placed, skippedCount = 0) {
     setPlaced(summary);
+    setPlacedSkippedCount(skippedCount);
     haptic([12, 30, 12]);
     router.refresh();
   }
@@ -276,6 +278,17 @@ export function CustomerExperience({
             <motion.div variants={fadeUp} className="mt-6 rounded-[var(--radius-card)] bg-surface shadow-raised px-5 pt-4 pb-5">
               <OrderTracker status={latestOrder?.status ?? "SUBMITTED"} />
             </motion.div>
+          )}
+
+          {placedSkippedCount > 0 && (
+            <motion.p
+              variants={fadeUp}
+              className="mt-4 text-sm text-center text-warn bg-warn-soft rounded-[var(--radius-card)] px-4 py-2.5"
+            >
+              {placedSkippedCount === 1
+                ? "1 item just sold out and wasn't added — the rest of your order was sent."
+                : `${placedSkippedCount} items just sold out and weren't added — the rest of your order was sent.`}
+            </motion.p>
           )}
 
           <motion.ul variants={fadeUp} className="mt-5 rounded-[var(--radius-card)] bg-surface border border-line divide-y divide-line">

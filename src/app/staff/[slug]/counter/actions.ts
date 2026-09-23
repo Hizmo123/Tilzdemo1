@@ -43,7 +43,13 @@ export async function startCounterSale(slug: string, locationId: string) {
 // Adds items to an open counter sale. Reuses the exact same
 // addItemsToCounterBill core the counter lib exposes — prices always come
 // from the DB, never the client.
-export async function addCounterItems(slug: string, billId: string, items: AddItem[]) {
+export async function addCounterItems(
+  slug: string,
+  billId: string,
+  items: AddItem[],
+  note?: string,
+  clientRequestId?: string,
+) {
   const session = await requireStaffForSlug(slug);
   if (!session) return { error: "Your session has ended. Please sign in again." };
   if (!roleCan(session.staff.role, "orders:manage"))
@@ -56,7 +62,7 @@ export async function addCounterItems(slug: string, billId: string, items: AddIt
     return { error: "This venue can't take new orders right now — contact the owner." };
   }
 
-  const res = await addItemsToCounterBill(billId, session.restaurant.id, items);
+  const res = await addItemsToCounterBill(billId, session.restaurant.id, items, note, clientRequestId);
   if ("error" in res) return res;
 
   revalidateCounter(slug, billId);

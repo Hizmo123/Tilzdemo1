@@ -95,9 +95,13 @@ export function MenuOrderer({
     lines: { menuItemId: string; quantity: number; optionIds: string[]; note?: string }[],
     note?: string,
     clientRequestId?: string,
-  ) => Promise<{ error?: string } | { ok: true }>;
+  ) => Promise<{ error?: string } | { ok: true; skippedMenuItemIds?: string[] }>;
   reviewStep?: boolean;
-  onPlaced?: (summary: { name: string; quantity: number }[]) => void;
+  // skippedCount: items in the cart that the server silently dropped (sold
+  // out/deleted between adding to cart and sending) — lets the success
+  // screen say so instead of claiming every tapped item reached the
+  // kitchen.
+  onPlaced?: (summary: { name: string; quantity: number }[], skippedCount?: number) => void;
   layout?: string;
   cardStyle?: unknown;
   sectionHeaderStyle?: string;
@@ -312,7 +316,15 @@ export function MenuOrderer({
       setReviewOpen(false);
       setRetrying(false);
       submitKeyRef.current = null;
-      onPlaced?.(summary);
+      // lines and summary are built together from the same cart, same
+      // order — zip them by index to drop whichever lines the server
+      // actually skipped instead of showing a false full-cart success.
+      const skipped = res && "skippedMenuItemIds" in res ? res.skippedMenuItemIds : undefined;
+      const placedSummary =
+        skipped && skipped.length
+          ? summary.filter((_, i) => !skipped.includes(lines[i].menuItemId))
+          : summary;
+      onPlaced?.(placedSummary, skipped?.length ?? 0);
     } catch {
       if (attempt >= MAX_AUTO_RETRIES) {
         setRetrying(false);
