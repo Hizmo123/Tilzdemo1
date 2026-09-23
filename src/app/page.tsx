@@ -1,95 +1,27 @@
 import Link from "next/link";
+import { PLANS, type PlanDef } from "@/lib/plans";
+import { formatCents } from "@/lib/money";
+import { LinkButton } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { MarketingNav } from "@/components/marketing/nav";
+import { Reveal, RevealGroup, RevealItem } from "@/components/marketing/reveal";
+import { SplitCheck } from "@/components/marketing/split-check";
 
 // Public marketing site. Honest scope: it only names what the product actually
 // does today (order, split, pay, staff terminal, kitchen) — no POS/loyalty
 // claims that aren't built, and no fabricated uplift statistics.
+//
+// Visual language is the Phase 0 system (type scale, radius, elevation,
+// motion) shared with the customer /v pages, so a visitor who goes from the
+// hero to a scanned table sees one product, not two.
 
-function Nav() {
-  return (
-    <header className="border-b border-line">
-      <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
-        <span className="font-display text-xl font-semibold tracking-tight">
-          Tillz
-        </span>
-        <nav className="flex items-center gap-2 sm:gap-4">
-          <Link
-            href="/staff"
-            className="text-sm text-ink-soft hover:text-ink px-3 py-2"
-          >
-            Staff sign in
-          </Link>
-          <Link
-            href="/login"
-            className="text-sm text-ink-soft hover:text-ink px-3 py-2"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/signup"
-            className="text-sm font-medium rounded-lg bg-ink text-surface px-4 py-2 hover:opacity-90"
-          >
-            Get started
-          </Link>
-        </nav>
-      </div>
-    </header>
-  );
-}
-
-// The split-check hero visual: an itemized bill that resolves into three shares.
-function SplitCheck() {
-  const items = [
-    ["Flat white", "5.00"],
-    ["Smashed avo", "18.00"],
-    ["Bacon & egg roll", "12.00"],
-    ["Cold brew", "6.00"],
-    ["Banana bread", "6.00"],
-  ];
-  return (
-    <div className="relative">
-      <div className="rounded-2xl border border-line bg-surface shadow-sm p-6 max-w-sm mx-auto lg:mx-0">
-        <div className="flex items-baseline justify-between border-b border-line pb-3">
-          <span className="font-display text-lg font-semibold tracking-tight">
-            Harbour Kitchen
-          </span>
-          <span className="text-sm text-muted">Table 7</span>
-        </div>
-        <ul className="py-3 space-y-1.5">
-          {items.map(([name, price]) => (
-            <li key={name} className="flex justify-between text-sm">
-              <span>{name}</span>
-              <span className="tabular-nums text-muted">${price}</span>
-            </li>
-          ))}
-        </ul>
-        <div className="flex justify-between border-t border-line pt-3 font-medium">
-          <span>Total</span>
-          <span className="tabular-nums">$47.00</span>
-        </div>
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          {["Ari", "Sam", "Jo"].map((who) => (
-            <div
-              key={who}
-              className="rounded-xl bg-pine-soft text-pine-deep text-center py-2.5"
-            >
-              <div className="text-xs">{who}</div>
-              <div className="font-semibold tabular-nums">$15.67</div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 rounded-xl bg-ink text-surface text-center py-2.5 text-sm font-medium">
-          Paid from the table
-        </div>
-      </div>
-    </div>
-  );
-}
+const CONTAINER = "max-w-6xl mx-auto px-5 sm:px-8";
 
 function Hero() {
   return (
-    <section className="max-w-6xl mx-auto px-5 sm:px-8 py-16 sm:py-24 grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
-      <div>
-        <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.05]">
+    <section className={`${CONTAINER} pt-14 pb-16 sm:pt-20 sm:pb-24 grid lg:grid-cols-2 gap-12 lg:gap-8 items-center`}>
+      <Reveal>
+        <h1 className="font-display text-display-lg sm:text-display-xl font-semibold">
           Let your table order, split and pay by themselves.
         </h1>
         <p className="mt-5 text-lg text-ink-soft max-w-md">
@@ -98,24 +30,20 @@ function Hero() {
           for the check.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-3">
-          <Link
-            href="/signup"
-            className="rounded-xl bg-pine text-white px-6 py-3 font-medium hover:bg-pine-deep"
-          >
+          <LinkButton href="/signup" size="lg">
             Set up your venue
-          </Link>
-          <a
-            href="#how"
-            className="rounded-xl border border-line px-6 py-3 font-medium hover:border-ink/30"
-          >
+          </LinkButton>
+          <LinkButton href="#how" variant="secondary" size="lg">
             See how it works
-          </a>
+          </LinkButton>
         </div>
         <p className="mt-4 text-sm text-muted">
           Free to start. Set it up yourself in an afternoon — no sales call.
         </p>
-      </div>
-      <SplitCheck />
+      </Reveal>
+      <Reveal delay={0.15}>
+        <SplitCheck />
+      </Reveal>
     </section>
   );
 }
@@ -139,24 +67,22 @@ function How() {
     },
   ];
   return (
-    <section id="how" className="bg-surface border-y border-line">
-      <div className="max-w-6xl mx-auto px-5 sm:px-8 py-16 sm:py-20">
-        <h2 className="font-display text-3xl font-semibold tracking-tight">
-          How it works
-        </h2>
-        <div className="mt-10 grid md:grid-cols-3 gap-8">
+    <section id="how" className="bg-surface border-y border-line scroll-mt-16">
+      <div className={`${CONTAINER} py-16 sm:py-20`}>
+        <Reveal>
+          <h2 className="font-display text-display font-semibold">How it works</h2>
+        </Reveal>
+        <RevealGroup className="mt-10 grid md:grid-cols-3 gap-8" each={0.12}>
           {steps.map((s) => (
-            <div key={s.n}>
-              <div className="w-9 h-9 rounded-full bg-pine text-white flex items-center justify-center font-medium">
+            <RevealItem key={s.n}>
+              <div className="w-10 h-10 rounded-pill bg-accent-gradient text-on-accent shadow-accent flex items-center justify-center font-display font-semibold">
                 {s.n}
               </div>
-              <h3 className="mt-4 font-display text-lg font-semibold tracking-tight">
-                {s.title}
-              </h3>
+              <h3 className="mt-4 font-display text-display-sm font-semibold">{s.title}</h3>
               <p className="mt-2 text-ink-soft">{s.body}</p>
-            </div>
+            </RevealItem>
           ))}
-        </div>
+        </RevealGroup>
       </div>
     </section>
   );
@@ -182,20 +108,18 @@ function Benefits() {
     },
   ];
   return (
-    <section className="max-w-6xl mx-auto px-5 sm:px-8 py-16 sm:py-20">
-      <h2 className="font-display text-3xl font-semibold tracking-tight">
-        What it does for your venue
-      </h2>
-      <div className="mt-10 grid sm:grid-cols-2 gap-x-10 gap-y-8">
+    <section className={`${CONTAINER} py-16 sm:py-20`}>
+      <Reveal>
+        <h2 className="font-display text-display font-semibold">What it does for your venue</h2>
+      </Reveal>
+      <RevealGroup className="mt-10 grid sm:grid-cols-2 gap-x-10 gap-y-8">
         {points.map((p) => (
-          <div key={p.title} className="border-t border-line pt-5">
-            <h3 className="font-display text-lg font-semibold tracking-tight">
-              {p.title}
-            </h3>
+          <RevealItem key={p.title} className="border-t border-line pt-5">
+            <h3 className="font-display text-display-sm font-semibold">{p.title}</h3>
             <p className="mt-2 text-ink-soft max-w-md">{p.body}</p>
-          </div>
+          </RevealItem>
         ))}
-      </div>
+      </RevealGroup>
     </section>
   );
 }
@@ -203,89 +127,110 @@ function Benefits() {
 function Positioning() {
   return (
     <section className="bg-ink text-surface">
-      <div className="max-w-6xl mx-auto px-5 sm:px-8 py-16 sm:py-20">
-        <h2 className="font-display text-3xl font-semibold tracking-tight">
-          Built for the venue that just wants it to work
-        </h2>
-        <p className="mt-4 text-lg text-white/70 max-w-2xl">
-          No demo to book, no quote that changes with your volume, no long
-          contract. One clear price, sign up on the website, and you own your
-          setup from day one.
-        </p>
-        <div className="mt-10 grid sm:grid-cols-3 gap-8">
+      <div className={`${CONTAINER} py-16 sm:py-20`}>
+        <Reveal>
+          <h2 className="font-display text-display font-semibold">
+            Built for the venue that just wants it to work
+          </h2>
+          <p className="mt-4 text-lg text-white/70 max-w-2xl">
+            No demo to book, no quote that changes with your volume, no long
+            contract. One clear price, sign up on the website, and you own your
+            setup from day one.
+          </p>
+        </Reveal>
+        <RevealGroup className="mt-10 grid sm:grid-cols-3 gap-8">
           {[
             ["Sign up online", "Create your venue, add your menu and tables, print your codes. No onboarding rep required."],
             ["One flat price", "You know what you pay before you start. No per-order surprises, no volume tiers to decode."],
             ["Yours to leave", "Your menu, your data. Month to month — stay because it works, not because you're locked in."],
           ].map(([t, b]) => (
-            <div key={t}>
-              <h3 className="font-display text-lg font-semibold tracking-tight">
-                {t}
-              </h3>
+            <RevealItem key={t}>
+              <h3 className="font-display text-display-sm font-semibold">{t}</h3>
               <p className="mt-2 text-white/70">{b}</p>
-            </div>
+            </RevealItem>
           ))}
-        </div>
+        </RevealGroup>
       </div>
     </section>
   );
 }
 
+// The tier we lead with. Growth is the plan a venue going live across the
+// whole floor actually lands on — no table cap, no "Powered by Tillz" on
+// their ordering page — so it's the one we mark "Most popular". Basic is the
+// on-ramp, Pro is for groups.
+const RECOMMENDED_TIER: PlanDef["tier"] = "GROWTH";
+
+function planPrice(p: PlanDef) {
+  if (p.priceCents === 0) return "Free";
+  // "$49", not "$49.00" — whole-dollar plans read cleaner at display size.
+  return formatCents(p.priceCents).replace(/\.00$/, "");
+}
+
+function PricingCard({ plan }: { plan: PlanDef }) {
+  const free = plan.priceCents === 0;
+  const recommended = plan.tier === RECOMMENDED_TIER;
+  return (
+    <Card
+      elevation={recommended ? "raised" : "rest"}
+      className={`relative flex flex-col p-6 h-full ${
+        recommended ? "ring-2 ring-pine" : free ? "bg-surface-2/60" : ""
+      }`}
+    >
+      {recommended && (
+        <span className="absolute -top-3 left-6 text-[11px] font-semibold uppercase tracking-wide bg-accent-gradient text-on-accent px-2.5 py-1 rounded-pill shadow-accent">
+          Most popular
+        </span>
+      )}
+      <h3 className="font-display text-display-sm font-semibold">{plan.name}</h3>
+      <p className="mt-1 text-sm text-muted min-h-[40px]">{plan.blurb}</p>
+      <p className="mt-5 font-display text-display font-semibold">
+        {planPrice(plan)}
+        {!free && <span className="text-base text-muted font-normal font-sans tracking-normal"> /month</span>}
+      </p>
+      {free && <p className="text-xs text-muted mt-1">No card needed</p>}
+      <ul className="mt-6 space-y-2.5 text-sm text-ink-soft flex-1">
+        {plan.features.map((f) => (
+          <li key={f} className="flex items-start gap-2.5">
+            <svg viewBox="0 0 20 20" className="w-4 h-4 mt-0.5 shrink-0 text-pine" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M4 10.5l3.5 3.5L16 6" />
+            </svg>
+            <span>{f}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-7">
+        <LinkButton href="/signup" variant={recommended ? "primary" : "secondary"} full>
+          {free ? "Start free" : `Choose ${plan.name}`}
+        </LinkButton>
+      </div>
+    </Card>
+  );
+}
+
 function Pricing() {
   return (
-    <section id="pricing" className="max-w-6xl mx-auto px-5 sm:px-8 py-16 sm:py-20">
-      <h2 className="font-display text-3xl font-semibold tracking-tight">
-        Simple pricing
-      </h2>
-      <p className="mt-3 text-ink-soft max-w-lg">
-        Start free while you set up and try it on a few tables. Move to a flat
-        monthly plan when you go live across the venue.
-      </p>
-      <div className="mt-10 grid md:grid-cols-2 gap-4 max-w-3xl">
-        <div className="rounded-2xl border border-line bg-surface p-7">
-          <h3 className="font-display text-xl font-semibold tracking-tight">
-            Starter
-          </h3>
-          <p className="mt-1 text-muted">To set up and try it out</p>
-          <p className="mt-5 font-display text-4xl font-semibold tracking-tight">
-            Free
-          </p>
-          <ul className="mt-6 space-y-2 text-sm text-ink-soft">
-            <li>Full menu, tables and QR codes</li>
-            <li>Ordering, bill splitting and test payments</li>
-            <li>Staff logins and kitchen screen</li>
-          </ul>
-          <Link
-            href="/signup"
-            className="mt-7 block text-center rounded-xl border border-line py-3 font-medium hover:border-ink/30"
-          >
-            Get started
-          </Link>
-        </div>
-        <div className="rounded-2xl border-2 border-pine bg-surface p-7">
-          <h3 className="font-display text-xl font-semibold tracking-tight">
-            Venue
-          </h3>
-          <p className="mt-1 text-muted">For live service</p>
-          <p className="mt-5 font-display text-4xl font-semibold tracking-tight">
-            $49<span className="text-lg text-muted font-normal">/month</span>
-          </p>
-          <ul className="mt-6 space-y-2 text-sm text-ink-soft">
-            <li>Everything in Starter</li>
-            <li>Live payments to your account</li>
-            <li>All your tables, one flat price</li>
-          </ul>
-          <Link
-            href="/signup"
-            className="mt-7 block text-center rounded-xl bg-pine text-white py-3 font-medium hover:bg-pine-deep"
-          >
-            Set up your venue
-          </Link>
-        </div>
-      </div>
-      <p className="mt-5 text-sm text-muted">
-        Live payments are processed by a licensed payment provider; a short
-        verification is required before you can accept real payments.
+    <section id="pricing" className={`${CONTAINER} py-16 sm:py-20 scroll-mt-16`}>
+      <Reveal>
+        <h2 className="font-display text-display font-semibold">Simple pricing</h2>
+        <p className="mt-3 text-ink-soft max-w-lg">
+          Start free with a digital menu while you set up. Move to a flat monthly
+          plan when you&apos;re ready for live ordering across the venue.
+        </p>
+      </Reveal>
+      {/* Rendered straight from PLANS so this page can't drift from the
+          catalogue the billing flow uses. */}
+      <RevealGroup className="mt-10 grid sm:grid-cols-2 xl:grid-cols-4 gap-4 pt-3">
+        {PLANS.map((plan) => (
+          <RevealItem key={plan.tier} className="h-full">
+            <PricingCard plan={plan} />
+          </RevealItem>
+        ))}
+      </RevealGroup>
+      <p className="mt-6 text-sm text-muted max-w-2xl">
+        Prices in AUD, excluding GST. Live payments are processed by a licensed
+        payment provider; a short verification is required before you can
+        accept real payments.
       </p>
     </section>
   );
@@ -313,17 +258,17 @@ function FAQ() {
   return (
     <section className="bg-surface border-y border-line">
       <div className="max-w-3xl mx-auto px-5 sm:px-8 py-16 sm:py-20">
-        <h2 className="font-display text-3xl font-semibold tracking-tight">
-          Questions
-        </h2>
-        <div className="mt-8 divide-y divide-line">
+        <Reveal>
+          <h2 className="font-display text-display font-semibold">Questions</h2>
+        </Reveal>
+        <RevealGroup className="mt-8 divide-y divide-line" each={0.06}>
           {qs.map(([q, a]) => (
-            <div key={q} className="py-5">
+            <RevealItem key={q} className="py-5">
               <h3 className="font-medium">{q}</h3>
               <p className="mt-2 text-ink-soft">{a}</p>
-            </div>
+            </RevealItem>
           ))}
-        </div>
+        </RevealGroup>
       </div>
     </section>
   );
@@ -331,19 +276,20 @@ function FAQ() {
 
 function FinalCta() {
   return (
-    <section className="max-w-6xl mx-auto px-5 sm:px-8 py-20 text-center">
-      <h2 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight">
-        Give your customers a faster way to pay.
-      </h2>
-      <p className="mt-4 text-ink-soft max-w-md mx-auto">
-        Set up your venue in an afternoon and see it working on your own tables.
-      </p>
-      <Link
-        href="/signup"
-        className="mt-8 inline-block rounded-xl bg-pine text-white px-7 py-3.5 font-medium hover:bg-pine-deep"
-      >
-        Set up your venue
-      </Link>
+    <section className={`${CONTAINER} py-20 text-center`}>
+      <Reveal>
+        <h2 className="font-display text-display sm:text-display-lg font-semibold">
+          Give your customers a faster way to pay.
+        </h2>
+        <p className="mt-4 text-ink-soft max-w-md mx-auto">
+          Set up your venue in an afternoon and see it working on your own tables.
+        </p>
+        <div className="mt-8">
+          <LinkButton href="/signup" size="lg">
+            Set up your venue
+          </LinkButton>
+        </div>
+      </Reveal>
     </section>
   );
 }
@@ -351,7 +297,7 @@ function FinalCta() {
 function Footer() {
   return (
     <footer className="border-t border-line">
-      <div className="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted">
+      <div className={`${CONTAINER} py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted`}>
         <span className="font-display font-semibold text-ink">Tillz</span>
         <span>QR ordering, splitting and payments for Australian venues.</span>
         <span className="flex items-center gap-4">
@@ -379,7 +325,7 @@ function Footer() {
 export default function Home() {
   return (
     <div className="min-h-dvh bg-paper text-ink">
-      <Nav />
+      <MarketingNav />
       <Hero />
       <How />
       <Benefits />
