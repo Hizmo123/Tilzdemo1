@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
+import { getEntitlements } from "@/lib/entitlements";
 import { getKitchenOrders, getOrderHistory, type OrderStatusName } from "@/lib/bills";
 import { formatCents } from "@/lib/money";
 import { LiveRefresh } from "../live-refresh";
@@ -37,11 +38,19 @@ export default async function OrdersPage() {
   }
 
   const restaurant = authz.membership.organization.restaurants[0];
-  const [orders, history] = restaurant
-    ? await Promise.all([getKitchenOrders(restaurant.id), getOrderHistory(restaurant.id)])
-    : [[], []];
+  const [orders, history, ent] = restaurant
+    ? await Promise.all([
+        getKitchenOrders(restaurant.id),
+        getOrderHistory(restaurant.id),
+        getEntitlements(authz.membership.organizationId),
+      ])
+    : [[], [], null];
   const now = Date.now();
   const currency = restaurant?.currency ?? "AUD";
+  // Square owns the kitchen on Connect — no local status-changing control
+  // here (see dashboard-ticket.tsx); the fulfillment-sync webhook is the
+  // only thing that moves these tickets forward.
+  const readOnly = ent?.requiresSquare ?? false;
 
   const tickets = orders.map((o) => ({
     id: o.id,
@@ -77,7 +86,7 @@ export default async function OrdersPage() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {tickets.map((t) => (
-            <DashboardTicket key={t.id} ticket={t} />
+            <DashboardTicket key={t.id} ticket={t} readOnly={readOnly} />
           ))}
         </div>
       )}

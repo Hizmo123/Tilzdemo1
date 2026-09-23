@@ -10,10 +10,22 @@ import { KitchenTicket, NEXT_LABEL, type Ticket } from "./kitchen-ticket";
 // — a cheap wireless keypad mounted at the pass is a common kitchen setup.
 // Ignored while any text input has focus (the device-label field, etc.) so
 // typing a name doesn't accidentally bump a ticket.
-export function KitchenBoard({ slug, tickets }: { slug: string; tickets: Ticket[] }) {
+export function KitchenBoard({
+  slug,
+  tickets,
+  // Connect-tier orgs: see kitchen-ticket.tsx's matching comment. Disables
+  // the numeric bump shortcut too, not just the on-card buttons — the same
+  // "does nothing real" rule applies to it.
+  readOnly = false,
+}: {
+  slug: string;
+  tickets: Ticket[];
+  readOnly?: boolean;
+}) {
   const router = useRouter();
 
   useEffect(() => {
+    if (readOnly) return;
     function onKey(e: KeyboardEvent) {
       const target = e.target;
       if (
@@ -33,7 +45,7 @@ export function KitchenBoard({ slug, tickets }: { slug: string; tickets: Ticket[
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tickets, slug, router]);
+  }, [tickets, slug, router, readOnly]);
 
   return (
     <div className="grid sm:grid-cols-2 gap-3">
@@ -42,7 +54,8 @@ export function KitchenBoard({ slug, tickets }: { slug: string; tickets: Ticket[
           key={t.id}
           slug={slug}
           ticket={t}
-          shortcutNumber={i < 9 ? i + 1 : undefined}
+          shortcutNumber={readOnly ? undefined : i < 9 ? i + 1 : undefined}
+          readOnly={readOnly}
         />
       ))}
     </div>

@@ -221,3 +221,17 @@ export async function requireStaffOrdering(
   const ent = await getEntitlements(organizationId);
   if (!ent.ordering) redirect(`/staff/${slug}`);
 }
+
+// Same shape as requireStaffOrdering, for the counter/register pages
+// specifically: on Connect, no cash-drawer/counter workflow applies —
+// Square handles the venue's own in-person payments if they use one — so a
+// Connect staff member typing these URLs directly must be bounced back to
+// the floor, not just miss the header link (see staff/[slug]/home/page.tsx's
+// nav filtering, which is cosmetic only).
+export async function requireStaffCounterAllowed(
+  organizationId: string,
+  slug: string,
+) {
+  const ent = await getEntitlements(organizationId);
+  if (ent.requiresSquare) redirect(`/staff/${slug}/home`);
+}

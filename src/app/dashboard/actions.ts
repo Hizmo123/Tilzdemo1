@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getAuthz, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
-import { isOrgSubscribed } from "@/lib/entitlements";
+import { getPublishReadiness } from "@/lib/entitlements";
 
 const createRestaurantSchema = z.object({
   restaurantName: z.string().trim().min(2, "Enter a restaurant name.").max(80),
@@ -85,10 +85,12 @@ export async function createRestaurant(
 export type PublishState = { error?: string; ok?: boolean };
 
 // Flips a restaurant live — gates /v/[token] and /m/[slug] (see
-// lib/entitlements.ts's Restaurant.published comment). Refuses outright if
-// the org isn't "subscribed" under the mock billing model
-// (isOrgSubscribed) — no payment provider is ever called here; this is the
-// mock path the whole plan model runs on until real billing lands.
+// lib/entitlements.ts's Restaurant.published comment). Refuses outright
+// unless getPublishReadiness says so — under the mock billing model that's
+// "subscribed" for every tier, PLUS an active Square connection for
+// CONNECT specifically (it has no subscription to be "active" instead of).
+// No payment provider is ever called here; this is the mock path the whole
+// plan model runs on until real billing lands.
 export async function publishRestaurant(): Promise<PublishState> {
   const authz = await getAuthz();
   if (!authz.can("settings:manage")) {
@@ -97,11 +99,13 @@ export async function publishRestaurant(): Promise<PublishState> {
   const restaurant = authz.membership?.organization.restaurants[0];
   if (!restaurant) return { error: "Create your restaurant first." };
 
-  const subscribed = await isOrgSubscribed(authz.membership!.organizationId);
-  if (!subscribed) {
+  const readiness = await getPublishReadiness(authz.membership!.organizationId);
+  if (!readiness.ready) {
     return {
       error:
-        "This venue needs an active plan before it can go live. Confirm a plan on the Billing page first.",
+        readiness.reason === "square_disconnected"
+          ? "This venue needs an active Square connection before it can go live. Reconnect Square in Settings → Integrations first."
+          : "This venue needs an active plan before it can go live. Confirm a plan on the Billing page first.",
     };
   }
 

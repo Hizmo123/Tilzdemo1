@@ -19,6 +19,16 @@ export type Entitlements = {
   analyticsWindowDays: number | null; // null = full history, 0 = none
   showTillzBranding: boolean;
   prioritySupport: boolean;
+  // Tillz's own per-order application fee, in basis points, applied on top
+  // of a Square-connected charge (chargeBillViaSquare) — see
+  // TIER_LIMITS below for why this is 0 everywhere except CONNECT.
+  appFeeBps: number;
+  // true only for CONNECT: the entire tier IS a Square connection — there
+  // is no Tillz-payments fallback. Onboarding makes the Connect step
+  // mandatory (see lib/onboarding-options.ts#planRequiresSquare), and the
+  // publish gate (isOrgSubscribed) additionally requires an active,
+  // non-revoked SquareConnection before a Connect org can go live.
+  requiresSquare: boolean;
   // Lapsed-subscription state (spec B4). `lapsed` alone doesn't stop
   // anything — existing service and read access keep running through the
   // grace period. Only `orderingBlocked` (lapsed AND past the grace period)
@@ -28,6 +38,12 @@ export type Entitlements = {
   orderingBlocked: boolean;
 };
 
+// appFeeBps is 0 on every subscription tier (LITE/BASIC/GROWTH/PRO) — a
+// paying subscriber who ALSO connects their own Square (for payment
+// convenience or a catalog import) must never be charged a per-order fee
+// on top of what they already pay monthly; that would be double-dipping
+// the same revenue relationship. Only CONNECT — no subscription at all —
+// carries a nonzero fee, since it's Tillz's only revenue from that org.
 const TIER_LIMITS: Record<
   PlanTier,
   {
@@ -38,6 +54,8 @@ const TIER_LIMITS: Record<
     analyticsWindowDays: number | null;
     showTillzBranding: boolean;
     prioritySupport: boolean;
+    appFeeBps: number;
+    requiresSquare: boolean;
   }
 > = {
   LITE: {
@@ -48,6 +66,8 @@ const TIER_LIMITS: Record<
     analyticsWindowDays: 0,
     showTillzBranding: true,
     prioritySupport: false,
+    appFeeBps: 0,
+    requiresSquare: false,
   },
   BASIC: {
     ordering: true,
@@ -57,6 +77,8 @@ const TIER_LIMITS: Record<
     analyticsWindowDays: 14,
     showTillzBranding: true,
     prioritySupport: false,
+    appFeeBps: 0,
+    requiresSquare: false,
   },
   GROWTH: {
     ordering: true,
@@ -66,6 +88,8 @@ const TIER_LIMITS: Record<
     analyticsWindowDays: null,
     showTillzBranding: false,
     prioritySupport: false,
+    appFeeBps: 0,
+    requiresSquare: false,
   },
   PRO: {
     ordering: true,
@@ -75,6 +99,22 @@ const TIER_LIMITS: Record<
     analyticsWindowDays: null,
     showTillzBranding: false,
     prioritySupport: true,
+    appFeeBps: 0,
+    requiresSquare: false,
+  },
+  // Unlimited tables (kdsStationLimit: 0, tableLimit: null) — no Tillz KDS
+  // burden either way, since Square owns the kitchen for this tier (see
+  // the PlanTier.CONNECT schema comment); no reason to also cap tables.
+  CONNECT: {
+    ordering: true,
+    tableLimit: null,
+    kdsStationLimit: 0,
+    venueLimit: 1,
+    analyticsWindowDays: 14,
+    showTillzBranding: true,
+    prioritySupport: false,
+    appFeeBps: 200, // 2% — the org's only revenue relationship with Tillz on this tier.
+    requiresSquare: true,
   },
 };
 
@@ -109,5 +149,7 @@ export function entitlementsLabel(tier: PlanTier): string {
       return "Growth";
     case "PRO":
       return "Pro";
+    case "CONNECT":
+      return "Connect";
   }
 }

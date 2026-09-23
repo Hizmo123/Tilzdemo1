@@ -71,6 +71,19 @@ export const PLANS: PlanDef[] = [
       "Priority support",
     ],
   },
+  {
+    tier: "CONNECT",
+    name: "Connect",
+    priceCents: 0,
+    cadence: "free + ~2% per order",
+    blurb: "Connect your own Square — free monthly, a small fee per order.",
+    features: [
+      "Orders + payments settle to your own Square account",
+      "Orders appear on your Square kitchen/POS",
+      "No monthly fee — pay only as you sell",
+      "\"Powered by Tillz\" shown on your ordering page",
+    ],
+  },
 ];
 
 export function planByTier(tier: PlanTier): PlanDef {

@@ -25,8 +25,11 @@ export function PlanPicker({
     <div role="radiogroup" className="grid sm:grid-cols-2 gap-3 pt-3">
       {PLANS.map((p) => {
         const selected = p.tier === value;
-        const free = p.priceCents === 0;
         const recommended = p.tier === RECOMMENDED;
+        // Connect is free monthly but not "free" the way Lite is — no
+        // subscription at all, a per-order fee instead — so it gets its own
+        // badge rather than either "Most popular" or a plain price line.
+        const connect = p.tier === "CONNECT";
         return (
           <motion.button
             key={p.tier}
@@ -43,6 +46,11 @@ export function PlanPicker({
             {recommended && (
               <span className="absolute -top-3 left-5 text-[11px] font-semibold uppercase tracking-wide bg-accent-gradient text-on-accent px-2.5 py-1 rounded-pill shadow-accent">
                 Most popular
+              </span>
+            )}
+            {connect && (
+              <span className="absolute -top-3 left-5 text-[11px] font-semibold uppercase tracking-wide bg-surface text-pine-deep border border-pine/30 px-2.5 py-1 rounded-pill shadow-rest">
+                No subscription
               </span>
             )}
 
@@ -70,9 +78,14 @@ export function PlanPicker({
 
             <span className="block mt-4 font-display text-display-sm font-semibold">
               {planPriceLabel(p)}
-              {!free && <span className="text-sm text-muted font-normal font-sans tracking-normal"> /month</span>}
-              {free && <span className="text-sm text-muted font-normal font-sans tracking-normal"> · no card needed</span>}
+              {p.cadence === "per month" && (
+                <span className="text-sm text-muted font-normal font-sans tracking-normal"> /month</span>
+              )}
+              {p.cadence === "free" && (
+                <span className="text-sm text-muted font-normal font-sans tracking-normal"> · no card needed</span>
+              )}
             </span>
+            {connect && <p className="text-xs text-pine-deep font-medium mt-0.5">+ ~2% per order — no monthly fee</p>}
 
             <ul className="mt-4 space-y-1.5 text-sm text-ink-soft">
               {p.features.map((f) => (

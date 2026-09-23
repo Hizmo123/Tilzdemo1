@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { requireStaffForSlug, requireStaffOrdering } from "@/lib/staff-auth";
+import { requireStaffForSlug, requireStaffOrdering, requireStaffCounterAllowed } from "@/lib/staff-auth";
 import { roleCan } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { getZReport } from "@/lib/cash-drawer";
@@ -22,6 +22,9 @@ export default async function SessionReportPage({
   // lib/staff-auth.ts#requireStaffOrdering for why this is NOT
   // lib/auth.ts#requireOrdering (owner Supabase session vs staff PIN session).
   await requireStaffOrdering(session.restaurant.organizationId, slug);
+  // HARD guard: Connect has no counter/cash-drawer workflow — Square handles
+  // the venue's own in-person payments — see lib/staff-auth.ts#requireStaffCounterAllowed.
+  await requireStaffCounterAllowed(session.restaurant.organizationId, slug);
 
   const { staff, restaurant } = session;
 

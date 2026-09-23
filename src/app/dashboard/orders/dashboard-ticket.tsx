@@ -26,7 +26,18 @@ const STATUS_STYLE: Record<string, string> = {
   READY: "bg-pine-soft text-pine-deep",
 };
 
-export function DashboardTicket({ ticket }: { ticket: Ticket }) {
+export function DashboardTicket({
+  ticket,
+  // Connect-tier orgs: Square owns the kitchen, not Tillz — the only thing
+  // that ever advances one of these orders' status is the
+  // order.fulfillment.updated webhook sync (lib/bills.ts). A manual button
+  // here would look real but do nothing the venue's own Square KDS/POS
+  // cares about, so it's replaced with a plain status badge instead.
+  readOnly = false,
+}: {
+  ticket: Ticket;
+  readOnly?: boolean;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -70,14 +81,20 @@ export function DashboardTicket({ ticket }: { ticket: Ticket }) {
         ))}
       </ul>
       {error && <p className="text-xs text-danger mb-2">{error}</p>}
-      {next && (
-        <button
-          disabled={pending}
-          onClick={() => move(next.to)}
-          className="w-full rounded-lg bg-pine text-white py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-50"
-        >
-          {pending ? "…" : next.label}
-        </button>
+      {readOnly ? (
+        <p className="text-xs text-muted text-center py-2 border-t border-line">
+          Synced from your Square kitchen
+        </p>
+      ) : (
+        next && (
+          <button
+            disabled={pending}
+            onClick={() => move(next.to)}
+            className="w-full rounded-lg bg-pine text-white py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-50"
+          >
+            {pending ? "…" : next.label}
+          </button>
+        )
       )}
     </div>
   );

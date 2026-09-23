@@ -4,7 +4,6 @@ import type { PaymentStatus, RefundStatus } from "@prisma/client";
 import type { Square } from "square";
 import { SquareError } from "square";
 import { squareClientFor } from "@/lib/square/client";
-import { env } from "@/lib/env";
 
 // Square caps idempotency_key at 45 characters. Tillz's own idempotency keys
 // (built in lib/bills.ts — e.g. "pay_<bill cuid>_<16 hex chars>" — also
@@ -118,6 +117,16 @@ export type ChargeBillViaSquareInput = {
   currency: string;
   sourceId: string;
   idempotencyKey: string;
+  // Tillz's per-order application fee, in basis points — the CALLER's job
+  // to resolve (entitlementsForTier(org.plan).appFeeBps in lib/bills.ts),
+  // never read from the raw SQUARE_APP_FEE_BPS env var in here. Only a
+  // CONNECT-tier org should ever pass a nonzero value: every other tier
+  // already pays a monthly subscription, so charging them a fee on top
+  // would double-dip the same revenue relationship. Keeping this a
+  // required, explicit input (not a fallback to the env var) means a
+  // caller can never forget to pass it and silently fall back to a global
+  // rate that was never meant to apply per-tier.
+  appFeeBps: number;
 };
 
 export type ChargeBillViaSquareResult = {
@@ -142,8 +151,18 @@ export function mapSquareStatus(status: string | undefined): PaymentStatus {
 export async function chargeBillViaSquare(
   input: ChargeBillViaSquareInput,
 ): Promise<ChargeBillViaSquareResult> {
-  const { connection, bill, lineItems, goodsCents, tipCents, surchargeCents, currency, sourceId, idempotencyKey } =
-    input;
+  const {
+    connection,
+    bill,
+    lineItems,
+    goodsCents,
+    tipCents,
+    surchargeCents,
+    currency,
+    sourceId,
+    idempotencyKey,
+    appFeeBps,
+  } = input;
 
   // location_id is required on the Order itself — an empty string is just as
   // unusable as null/undefined here, so this is a falsy check, not a strict
@@ -262,11 +281,12 @@ export async function chargeBillViaSquare(
   }
 
   // ---- 3. Create the payment --------------------------------------------------
-  // Tillz's application fee (SQUARE_APP_FEE_BPS) on the goods amount only —
-  // never on tip or surcharge — capped at 90% of the total amount actually
-  // charged to the card, matching Square's own hard limit on appFeeMoney.
+  // Tillz's application fee, on the goods amount only — never on tip or
+  // surcharge — capped at 90% of the total amount actually charged to the
+  // card, matching Square's own hard limit on appFeeMoney. appFeeBps comes
+  // from the CALLER (the org's plan tier), not a global env var — see the
+  // field's doc comment on ChargeBillViaSquareInput above.
   const totalChargeCents = goodsCents + tipCents + surchargeCents;
-  const appFeeBps = env.squareAppFeeBps();
   const appFeeCents = Math.min(
     Math.floor((goodsCents * appFeeBps) / 10000),
     Math.floor(totalChargeCents * 0.9),

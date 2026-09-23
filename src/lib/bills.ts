@@ -64,6 +64,10 @@ export type ResolvedVisit = {
   // customer page and its actions don't need a second round trip for them.
   showTillzBranding: boolean;
   orderingBlocked: boolean;
+  // Tillz's per-order app fee for THIS org's tier (0 except CONNECT) — the
+  // only source chargeBillViaSquare's appFeeBps input should ever be
+  // derived from. See lib/entitlements-core.ts's TIER_LIMITS comment.
+  appFeeBps: number;
   // Deep customisation (A5) — see lib/menu-style.ts for how these resolve.
   cardStyle: unknown;
   typeScale: string;
@@ -159,6 +163,7 @@ export async function resolveVisit(
       surchargeBasisPoints: r.surchargeBasisPoints,
       showTillzBranding: ent.showTillzBranding,
       orderingBlocked: ent.orderingBlocked,
+      appFeeBps: ent.appFeeBps,
       cardStyle: r.cardStyle,
       typeScale: r.typeScale,
       sectionHeaderStyle: r.sectionHeaderStyle,
@@ -1172,6 +1177,7 @@ export async function payBillAmount(
           currency: bill.currency,
           sourceId,
           idempotencyKey,
+          appFeeBps: resolved.visit.appFeeBps,
         });
         paymentRow = {
           status: result.status,
@@ -1475,6 +1481,7 @@ export async function payBillItems(
           currency: bill.currency,
           sourceId,
           idempotencyKey,
+          appFeeBps: resolved.visit.appFeeBps,
         });
         paymentRow = {
           status: result.status,

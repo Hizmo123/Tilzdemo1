@@ -6,15 +6,20 @@ import { useRouter } from "next/navigation";
 import { publishRestaurant, unpublishRestaurant } from "@/app/dashboard/actions";
 
 // Gates whether customers can actually reach /v/[token] or /m/[slug] (see
-// lib/entitlements.ts#isOrgSubscribed, dashboard/actions.ts#publishRestaurant).
-// Publishing needs an active (mock) plan; taking a live venue offline never
-// needs one.
+// lib/entitlements.ts#getPublishReadiness, dashboard/actions.ts#publishRestaurant).
+// Publishing needs "ready" (subscribed, and — for Connect only — an active
+// Square connection too); taking a live venue offline never needs either.
 export function PublishControl({
   published,
   subscribed,
+  // Connect-only: true when subscribed but Square isn't (yet, or no
+  // longer) actively connected — a distinct reason from "not subscribed",
+  // since Connect has no subscription to point them at instead.
+  squareDisconnected = false,
 }: {
   published: boolean;
   subscribed: boolean;
+  squareDisconnected?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -29,20 +34,33 @@ export function PublishControl({
     });
   }
 
+  const ready = subscribed && !squareDisconnected;
+
   if (published) {
     return (
-      <div data-tour="publish" className="rounded-[var(--radius-card)] border border-line bg-surface p-5 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-pine" />
-          <p className="font-medium">You&apos;re live</p>
+      <div data-tour="publish" className="rounded-[var(--radius-card)] border border-line bg-surface p-5 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${squareDisconnected ? "bg-danger" : "bg-pine"}`} />
+            <p className="font-medium">You&apos;re live</p>
+          </div>
+          <button
+            disabled={pending}
+            onClick={toggle}
+            className="text-sm text-muted hover:text-danger disabled:opacity-50"
+          >
+            {pending ? "…" : "Take offline"}
+          </button>
         </div>
-        <button
-          disabled={pending}
-          onClick={toggle}
-          className="text-sm text-muted hover:text-danger disabled:opacity-50"
-        >
-          {pending ? "…" : "Take offline"}
-        </button>
+        {squareDisconnected && (
+          <p className="text-sm text-danger">
+            Square isn&apos;t connected right now — orders can&apos;t be paid for until you{" "}
+            <Link href="/dashboard/settings/integrations" className="underline">
+              reconnect it
+            </Link>
+            .
+          </p>
+        )}
       </div>
     );
   }
@@ -53,12 +71,14 @@ export function PublishControl({
         <div>
           <p className="font-medium">Not live yet</p>
           <p className="text-sm text-muted">
-            {subscribed
+            {ready
               ? "Customers can't order or view your menu until you publish."
-              : "Confirm a plan on Billing before you can go live — billing is mock for now, so no card is actually charged."}
+              : squareDisconnected
+                ? "Connect your Square account before you can go live — this plan runs entirely on it."
+                : "Confirm a plan on Billing before you can go live — billing is mock for now, so no card is actually charged."}
           </p>
         </div>
-        {subscribed ? (
+        {ready ? (
           <button
             disabled={pending}
             onClick={toggle}
@@ -68,10 +88,10 @@ export function PublishControl({
           </button>
         ) : (
           <Link
-            href="/dashboard/billing"
+            href={squareDisconnected ? "/dashboard/settings/integrations" : "/dashboard/billing"}
             className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep shrink-0"
           >
-            Go to Billing
+            {squareDisconnected ? "Connect Square" : "Go to Billing"}
           </Link>
         )}
       </div>

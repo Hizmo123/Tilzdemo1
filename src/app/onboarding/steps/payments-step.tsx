@@ -32,6 +32,7 @@ export function PaymentsStep({
   onSquareChange,
   squareResult,
   returnTo,
+  mandatory = false,
   onBeforeRedirect,
 }: {
   answers: OnboardingAnswers;
@@ -40,6 +41,9 @@ export function PaymentsStep({
   onSquareChange: (next: PendingSquareSummary | null) => void;
   squareResult: SquareResult | null;
   returnTo: "/onboarding" | "/venues/new";
+  // True on the Connect plan: there's no Tillz-payments alternative, so the
+  // path choice itself is hidden and paymentPath is pinned to "square".
+  mandatory?: boolean;
   onBeforeRedirect: () => Promise<void>;
 }) {
   const [redirecting, setRedirecting] = useState(false);
@@ -47,6 +51,13 @@ export function PaymentsStep({
   const [locations, setLocations] = useState<{ id: string; name: string }[] | null>(null);
   const [locError, setLocError] = useState<string | null>(null);
   const [justConnected, setJustConnected] = useState(squareResult?.status === "success");
+
+  // Connect has no path to choose — pin it the moment this step mounts (or
+  // if a stale draft somehow carries "tillz" from before the plan changed).
+  useEffect(() => {
+    if (mandatory && answers.paymentPath !== "square") update({ paymentPath: "square" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mandatory, answers.paymentPath]);
 
   // Load the merchant's locations once connected; auto-pick when there's
   // exactly one so a single-site venue never has to touch the select.
@@ -114,26 +125,34 @@ export function PaymentsStep({
 
   return (
     <div className="space-y-4">
-      <div role="radiogroup" className="space-y-2">
-        <PathCard
-          selected={path === "square"}
-          onClick={() => update({ paymentPath: "square" })}
-          title="Connect your Square"
-          desc="Card payments settle into your own Square account, and every order lands on your Square POS and kitchen display. Square's per-transaction fee applies."
-          icon={<SquareMark />}
-        />
-        <PathCard
-          selected={path === "tillz"}
-          onClick={() => update({ paymentPath: "tillz" })}
-          title="Use Tillz payments"
-          desc="No Square account needed. Test mode today — real card payments through Tillz are coming; you can switch to Square any time in Settings."
-          badge="Test mode"
-          icon={<TillzMark />}
-        />
-      </div>
+      {mandatory ? (
+        <p className="text-sm text-ink-soft rounded-[var(--radius-card)] border border-line bg-surface-2/60 px-4 py-3">
+          The Connect plan runs on your own Square account — there&apos;s no separate
+          Tillz payment option here. Card fees are Square&apos;s; Tillz&apos;s own
+          share is the small per-order fee shown on the plan.
+        </p>
+      ) : (
+        <div role="radiogroup" className="space-y-2">
+          <PathCard
+            selected={path === "square"}
+            onClick={() => update({ paymentPath: "square" })}
+            title="Connect your Square"
+            desc="Card payments settle into your own Square account, and every order lands on your Square POS and kitchen display. Square's per-transaction fee applies."
+            icon={<SquareMark />}
+          />
+          <PathCard
+            selected={path === "tillz"}
+            onClick={() => update({ paymentPath: "tillz" })}
+            title="Use Tillz payments"
+            desc="No Square account needed. Test mode today — real card payments through Tillz are coming; you can switch to Square any time in Settings."
+            badge="Test mode"
+            icon={<TillzMark />}
+          />
+        </div>
+      )}
 
       <AnimatePresence initial={false} mode="wait">
-        {path === "square" && (
+        {(mandatory || path === "square") && (
           <motion.div
             key={square ? "connected" : "connect"}
             initial={{ opacity: 0, y: 6 }}

@@ -12,7 +12,7 @@ import { audit } from "@/lib/audit";
 import { SAMPLE_MENU } from "@/lib/sample-data";
 import { sameEveryDayHours, weekdayWeekendHours } from "@/lib/hours";
 import { getSetupChecklist, type ChecklistItem } from "@/lib/setup-checklist";
-import { entitlementsForTier, getEntitlements, canCreateVenue } from "@/lib/entitlements";
+import { entitlementsForTier, getEntitlements, canCreateVenue, type Entitlements } from "@/lib/entitlements";
 import { mockSubscriptionData } from "@/lib/plan-subscription";
 import {
   attachPendingToRestaurant,
@@ -252,6 +252,23 @@ function forceMenuOnly(a: z.infer<typeof schema>): z.infer<typeof schema> {
   };
 }
 
+// The server-side half of "Connect Square is mandatory" — the client
+// (wizard/PaymentsStep) blocks Next/finish without a connected + located
+// PendingSquareConnection, but that's only a convenience; this is the real
+// gate. Returns an error string to fail the whole completion with (never
+// silently falls back to another tier or lets the venue through menu-only —
+// the caller must return this error as-is, not swallow it). Not pulled into
+// forceMenuOnly's pattern since that one *adjusts* the answers and proceeds;
+// this one can only block.
+async function requireSquareForConnect(userId: string, tier: Entitlements): Promise<string | null> {
+  if (!tier.requiresSquare) return null;
+  const pending = await getPendingSquareSummary(userId);
+  if (!pending || !pending.locationId) {
+    return "Connect your Square account and choose a location before finishing — required on the Connect plan.";
+  }
+  return null;
+}
+
 // Shared by completeOnboarding (new org) and completeOnboardingForExistingOrg
 // (task G's "+ Add venue" flow, attaching to an ALREADY-existing org): builds
 // the restaurant (every service/appearance setting from the wizard) + its
@@ -465,6 +482,9 @@ export async function completeOnboarding(
   const tier = entitlementsForTier(parsed.data.plan);
   const a = tier.ordering ? parsed.data : forceMenuOnly(parsed.data);
 
+  const squareError = await requireSquareForConnect(user.id, tier);
+  if (squareError) return { error: squareError };
+
   const hours =
     a.hoursMode === "later"
       ? null
@@ -615,6 +635,9 @@ export async function completeOnboardingForExistingOrg(
   // both the table clamp and whether ordering exists for the new venue.
   const ent = await getEntitlements(organizationId);
   const a = ent.ordering ? parsed.data : forceMenuOnly(parsed.data);
+
+  const squareError = await requireSquareForConnect(user.id, ent);
+  if (squareError) return { error: squareError };
 
   const hours =
     a.hoursMode === "later"
