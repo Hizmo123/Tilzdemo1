@@ -9,6 +9,7 @@ import { audit } from "@/lib/audit";
 import { ALLERGEN_SET } from "@/lib/allergens";
 import { BADGE_VALUES } from "@/lib/menu-badges";
 import { canCreateStation } from "@/lib/entitlements";
+import { deleteAllMenuData } from "@/lib/menu-import";
 
 const BADGE_SET = new Set<string>(BADGE_VALUES);
 
@@ -478,4 +479,145 @@ export async function updateItemBadges(
   });
   revalidatePath("/dashboard/menu");
   return {};
+}
+
+// ---- Category delete / rename / reorder ------------------------------------
+
+// Deletes a category and everything under it (items, modifier groups/
+// options, Square catalog mappings — all cascade off MenuCategory, see
+// prisma/schema.prisma and the comment on deleteAllMenuData in
+// lib/menu-import.ts for the full chain). A past order's BillItems are
+// unaffected — menuItemId is nullable with onDelete: SetNull, so they keep
+// their name/price snapshot and just lose the live link.
+export async function deleteCategoryAction(categoryId: string) {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+
+  const owned = await assertCategoryOwned(categoryId, authz.user.id);
+  if (!owned) return { error: "Category not found." };
+
+  const itemCount = await prisma.menuItem.count({ where: { categoryId } });
+  await prisma.menuCategory.delete({ where: { id: categoryId } });
+
+  await audit({
+    organizationId: authz.membership!.organizationId,
+    actorUserId: authz.user.id,
+    actorEmail: authz.user.email ?? "",
+    action: "menu.category.deleted",
+    resourceType: "MenuCategory",
+    resourceId: categoryId,
+    metadata: { name: owned.name, itemCount },
+  });
+
+  revalidatePath("/dashboard/menu");
+  return { ok: true as const };
+}
+
+const renameSchema = z.object({
+  name: z.string().trim().min(1, "Enter a category name.").max(60),
+});
+
+export async function renameCategoryAction(
+  categoryId: string,
+  newName: string,
+): Promise<MenuActionState> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+
+  const parsed = renameSchema.safeParse({ name: newName });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const owned = await assertCategoryOwned(categoryId, authz.user.id);
+  if (!owned) return { error: "Category not found." };
+
+  await prisma.menuCategory.update({
+    where: { id: categoryId },
+    data: { name: parsed.data.name },
+  });
+
+  await audit({
+    organizationId: authz.membership!.organizationId,
+    actorUserId: authz.user.id,
+    actorEmail: authz.user.email ?? "",
+    action: "menu.category.renamed",
+    resourceType: "MenuCategory",
+    resourceId: categoryId,
+    metadata: { from: owned.name, to: parsed.data.name },
+  });
+
+  revalidatePath("/dashboard/menu");
+  return {};
+}
+
+// Persists a full drag/up-down reorder from the dashboard in one call. The
+// given id list must be EXACTLY this restaurant's current category set (no
+// more, no fewer, nothing foreign) — this is the ownership check, not just a
+// courtesy: a category from another venue could never sneak an id into a
+// list that has to match 1:1 against this restaurant's own categories.
+export async function reorderCategoriesAction(
+  orderedCategoryIds: string[],
+): Promise<MenuActionState> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+  const restaurantId = await requireRestaurantId();
+  if (!restaurantId) return { error: "Create your restaurant first." };
+
+  const existing = await prisma.menuCategory.findMany({
+    where: { restaurantId },
+    select: { id: true },
+  });
+  const existingIds = new Set(existing.map((c) => c.id));
+  const isExactMatch =
+    orderedCategoryIds.length === existing.length &&
+    orderedCategoryIds.every((id) => existingIds.has(id)) &&
+    new Set(orderedCategoryIds).size === orderedCategoryIds.length;
+  if (!isExactMatch) {
+    return { error: "That category list doesn't match your menu — refresh and try again." };
+  }
+
+  await prisma.$transaction(
+    orderedCategoryIds.map((id, i) =>
+      prisma.menuCategory.update({ where: { id }, data: { sortOrder: i } }),
+    ),
+  );
+
+  revalidatePath("/dashboard/menu");
+  // Customer-facing surfaces (MenuDisplay, MenuOrderer) both read categories
+  // via the one shared lib/bills.ts#getMenuForCustomer query, ordered by
+  // sortOrder — no separate revalidation needed for them to pick this up.
+  return {};
+}
+
+// ---- Delete the whole menu ---------------------------------------------------
+
+export type DeleteMenuState =
+  | { error: string }
+  | { ok: true; categoriesDeleted: number; itemsDeleted: number };
+
+// Reuses deleteAllMenuData (lib/menu-import.ts) — the exact same primitive
+// commitMenuImport's "replace" mode uses — rather than a second copy of the
+// same deletion logic.
+export async function deleteWholeMenuAction(): Promise<DeleteMenuState> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+  const restaurantId = await requireRestaurantId();
+  if (!restaurantId) return { error: "Create your restaurant first." };
+
+  const result = await prisma.$transaction(
+    (tx) => deleteAllMenuData(tx, restaurantId),
+    { timeout: 15000 },
+  );
+
+  await audit({
+    organizationId: authz.membership!.organizationId,
+    actorUserId: authz.user.id,
+    actorEmail: authz.user.email ?? "",
+    action: "menu.deleted_all",
+    resourceType: "Restaurant",
+    resourceId: restaurantId,
+    metadata: result,
+  });
+
+  revalidatePath("/dashboard/menu");
+  return { ok: true, ...result };
 }
