@@ -935,11 +935,21 @@ async function releasePaidOrders(billId: string) {
 }
 
 // Reject a pending order → cancel it and take its items back off the bill.
-export async function staffRejectOrder(orderId: string, restaurantId: string) {
+// Still-PENDING doesn't mean never charged: it can carry item-split
+// payments taken while it waited on approval — refunded (via
+// refundOrderItemsIfPaid, reusing refundBillPayment) before the items are
+// deleted, same as the customer-initiated cancel path.
+export async function staffRejectOrder(
+  orderId: string,
+  restaurantId: string,
+  actor: RefundActor,
+) {
   const order = await prisma.order.findFirst({
     where: { id: orderId, restaurantId, status: "PENDING" },
   });
   if (!order) return { error: "Order not found." };
+
+  await refundOrderItemsIfPaid(order, restaurantId, actor);
 
   await prisma.$transaction(async (tx) => {
     await tx.billItem.deleteMany({ where: { orderId: order.id } });
@@ -1370,10 +1380,23 @@ export async function payBillItems(
     }
     if (amount <= 0) return { error: "Select at least one item." };
 
+    // amount is summed from raw, undiscounted item prices, but a bill-level
+    // discount (recompute() above) is never distributed per item — it only
+    // reduces totalCents. Comparing the raw sum against the discounted
+    // remaining balance used to REJECT a perfectly valid final selection
+    // whenever a discount made the true remaining balance smaller than the
+    // items' sticker total (e.g. two $10 items with a $5 bill-level
+    // discount: paying the first for its full $10 leaves only $5 remaining,
+    // but the second item's raw price is still $10 — permanently unpayable
+    // under the old ">" check). Clamping to `remaining` instead means the
+    // discount lands on whichever selection completes the bill, and the
+    // total actually collected across every split payment can never exceed
+    // the bill's true (discounted) total.
     const remaining = bill.totalCents - bill.amountPaidCents;
-    if (amount > remaining) {
+    if (remaining <= 0) {
       return { error: "This bill was partly paid already — please refresh." };
     }
+    amount = Math.min(amount, remaining);
 
     const surcharge = resolved.visit.surchargeEnabled
       ? surchargeFor(amount + tip, resolved.visit.surchargeBasisPoints)
@@ -1587,6 +1610,78 @@ export async function payBillItems(
 
 // ---- Customer cancel (mistake safeguard) -----------------------------------
 
+// Refunds whatever's already been paid toward a specific (native, non-Square)
+// order's items BEFORE its BillItems are deleted — cancelling/rejecting an
+// order used to just delete the items, discarding any money already taken
+// for them. Reuses refundBillPayment for the actual refund; never
+// re-implements refund logic.
+//
+// Two distinct ways an order's items can already be paid before the order
+// itself is even SUBMITTED/PENDING-cancellable:
+//  - item-split payment (payBillItems) bumps paidQuantity directly on THIS
+//    order's own BillItem rows — exact, unambiguous, always safe to trust.
+//  - a prepay venue (Restaurant.paymentTiming "before", or the stricter
+//    requirePaymentBeforeOrder) holds a CUSTOMER order as awaitingPayment
+//    until the WHOLE bill is paid off (releasePaidOrders, called by every
+//    pay path once the bill is fully settled) — a lump-sum bill payment
+//    that never itemises which order it covered. A released
+//    (awaitingPayment: false), still-cancellable CUSTOMER order at such a
+//    venue is therefore guaranteed paid in full, even though no
+//    BillItem.paidQuantity reflects it.
+// Pure computation, split out from refundOrderItemsIfPaid so the two paid-
+// signals (item-split paidQuantity vs. a prepay venue's lump-sum release)
+// can be unit-tested without a database.
+export function computeOrderRefundTargetCents(
+  items: { paidQuantity: number; quantity: number; unitPriceCents: number }[],
+  wasReleasedFromPrepayGate: boolean,
+): number {
+  const directlyPaidCents = items.reduce((sum, it) => sum + it.paidQuantity * it.unitPriceCents, 0);
+  if (!wasReleasedFromPrepayGate) return directlyPaidCents;
+  const orderTotalCents = items.reduce((sum, it) => sum + it.quantity * it.unitPriceCents, 0);
+  return Math.max(directlyPaidCents, orderTotalCents);
+}
+
+async function refundOrderItemsIfPaid(
+  order: { id: string; billId: string; source: string; awaitingPayment: boolean },
+  restaurantId: string,
+  actor: RefundActor,
+): Promise<{ refundedCents: number }> {
+  const items = await prisma.billItem.findMany({ where: { orderId: order.id } });
+
+  let wasReleasedFromPrepayGate = false;
+  if (order.source === "CUSTOMER" && !order.awaitingPayment) {
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: { paymentTiming: true, requirePaymentBeforeOrder: true },
+    });
+    wasReleasedFromPrepayGate =
+      restaurant?.paymentTiming === "before" || !!restaurant?.requirePaymentBeforeOrder;
+  }
+  const targetCents = computeOrderRefundTargetCents(items, wasReleasedFromPrepayGate);
+
+  if (targetCents <= 0) return { refundedCents: 0 };
+
+  const payments = await prisma.payment.findMany({
+    where: { billId: order.billId, status: "SUCCEEDED" },
+    orderBy: { createdAt: "asc" },
+  });
+
+  let remaining = targetCents;
+  let refunded = 0;
+  for (const p of payments) {
+    if (remaining <= 0) break;
+    const refundable = p.amountCents + p.tipCents + p.surchargeCents - p.refundedCents;
+    if (refundable <= 0) continue;
+    const amount = Math.min(remaining, refundable);
+    const res = await refundBillPayment(p.id, restaurantId, amount, "Order cancelled after payment", actor);
+    if (!("error" in res) && res.status === "SUCCEEDED") {
+      refunded += amount;
+      remaining -= amount;
+    }
+  }
+  return { refundedCents: refunded };
+}
+
 // Lets a customer pull back an order they placed by mistake — but ONLY while the
 // kitchen hasn't started it (status still SUBMITTED). Removes the order's items
 // from the bill and recomputes the total. Once the kitchen taps "Start
@@ -1616,8 +1711,6 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
   // path below, gated on the fulfillment still being PROPOSED (i.e. this
   // order's status is still exactly SUBMITTED, not PREPARING+ per the
   // order.fulfillment.updated sync in syncSquareFulfillmentStatus).
-  // A still-PENDING order (awaiting payment/approval) was never charged, so
-  // it always cancels the plain local way below, Square venue or not.
   if (order.status === "SUBMITTED") {
     const bill = await prisma.bill.findUnique({
       where: { id: order.billId },
@@ -1627,6 +1720,15 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
       return cancelSquareCustomerOrder(resolved.visit.restaurantId, bill.id, bill.squareOrderId, order.id);
     }
   }
+
+  // Native (non-Square) path — NOT guaranteed unpaid just because it's still
+  // SUBMITTED/PENDING: a prepay-venue order can already be paid in full (see
+  // refundOrderItemsIfPaid), and either status can carry item-split
+  // payments. Refund first, before any item is deleted.
+  await refundOrderItemsIfPaid(order, resolved.visit.restaurantId, {
+    userId: "system:customer-cancel",
+    email: "customer-cancel@tillz.internal",
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.billItem.deleteMany({ where: { orderId: order.id } });
@@ -1802,7 +1904,11 @@ export async function refundBillPayment(
     where: {
       id: paymentId,
       status: "SUCCEEDED",
-      bill: { table: { location: { restaurantId } } },
+      // OR: a dine-in bill reaches its restaurant via table -> location; a
+      // counter bill has no table (Bill.tableId is nullable) and is scoped
+      // via Bill.restaurantId directly instead — table-only filtering here
+      // silently broke every refund on a counter/cash bill.
+      bill: { OR: [{ table: { location: { restaurantId } } }, { restaurantId }] },
     },
   });
   if (!payment) return { error: "Payment not found." };
@@ -2230,7 +2336,11 @@ export async function refireItems(
   if (ids.length === 0) return { error: "Select at least one item." };
 
   const items = await prisma.billItem.findMany({
-    where: { id: { in: ids }, bill: { table: { location: { restaurantId } } } },
+    where: {
+      id: { in: ids },
+      // OR: see refundBillPayment's comment — a counter bill has no table.
+      bill: { OR: [{ table: { location: { restaurantId } } }, { restaurantId }] },
+    },
     include: { bill: { select: { id: true, tableId: true } } },
   });
   if (items.length !== ids.length) return { error: "Some items weren't found." };
@@ -2274,7 +2384,11 @@ export async function refireItems(
 
 async function ownedOpenBillItem(itemId: string, restaurantId: string) {
   return prisma.billItem.findFirst({
-    where: { id: itemId, bill: { table: { location: { restaurantId } } } },
+    where: {
+      id: itemId,
+      // OR: see refundBillPayment's comment — a counter bill has no table.
+      bill: { OR: [{ table: { location: { restaurantId } } }, { restaurantId }] },
+    },
     include: { bill: { select: { id: true, status: true } } },
   });
 }
@@ -2317,7 +2431,11 @@ export async function setBillDiscount(
   discountCents: number,
 ) {
   const bill = await prisma.bill.findFirst({
-    where: { id: billId, table: { location: { restaurantId } } },
+    where: {
+      id: billId,
+      // OR: see refundBillPayment's comment — a counter bill has no table.
+      OR: [{ table: { location: { restaurantId } } }, { restaurantId }],
+    },
   });
   if (!bill) return { error: "Bill not found." };
   if (bill.status === "PAID") return { error: "This bill is already paid." };

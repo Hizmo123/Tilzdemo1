@@ -292,7 +292,12 @@ export function PaySheet({
         setError(res.error || "Your payment couldn't be processed. Please try again.");
         haptic([20, 40, 20]);
       } else if (res) {
-        onPaid(res.amountPaidCents || optimistic, res.fullyPaid);
+        // ?? not ||: a genuinely $0 charge (e.g. a fully-discounted/comped
+        // bill) is a real, successful result — `||` would treat that falsy
+        // zero as "no value" and substitute the optimistic guess instead,
+        // which could show a nonzero "Payment complete" amount for a bill
+        // that was actually settled for $0.
+        onPaid(res.amountPaidCents ?? optimistic, res.fullyPaid);
         router.refresh();
       }
     });

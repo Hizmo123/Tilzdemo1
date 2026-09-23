@@ -53,7 +53,12 @@ export async function rejectOrder(slug: string, orderId: string) {
   if (!roleCan(session.staff.role, "kitchen:manage"))
     return { error: "Your role can't update the kitchen." };
 
-  const res = await staffRejectOrder(orderId, session.restaurant.id);
+  // Staff PIN accounts have no email — `name` is the closest identifier,
+  // same convention as staffRefundPayment in table/[tableId]/actions.ts.
+  const res = await staffRejectOrder(orderId, session.restaurant.id, {
+    userId: session.staff.id,
+    email: session.staff.name,
+  });
   if ("error" in res) return res;
   revalidatePath(`/staff/${slug}/kitchen`);
   revalidatePath(`/staff/${slug}/home`);
