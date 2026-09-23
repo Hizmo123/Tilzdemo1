@@ -85,6 +85,8 @@ const schema = z.object({
     .or(z.literal("")),
   tagline: z.string().trim().max(80).optional().or(z.literal("")),
   logoUrl: z.string().url().nullable().optional(),
+  coverUrl: z.string().url().nullable().optional(),
+  menuLayout: z.enum(["list", "grid", "magazine", "minimal"]).default("list"),
   abn: z
     .string()
     .trim()
@@ -107,11 +109,22 @@ function slugify(input: string): string {
 // Sample-menu categories don't natively carry a station or a service window —
 // this maps the wizard's step 6 answers onto them with a simple heuristic
 // rather than hardcoding either. Reused by completeOnboarding only.
-function stationFor(categoryName: string): string | null {
+function stationFor(categoryName: string): string {
   const n = categoryName.toLowerCase();
   if (n.includes("coffee")) return "Coffee";
   if (n.includes("bar") || n.includes("drink")) return "Bar";
   return "Kitchen";
+}
+
+// The venue's prep stations (Restaurant.kitchenStations — what the category/
+// item station pickers offer). "Kitchen + bar + coffee" used to route the
+// SAMPLE categories to those names without ever adding them to this list,
+// so the pickers never showed them. Clamped to the tier's KDS station limit
+// (Basic = 2) the same way canCreateStation would refuse a third later.
+function stationsFor(a: z.infer<typeof schema>, kdsStationLimit: number | null): string[] {
+  const wanted = a.menuStations ? ["Kitchen", "Bar", "Coffee"] : ["Kitchen"];
+  const limit = kdsStationLimit === null ? wanted.length : Math.max(1, kdsStationLimit);
+  return wanted.slice(0, limit);
 }
 function windowFor(categoryName: string): { from: string | null; to: string | null } {
   const n = categoryName.toLowerCase();
@@ -140,19 +153,21 @@ export async function saveOnboardingDraft(
   return { ok: true };
 }
 
-// Uploads a logo before any Restaurant exists, so it can't reuse
-// dashboard/settings/actions.ts's uploadLogo (which writes straight to a
-// restaurant row). Same storage, same compression pipeline, same public-URL
-// shape — just pathed under the user id and returned rather than persisted,
-// so the wizard can hold it in its draft until completeOnboarding.
-export async function uploadOnboardingLogo(
+// Uploads a venue image (logo or cover/hero photo) before any Restaurant
+// exists, so it can't reuse dashboard/settings/actions.ts's uploadLogo /
+// uploadCover (which write straight to a restaurant row). Same storage,
+// same compression pipeline, same public-URL shape — just pathed under the
+// user id and returned rather than persisted, so the wizard can hold it in
+// its draft until completeOnboarding.
+export async function uploadOnboardingImage(
   formData: FormData,
+  kind: "logo" | "cover",
 ): Promise<{ url: string } | { error: string }> {
   const user = await requireUser();
 
   const file = formData.get("file");
   if (!(file instanceof File)) return { error: "No image received." };
-  if (file.size > 3 * 1024 * 1024) return { error: "Image is too large." };
+  if (file.size > 4 * 1024 * 1024) return { error: "Image is too large." };
   if (!file.type.startsWith("image/")) return { error: "That isn't an image." };
 
   let supabase;
@@ -173,13 +188,13 @@ export async function uploadOnboardingLogo(
     return { error: "Couldn't prepare image storage. Please try again." };
   }
 
-  const path = `onboarding/${user.id}/logo-${randomBytes(6).toString("hex")}.jpg`;
+  const path = `onboarding/${user.id}/${kind}-${randomBytes(6).toString("hex")}.jpg`;
   const buffer = Buffer.from(await file.arrayBuffer());
   const { error: upErr } = await supabase.storage
     .from(MENU_IMAGE_BUCKET)
     .upload(path, buffer, { contentType: "image/jpeg", upsert: true });
   if (upErr) {
-    log.error("onboarding.logo_upload_failed", { userId: user.id, message: upErr.message });
+    log.error("onboarding.image_upload_failed", { userId: user.id, kind, message: upErr.message });
     return { error: describeStorageError(upErr.message) };
   }
 
@@ -260,7 +275,9 @@ async function createRestaurantAndSeedFromAnswers(
   hours: ReturnType<typeof sameEveryDayHours> | null,
   slug: string,
   tableLimit: number | null,
+  kdsStationLimit: number | null,
 ) {
+  const stations = stationsFor(a, kdsStationLimit);
   const restaurant = await tx.restaurant.create({
     data: {
       organizationId,
@@ -276,6 +293,9 @@ async function createRestaurantAndSeedFromAnswers(
       brandColor: a.brandColor ? a.brandColor : null,
       tagline: a.tagline ? a.tagline : null,
       logoUrl: a.logoUrl ?? null,
+      coverUrl: a.coverUrl ?? null,
+      menuLayout: a.menuLayout,
+      kitchenStations: stations,
       tipEnabled: a.tipEnabled,
       tipPresets: a.tipPresets.length ? a.tipPresets : [5, 10, 15],
       customerOrdering: a.customerOrdering,
@@ -335,7 +355,14 @@ async function createRestaurantAndSeedFromAnswers(
         sortOrder: ci,
         availableFrom: win.from,
         availableTo: win.to,
-        station: a.menuStations ? stationFor(cat.name) : null,
+        // Only route to a station the venue actually has (the tier clamp
+        // above may have dropped "Coffee"); anything else falls back to
+        // the kitchen rather than naming a station the pickers don't list.
+        station: a.menuStations
+          ? stations.includes(stationFor(cat.name))
+            ? stationFor(cat.name)
+            : "Kitchen"
+          : null,
       };
     });
 
@@ -494,6 +521,7 @@ export async function completeOnboarding(
       hours,
       slug,
       tier.tableLimit,
+      tier.kdsStationLimit,
     );
 
     return { organizationId: org.id, restaurant, square };
@@ -615,7 +643,16 @@ export async function completeOnboardingForExistingOrg(
   try {
     const result = await prisma.$transaction(
       (tx) =>
-        createRestaurantAndSeedFromAnswers(tx, organizationId, user.id, a, hours, slug, ent.tableLimit),
+        createRestaurantAndSeedFromAnswers(
+          tx,
+          organizationId,
+          user.id,
+          a,
+          hours,
+          slug,
+          ent.tableLimit,
+          ent.kdsStationLimit,
+        ),
       { timeout: 15000 },
     );
     restaurant = result.restaurant;

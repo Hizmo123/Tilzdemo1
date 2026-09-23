@@ -7,6 +7,7 @@
 
 import type { PlanTier } from "@prisma/client";
 import { entitlementsForTier } from "@/lib/entitlements-core";
+import type { MenuLayout } from "@/lib/menu-style";
 
 // Literal tuple of PlanTier for zod enums / iteration (the Prisma enum type
 // itself isn't iterable at runtime on the client).
@@ -179,6 +180,12 @@ export type OnboardingAnswers = {
   brandColor: string;
   tagline: string;
   logoUrl: string | null;
+  // Hero photo for the customer landing page (Restaurant.coverUrl). Null =
+  // the accent-gradient fallback the Phase 1 hero already draws.
+  coverUrl: string | null;
+  // One of MENU_LAYOUTS (lib/menu-style.ts). The finer card-style axes stay
+  // in Settings; the wizard only picks the preset.
+  menuLayout: MenuLayout;
   abn: string;
   currency: string;
   timezone: string;
@@ -224,6 +231,8 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     brandColor: "",
     tagline: "",
     logoUrl: null,
+    coverUrl: null,
+    menuLayout: "list",
     abn: "",
     currency: "AUD",
     timezone: "Australia/Sydney",

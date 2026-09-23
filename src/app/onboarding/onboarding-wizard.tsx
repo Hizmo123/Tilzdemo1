@@ -8,8 +8,10 @@ import {
   completeOnboarding,
   completeOnboardingForExistingOrg,
   saveOnboardingDraft,
-  uploadOnboardingLogo,
+  uploadOnboardingImage,
 } from "./actions";
+import { defaultCardStyle } from "@/lib/menu-style";
+import { MenuLayoutPicker } from "@/components/venue-setup/menu-layout-picker";
 import {
   defaultOnboardingAnswers,
   planAllowsOrdering,
@@ -654,37 +656,8 @@ function BrandingStep({
   answers: OnboardingAnswers;
   update: (patch: Partial<OnboardingAnswers>) => void;
 }) {
-  const [uploading, setUploading] = useState(false);
-  const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  async function onLogoPick(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setUploadError(null);
-    const objectUrl = URL.createObjectURL(file);
-    setLocalPreview(objectUrl);
-    setUploading(true);
-    try {
-      const blob = await compressImage(file, 400, 0.9);
-      const fd = new FormData();
-      fd.append("file", blob, "logo.jpg");
-      const res = await uploadOnboardingLogo(fd);
-      if ("error" in res) {
-        setUploadError(res.error);
-        setLocalPreview(null);
-      } else {
-        update({ logoUrl: res.url });
-      }
-    } catch {
-      setUploadError("Couldn't process that image.");
-      setLocalPreview(null);
-    } finally {
-      setUploading(false);
-      URL.revokeObjectURL(objectUrl);
-    }
-  }
+  const logo = useOnboardingImage("logo", answers.logoUrl, (logoUrl) => update({ logoUrl }));
+  const cover = useOnboardingImage("cover", answers.coverUrl, (coverUrl) => update({ coverUrl }));
 
   return (
     <Step title="Make it yours." subtitle="This themes your customer ordering page. Fully editable later in Settings.">
@@ -694,23 +667,50 @@ function BrandingStep({
             <label className="text-sm text-muted block mb-2">Logo</label>
             <div className="flex items-center gap-3">
               <div className="w-14 h-14 rounded-lg border border-line bg-paper overflow-hidden flex items-center justify-center shrink-0">
-                {localPreview || answers.logoUrl ? (
+                {logo.preview ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={localPreview ?? answers.logoUrl ?? ""}
-                    alt=""
-                    className="w-full h-full object-contain"
-                  />
+                  <img src={logo.preview} alt="" className="w-full h-full object-contain" />
                 ) : (
                   <span className="text-[10px] text-muted">Logo</span>
                 )}
               </div>
               <label className="text-sm rounded-md border border-line px-3 py-1.5 hover:border-ink/30 cursor-pointer">
-                {uploading ? "Uploading…" : "Upload logo"}
-                <input type="file" accept="image/*" onChange={onLogoPick} className="hidden" disabled={uploading} />
+                {logo.uploading ? "Uploading…" : answers.logoUrl ? "Replace logo" : "Upload logo"}
+                <input type="file" accept="image/*" onChange={logo.onPick} className="hidden" disabled={logo.uploading} />
               </label>
             </div>
-            {uploadError && <p className="text-xs text-danger mt-1.5">{uploadError}</p>}
+            {logo.error && <p className="text-xs text-danger mt-1.5">{logo.error}</p>}
+          </div>
+
+          <div>
+            <label className="text-sm text-muted block mb-2">
+              Cover photo <span className="text-xs">(optional — the hero behind your name)</span>
+            </label>
+            <div className="rounded-lg border border-line bg-paper overflow-hidden h-24 flex items-center justify-center mb-2">
+              {cover.preview ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={cover.preview} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs text-muted">No cover yet — we&apos;ll use your accent colour</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm rounded-md border border-line px-3 py-1.5 hover:border-ink/30 cursor-pointer">
+                {cover.uploading ? "Uploading…" : answers.coverUrl ? "Replace cover" : "Upload cover"}
+                <input type="file" accept="image/*" onChange={cover.onPick} className="hidden" disabled={cover.uploading} />
+              </label>
+              {answers.coverUrl && !cover.uploading && (
+                <button type="button" onClick={() => update({ coverUrl: null })} className="text-sm text-muted hover:text-danger">
+                  Remove
+                </button>
+              )}
+            </div>
+            {cover.error && <p className="text-xs text-danger mt-1.5">{cover.error}</p>}
+          </div>
+
+          <div>
+            <label className="text-sm text-muted block mb-2">Menu layout</label>
+            <MenuLayoutPicker value={answers.menuLayout} onChange={(menuLayout) => update({ menuLayout })} />
           </div>
 
           <div>
@@ -851,13 +851,60 @@ function BrandingStep({
             }}
             restaurantName={answers.restaurantName}
             tagline={answers.tagline}
-            logoUrl={localPreview ?? answers.logoUrl}
+            logoUrl={logo.preview}
+            cardStyle={defaultCardStyle(answers.menuLayout)}
             phoneFrame
           />
         </div>
       </div>
     </Step>
   );
+}
+
+// Compress → upload → hold the URL in the draft. Shows the picked file
+// instantly (object URL) while the upload runs, swaps to the stored URL on
+// success, and rolls back on failure. Logo and cover share this; they only
+// differ in target size/quality.
+function useOnboardingImage(
+  kind: "logo" | "cover",
+  current: string | null,
+  onUploaded: (url: string | null) => void,
+) {
+  const [uploading, setUploading] = useState(false);
+  const [local, setLocal] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setError(null);
+    const objectUrl = URL.createObjectURL(file);
+    setLocal(objectUrl);
+    setUploading(true);
+    try {
+      const blob =
+        kind === "logo" ? await compressImage(file, 400, 0.9) : await compressImage(file, 1600, 0.85);
+      const fd = new FormData();
+      fd.append("file", blob, `${kind}.jpg`);
+      const res = await uploadOnboardingImage(fd, kind);
+      if ("error" in res) {
+        setError(res.error);
+        setLocal(null);
+      } else {
+        onUploaded(res.url);
+      }
+    } catch {
+      setError("Couldn't process that image.");
+      setLocal(null);
+    } finally {
+      setUploading(false);
+      setLocal(null);
+      URL.revokeObjectURL(objectUrl);
+    }
+  }
+
+  return { uploading, error, onPick, preview: local ?? current };
 }
 
 function FinishScreen({
