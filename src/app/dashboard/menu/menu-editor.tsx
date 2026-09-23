@@ -12,6 +12,9 @@ import {
   updateItemBadges,
   updateItemStation,
   updateKitchenStations,
+  deleteCategoryAction,
+  renameCategoryAction,
+  reorderCategoriesAction,
   type MenuActionState,
 } from "./actions";
 import { Label, Input, FormMessage } from "@/components/ui/field";
@@ -22,6 +25,7 @@ import { BADGE_VALUES, BADGE_META } from "@/lib/menu-badges";
 import { ModifierEditor, type ModGroup } from "./modifier-editor";
 import { ImageUploader } from "./image-uploader";
 import { LoadSampleButton } from "../sample/load-sample-button";
+import { DangerZone } from "./danger-zone";
 
 type Item = {
   id: string;
@@ -49,13 +53,34 @@ const initial: MenuActionState = {};
 
 export function MenuEditor({
   categories,
+  restaurantName,
   currency,
   kitchenStations,
 }: {
   categories: Category[];
+  restaurantName: string;
   currency: string;
   kitchenStations: string[];
 }) {
+  const router = useRouter();
+  const [reordering, setReordering] = useState(false);
+
+  // Optimistic-order swap, then persist. Reads from the server-ordered
+  // `categories` prop each render (not separately-tracked local state), so
+  // it always reflects the latest sortOrder after router.refresh() below —
+  // no drift between what's shown and what's saved.
+  function move(index: number, delta: 1 | -1) {
+    const target = index + delta;
+    if (target < 0 || target >= categories.length) return;
+    const ids = categories.map((c) => c.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    setReordering(true);
+    reorderCategoriesAction(ids).finally(() => {
+      setReordering(false);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-8">
       <AddCategory />
@@ -71,15 +96,19 @@ export function MenuEditor({
           </div>
         </div>
       ) : (
-        categories.map((cat) => (
+        categories.map((cat, i) => (
           <CategoryBlock
             key={cat.id}
             category={cat}
             currency={currency}
             stations={kitchenStations}
+            onMoveUp={i > 0 ? () => move(i, -1) : undefined}
+            onMoveDown={i < categories.length - 1 ? () => move(i, 1) : undefined}
+            reordering={reordering}
           />
         ))
       )}
+      <DangerZone restaurantName={restaurantName} categoryCount={categories.length} />
     </div>
   );
 }
@@ -224,11 +253,18 @@ function CategoryBlock({
   category,
   currency,
   stations,
+  onMoveUp,
+  onMoveDown,
+  reordering,
 }: {
   category: Category;
   currency: string;
   stations: string[];
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  reordering: boolean;
 }) {
+  const router = useRouter();
   const [state, action] = useActionState(createItem, initial);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -239,34 +275,142 @@ function CategoryBlock({
   // scroll past every item in every category just to reach the next one.
   const [open, setOpen] = useState(false);
 
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(category.name);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renamePending, startRename] = useTransition();
+  const [deletePending, startDelete] = useTransition();
+
+  function saveName() {
+    const next = nameDraft.trim();
+    setEditingName(false);
+    if (!next || next === category.name) {
+      setNameDraft(category.name);
+      return;
+    }
+    setRenameError(null);
+    startRename(async () => {
+      const res = await renameCategoryAction(category.id, next);
+      if (res?.error) {
+        setNameDraft(category.name); // roll back the optimistic label
+        setRenameError(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function askDelete() {
+    const count = category.items.length;
+    const msg =
+      count > 0
+        ? `Delete "${category.name}" and its ${count} item${count === 1 ? "" : "s"}? This can't be undone.`
+        : `Delete "${category.name}"? This can't be undone.`;
+    if (!window.confirm(msg)) return;
+    startDelete(async () => {
+      await deleteCategoryAction(category.id);
+      router.refresh();
+    });
+  }
+
   return (
     <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 text-left"
-        aria-expanded={open}
-      >
-        <h3 className="font-display text-xl font-semibold tracking-tight flex items-center gap-2 min-w-0">
-          <span className="truncate">{category.name}</span>
-          <span className="shrink-0 text-xs font-normal text-muted bg-paper rounded-full px-2 py-0.5">
-            {category.items.length}
-          </span>
-        </h3>
-        <svg
-          viewBox="0 0 20 20"
-          fill="none"
-          className={`shrink-0 w-4 h-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex-1 min-w-0 flex items-center gap-3 text-left"
+          aria-expanded={open}
         >
-          <path
-            d="M5 7.5L10 12.5L15 7.5"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 20 20"
+            fill="none"
+            className={`shrink-0 w-4 h-4 text-muted transition-transform ${open ? "rotate-180" : ""}`}
+          >
+            <path
+              d="M5 7.5L10 12.5L15 7.5"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <h3 className="font-display text-xl font-semibold tracking-tight flex items-center gap-2 min-w-0">
+            {editingName ? (
+              <input
+                autoFocus
+                value={nameDraft}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    saveName();
+                  } else if (e.key === "Escape") {
+                    setNameDraft(category.name);
+                    setEditingName(false);
+                  }
+                }}
+                className="font-display text-xl font-semibold tracking-tight bg-paper rounded-md px-2 py-0.5 -ml-2 border border-line focus:border-pine focus:outline-none max-w-[240px]"
+              />
+            ) : (
+              <span className="truncate">{category.name}</span>
+            )}
+            <span className="shrink-0 text-xs font-normal text-muted bg-paper rounded-full px-2 py-0.5">
+              {category.items.length}
+            </span>
+            {renamePending && <span className="shrink-0 text-xs text-muted">saving…</span>}
+          </h3>
+        </button>
+
+        <div className="shrink-0 flex items-center gap-0.5">
+          <button
+            type="button"
+            disabled={!onMoveUp || reordering}
+            onClick={onMoveUp}
+            title="Move category up"
+            aria-label="Move category up"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-muted hover:text-ink hover:bg-paper disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            disabled={!onMoveDown || reordering}
+            onClick={onMoveDown}
+            title="Move category down"
+            aria-label="Move category down"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-muted hover:text-ink hover:bg-paper disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setNameDraft(category.name);
+              setEditingName(true);
+              setOpen(true);
+            }}
+            title="Rename category"
+            aria-label="Rename category"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-muted hover:text-ink hover:bg-paper"
+          >
+            ✎
+          </button>
+          <button
+            type="button"
+            disabled={deletePending}
+            onClick={askDelete}
+            title="Delete category"
+            aria-label="Delete category"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-muted hover:text-danger hover:bg-danger-soft disabled:opacity-50"
+          >
+            {deletePending ? "…" : "🗑"}
+          </button>
+        </div>
+      </div>
+      {renameError && <p className="text-xs text-danger mt-1.5">{renameError}</p>}
 
       {open && (
         <div className="mt-3">

@@ -3,20 +3,30 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatCents } from "@/lib/money";
+import { TypedDangerConfirm } from "@/components/dashboard/typed-danger-confirm";
 import {
   previewMenuImportAction,
   commitMenuImportAction,
   type PreviewState,
   type CommitState,
+  type ImportMode,
 } from "./actions";
 
-export function MenuImportForm({ currency }: { currency: string }) {
+export function MenuImportForm({
+  currency,
+  restaurantName,
+}: {
+  currency: string;
+  restaurantName: string;
+}) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [result, setResult] = useState<CommitState | null>(null);
+  const [mode, setMode] = useState<ImportMode>("add");
+  const [confirmingReplace, setConfirmingReplace] = useState(false);
   const [pending, start] = useTransition();
 
   function reset() {
@@ -24,6 +34,8 @@ export function MenuImportForm({ currency }: { currency: string }) {
     setCsvText(null);
     setPreview(null);
     setResult(null);
+    setMode("add");
+    setConfirmingReplace(false);
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -47,10 +59,11 @@ export function MenuImportForm({ currency }: { currency: string }) {
   function confirmImport() {
     if (!csvText) return;
     start(async () => {
-      const res = await commitMenuImportAction(csvText);
+      const res = await commitMenuImportAction(csvText, mode);
       setResult(res);
       if ("ok" in res) {
         setPreview(null);
+        setConfirmingReplace(false);
         router.refresh();
       }
     });
@@ -183,13 +196,80 @@ export function MenuImportForm({ currency }: { currency: string }) {
             ))}
           </div>
 
+          <div className="border-t border-line pt-4 space-y-3">
+            <p className="text-sm font-medium">What should this do to your current menu?</p>
+            <div className="space-y-2">
+              <label
+                className={`flex items-start gap-2.5 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${
+                  mode === "add" ? "border-pine bg-pine-soft" : "border-line hover:border-ink/20"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="import-mode"
+                  checked={mode === "add"}
+                  onChange={() => {
+                    setMode("add");
+                    setConfirmingReplace(false);
+                  }}
+                  className="mt-0.5 accent-pine"
+                />
+                <span>
+                  <span className="block font-medium">Add to current menu</span>
+                  <span className="block text-xs text-muted mt-0.5">
+                    Existing categories and items are kept — new ones are added
+                    alongside them. An item that already exists (by name) is
+                    left untouched and skipped.
+                  </span>
+                </span>
+              </label>
+              <label
+                className={`flex items-start gap-2.5 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${
+                  mode === "replace" ? "border-danger bg-danger-soft" : "border-line hover:border-ink/20"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="import-mode"
+                  checked={mode === "replace"}
+                  onChange={() => setMode("replace")}
+                  className="mt-0.5 accent-danger"
+                />
+                <span>
+                  <span className="block font-medium text-danger">Replace current menu</span>
+                  <span className="block text-xs text-ink-soft mt-0.5">
+                    Deletes every existing category and item first, then
+                    imports this file from scratch. This can&apos;t be undone.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {mode === "replace" && confirmingReplace ? (
+            <TypedDangerConfirm
+              confirmText={restaurantName}
+              description="This permanently deletes your entire current menu before importing this file."
+              confirmLabel={`Replace with ${preview.rowCount} item${preview.rowCount === 1 ? "" : "s"}`}
+              pendingLabel="Replacing…"
+              pending={pending}
+              onConfirm={confirmImport}
+              onCancel={() => setConfirmingReplace(false)}
+            />
+          ) : (
           <div className="flex gap-2 pt-2 border-t border-line">
             <button
               disabled={pending || !!blocked}
-              onClick={confirmImport}
-              className="rounded-xl bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-50"
+              onClick={() => (mode === "replace" ? setConfirmingReplace(true) : confirmImport())}
+              className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 ${
+                mode === "replace" ? "bg-danger hover:brightness-95" : "bg-pine hover:bg-pine-deep"
+              }`}
             >
-              {pending ? "Importing…" : `Import ${preview.rowCount} item${preview.rowCount === 1 ? "" : "s"}`}
+              {pending
+                ? "Importing…"
+                : mode === "replace"
+                  ? `Replace with ${preview.rowCount} item${preview.rowCount === 1 ? "" : "s"}`
+                  : `Import ${preview.rowCount} item${preview.rowCount === 1 ? "" : "s"}`}
             </button>
             <button
               disabled={pending}
@@ -199,6 +279,7 @@ export function MenuImportForm({ currency }: { currency: string }) {
               Start over
             </button>
           </div>
+          )}
         </div>
       )}
 
@@ -213,6 +294,13 @@ export function MenuImportForm({ currency }: { currency: string }) {
           <h2 className="font-display text-lg font-semibold tracking-tight mb-2">
             Done
           </h2>
+          {result.categoriesDeleted > 0 && (
+            <p className="text-sm text-danger mb-1">
+              Removed {result.categoriesDeleted} old categor
+              {result.categoriesDeleted === 1 ? "y" : "ies"} ({result.itemsDeleted} item
+              {result.itemsDeleted === 1 ? "" : "s"}) first.
+            </p>
+          )}
           <p className="text-sm text-ink-soft">
             {result.categoriesCreated} categor{result.categoriesCreated === 1 ? "y" : "ies"}{" "}
             created, {result.itemsCreated} item{result.itemsCreated === 1 ? "" : "s"} added

@@ -7,10 +7,12 @@ import { MenuEditor } from "./menu-editor";
 // immediately behind a Suspense boundary instead of blocking on this query.
 export async function MenuListData({
   restaurantId,
+  restaurantName,
   currency,
   kitchenStations,
 }: {
   restaurantId: string;
+  restaurantName: string;
   currency: string;
   kitchenStations: string[];
 }) {
@@ -33,6 +35,11 @@ export async function MenuListData({
   });
 
   return (
-    <MenuEditor categories={categories} currency={currency} kitchenStations={kitchenStations} />
+    <MenuEditor
+      categories={categories}
+      restaurantName={restaurantName}
+      currency={currency}
+      kitchenStations={kitchenStations}
+    />
   );
 }

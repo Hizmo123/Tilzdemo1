@@ -52,6 +52,7 @@ export default async function MenuPage() {
       <Suspense fallback={<MenuSkeleton />}>
         <MenuListData
           restaurantId={ctx.restaurant.id}
+          restaurantName={ctx.restaurant.name}
           currency={ctx.restaurant.currency}
           kitchenStations={ctx.restaurant.kitchenStations}
         />

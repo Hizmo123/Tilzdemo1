@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { dollarsToCents } from "@/lib/money";
 import { parseCsv, toCsvRow } from "@/lib/csv";
@@ -337,30 +338,73 @@ export async function buildImportPreview(
   });
 }
 
+// ---- Whole-menu deletion -----------------------------------------------------
+// Shared by commitMenuImport's "replace" mode (below) and the dashboard's
+// standalone "delete whole menu" danger-zone action (dashboard/menu/actions.ts)
+// — one deletion primitive, not duplicated. Always called from inside a
+// transaction the CALLER owns (so replace-mode's delete-then-recreate is one
+// atomic unit), never opens its own.
+//
+// A single `menuCategory.deleteMany` is enough: MenuCategory -> MenuItem ->
+// ModifierGroup -> ModifierOption, and every Square catalog mapping table
+// (MenuItemSquareMap, MenuCategorySquareMap, ModifierGroupSquareMap,
+// ModifierOptionSquareMap), all cascade off their parent FK (see
+// prisma/schema.prisma) — nothing is left orphaned. BillItem.menuItemId is
+// the one deliberate exception: nullable with onDelete: SetNull, so a past
+// order's line items keep their nameSnapshot/priceCents and simply lose the
+// live link, rather than being deleted or blocking this delete.
+export async function deleteAllMenuData(
+  tx: Prisma.TransactionClient,
+  restaurantId: string,
+): Promise<{ categoriesDeleted: number; itemsDeleted: number }> {
+  const [categoriesDeleted, itemsDeleted] = await Promise.all([
+    tx.menuCategory.count({ where: { restaurantId } }),
+    tx.menuItem.count({ where: { category: { restaurantId } } }),
+  ]);
+  await tx.menuCategory.deleteMany({ where: { restaurantId } });
+  return { categoriesDeleted, itemsDeleted };
+}
+
 // ---- Commit ----------------------------------------------------------------
 
 export type ImportCommitResult = {
   categoriesCreated: number;
   itemsCreated: number;
   itemsSkipped: number; // already existed in that category — never overwritten
+  // Only nonzero in "replace" mode — see deleteAllMenuData above.
+  categoriesDeleted: number;
+  itemsDeleted: number;
 };
 
-// Idempotent: re-running the same file is safe. A category is matched or
-// created by name (case-insensitive) so repeat imports land in the same
-// categories rather than duplicating them; an item is matched by name within
-// its category and, if found, is left completely untouched (never
+// Idempotent in "add" mode: re-running the same file is safe. A category is
+// matched or created by name (case-insensitive) so repeat imports land in the
+// same categories rather than duplicating them; an item is matched by name
+// within its category and, if found, is left completely untouched (never
 // overwritten) and counted as skipped — only genuinely new items are created.
 // Re-checks the DB fresh here rather than trusting whatever the caller
 // previewed, since time may have passed between preview and confirm.
+//
+// "replace" mode deletes the ENTIRE existing menu (deleteAllMenuData) inside
+// the same transaction, immediately before the create loop below — which
+// then runs completely unchanged: with nothing left to match against,
+// existingCategories/existingItemNames both start empty and every row is
+// created fresh. No separate "replace" code path to keep in sync.
 export async function commitMenuImport(
   restaurantId: string,
   rows: ParsedItemRow[],
+  mode: "add" | "replace" = "add",
 ): Promise<ImportCommitResult> {
   let categoriesCreated = 0;
   let itemsCreated = 0;
   let itemsSkipped = 0;
+  let categoriesDeleted = 0;
+  let itemsDeleted = 0;
 
   await prisma.$transaction(async (tx) => {
+    if (mode === "replace") {
+      ({ categoriesDeleted, itemsDeleted } = await deleteAllMenuData(tx, restaurantId));
+    }
+
     const existingCategories = await tx.menuCategory.findMany({
       where: { restaurantId },
       select: { id: true, name: true, sortOrder: true },
@@ -438,7 +482,8 @@ export async function commitMenuImport(
         }
       }
     }
-  });
+  }, { timeout: 15000 }); // replace mode's extra delete pass, plus a large CSV's
+  // many sequential row-by-row creates, can both run past Prisma's 5s default.
 
-  return { categoriesCreated, itemsCreated, itemsSkipped };
+  return { categoriesCreated, itemsCreated, itemsSkipped, categoriesDeleted, itemsDeleted };
 }
