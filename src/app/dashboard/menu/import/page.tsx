@@ -49,7 +49,7 @@ export default async function MenuImportPage() {
         </p>
       </div>
 
-      <MenuImportForm currency={restaurant.currency} />
+      <MenuImportForm currency={restaurant.currency} restaurantName={restaurant.name} />
     </div>
   );
 }

@@ -48,15 +48,34 @@ export async function previewMenuImportAction(csvText: string): Promise<PreviewS
   return { ok: true, categories, errors, warnings, rowCount: rows.length };
 }
 
+export type ImportMode = "add" | "replace";
+
 export type CommitState =
   | { error: string }
-  | { ok: true; categoriesCreated: number; itemsCreated: number; itemsSkipped: number };
+  | {
+      ok: true;
+      categoriesCreated: number;
+      itemsCreated: number;
+      itemsSkipped: number;
+      categoriesDeleted: number;
+      itemsDeleted: number;
+    };
 
 // Re-parses and re-validates the same file rather than trusting a client-held
 // preview — the menu may have changed since the preview was shown, and the
 // server never trusts client state for a write. Blocking errors are
 // re-checked here too, so a preview can't be raced or bypassed.
-export async function commitMenuImportAction(csvText: string): Promise<CommitState> {
+//
+// mode "replace" deletes the ENTIRE existing menu before importing — the
+// client already gates this behind a typed confirmation
+// (menu-import-form.tsx), but that's a UI convenience, not the guard: mode is
+// just a plain string parameter here, so this re-validates the CSV exactly
+// as "add" mode does and never trusts anything else about what's being
+// deleted beyond the caller's own restaurantId.
+export async function commitMenuImportAction(
+  csvText: string,
+  mode: ImportMode = "add",
+): Promise<CommitState> {
   const authz = await getAuthz();
   if (!authz.can("menu:manage"))
     return { error: "You don't have permission to edit the menu." };
@@ -69,16 +88,16 @@ export async function commitMenuImportAction(csvText: string): Promise<CommitSta
   }
   if (rows.length === 0) return { error: "No item rows found in that file." };
 
-  const result = await commitMenuImport(restaurantId, rows);
+  const result = await commitMenuImport(restaurantId, rows, mode);
 
   await audit({
     organizationId: authz.membership!.organizationId,
     actorUserId: authz.user.id,
     actorEmail: authz.user.email ?? "",
-    action: "menu.imported",
+    action: mode === "replace" ? "menu.imported_replace" : "menu.imported",
     resourceType: "Restaurant",
     resourceId: restaurantId,
-    metadata: result,
+    metadata: { mode, ...result },
   });
 
   revalidatePath("/dashboard/menu");
