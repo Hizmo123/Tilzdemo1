@@ -917,7 +917,11 @@ model Order {
 model Payment {
   id             String        @id @default(cuid())
   billId         String
-  bill           Bill          @relation(fields: [billId], references: [id], onDelete: Cascade)
+  // Restrict, not Cascade: a Payment is a financial record that must never
+  // silently vanish just because its Bill (or, transitively, the Bill's
+  // Table/Restaurant) gets hard-deleted — the delete should fail loudly
+  // instead. Deliberately blocks the whole cascade chain above it too.
+  bill           Bill          @relation(fields: [billId], references: [id], onDelete: Restrict)
   amountCents    Int
   tipCents       Int           @default(0)
   // Card surcharge charged on top of amountCents+tipCents for this specific
@@ -946,6 +950,15 @@ model Payment {
   // customer payment (payBillAmount, payBillItems) never sets this; only the
   // staff counter path (staffCloseBill, staffCloseBillById) does. See
   // lib/cash-drawer.ts.
+  // Set ONLY by an item-split payment (payBillItems): [{billItemId, count}]
+  // for exactly the BillItem.paidQuantity bumps this payment reserved. Null
+  // for every other payment (payBillAmount, staff counter/cash), which
+  // never touch paidQuantity at all. A failed/reversed Square payment
+  // webhook (syncSquarePaymentStatus) needs this to undo precisely the
+  // reservations THIS payment made — nothing else on the bill records which
+  // payment funded which item, so without it a failed item-split payment
+  // could leave those units stuck showing as paid forever.
+  itemAllocations Json?
   tenderType     TenderType?
   // Which open drawer session this payment landed in, if any was open at the
   // time — a CASH tender requires one (see lib/bills.ts's tender check);
@@ -968,7 +981,10 @@ model Payment {
 model Refund {
   id             String       @id @default(cuid())
   paymentId      String
-  payment        Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  // Restrict, not Cascade — same reasoning as Payment.bill above: a Refund
+  // is a financial record, never allowed to vanish just because its
+  // Payment gets hard-deleted.
+  payment        Payment      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   amountCents    Int
   reason         String
   status         RefundStatus @default(PENDING)

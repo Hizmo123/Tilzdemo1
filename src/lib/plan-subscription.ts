@@ -14,5 +14,10 @@ export function mockSubscriptionData(tier: PlanTier) {
     planStatus: "active" as const,
     cardLast4: null,
     subscribedAt: new Date(),
+    // Clears a prior lapse — without this, an org that fell behind and then
+    // re-subscribes kept entitlementsForTier treating it as still lapsed
+    // forever (subscriptionLapsedAt is only ever SET elsewhere, never
+    // cleared), since nothing else in this shape touches it.
+    subscriptionLapsedAt: null,
   };
 }

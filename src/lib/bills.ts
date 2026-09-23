@@ -263,13 +263,29 @@ async function recompute(tx: Prisma.TransactionClient, billId: string) {
   );
   const current = await tx.bill.findUnique({
     where: { id: billId },
-    select: { discountCents: true },
+    select: { discountCents: true, status: true, amountPaidCents: true },
   });
   const discount = Math.min(current?.discountCents ?? 0, subtotal);
   const total = Math.max(0, subtotal - discount);
+
+  // Voiding/comping a line on a PARTIALLY_PAID bill can drop the total to at
+  // or below what's already been collected — the bill is now fully covered,
+  // but recompute only ever adjusted subtotal/total, never status. Left
+  // alone, that bill would sit at PARTIALLY_PAID forever: still "owing"
+  // nothing, unable to be closed the normal way. Promote it to PAID here,
+  // the same terminal state a payment reaching the total would have set.
+  // Deliberately one-directional — this only ever moves PARTIALLY_PAID ->
+  // PAID, never touches an already-PAID/CANCELLED bill or reopens one.
+  const shouldSettle =
+    current?.status === "PARTIALLY_PAID" && current.amountPaidCents > 0 && current.amountPaidCents >= total;
+
   await tx.bill.update({
     where: { id: billId },
-    data: { subtotalCents: subtotal, totalCents: total },
+    data: {
+      subtotalCents: subtotal,
+      totalCents: total,
+      ...(shouldSettle ? { status: "PAID", paidAt: new Date() } : {}),
+    },
   });
 }
 
@@ -1147,14 +1163,21 @@ export async function payBillAmount(
     const newPaid = expectedPaid + amount;
     const fullyPaid = newPaid >= bill.totalCents;
 
-    // Atomic reserve: only succeeds if amountPaidCents is still what we read.
-    // The mock provider always succeeds, so reserving before recording the
-    // payment needs no release path. (With a real provider, M3 adds
-    // reserve → charge → webhook-confirm, releasing on failure.)
+    // Atomic reserve: only succeeds if amountPaidCents AND totalCents are
+    // still what we read. totalCents alone used to be unguarded — a
+    // concurrent discount/void/comp/added item between the read above and
+    // this write changes totalCents without touching amountPaidCents, so
+    // the old amountPaidCents-only CAS would still succeed and commit
+    // `amount`/`fullyPaid` computed against a now-stale total (over- or
+    // under-charging relative to the bill's actual current total). Guarding
+    // both means either value moving concurrently loses the race and
+    // retries against a fresh read, same as amountPaidCents alone already
+    // did.
     const cas = await prisma.bill.updateMany({
       where: {
         id: bill.id,
         amountPaidCents: expectedPaid,
+        totalCents: bill.totalCents,
         status: { in: ["OPEN", "PARTIALLY_PAID"] },
       },
       data: {
@@ -1493,10 +1516,15 @@ export async function payBillItems(
           });
           if (r.count !== 1) throw new PayConflict();
         }
+        // Guards totalCents too, not just amountPaidCents — see the matching
+        // comment on payBillAmount's CAS. A discount changes totalCents
+        // without touching any item's paidQuantity, so the per-item CAS
+        // above wouldn't catch it either.
         const rb = await tx.bill.updateMany({
           where: {
             id: bill.id,
             amountPaidCents: expectedPaid,
+            totalCents: bill.totalCents,
             status: { in: ["OPEN", "PARTIALLY_PAID"] },
           },
           data: {
@@ -1638,6 +1666,10 @@ export async function payBillItems(
         squareOrderId: paymentRow.squareOrderId,
         idempotencyKey,
         test: paymentRow.test,
+        itemAllocations: reservations.map((r) => ({
+          billItemId: r.billItemId,
+          count: r.newPaidQuantity - r.previousPaidQuantity,
+        })),
       },
     });
     if (paymentRow.squareOrderId) {
@@ -1818,23 +1850,31 @@ export async function cancelCustomerOrder(token: string, orderId: string) {
 }
 
 // Square-aware branch of cancelCustomerOrder. Refunds the FULL Square
-// payment behind this order group first, THEN (best-effort) cancels the
-// order's fulfillment on Square, and only then touches local state — never
-// the other way around, so a failed refund never leaves an order silently
-// gone with no money back.
+// payment behind THIS ORDER's own items first, THEN (best-effort, and only
+// when it's safe to) cancels the fulfillment on Square, and only then
+// touches local state — never the other way around, so a failed refund
+// never leaves an order silently gone with no money back.
 async function cancelSquareCustomerOrder(
   restaurantId: string,
   billId: string,
   squareOrderId: string,
   orderId: string,
 ) {
-  // Task 0 finding: releasePaidOrders releases every awaitingPayment order
-  // on a bill TOGETHER, in one batch, the moment a single payment fully
-  // pays it — a customer can send several carts before paying, each its
-  // own Order row, all gated on the same one Square payment/order. Square
-  // has no notion of "cancel part of an already-paid order" (only refund
-  // and/or cancel the whole fulfillment), so cancelling one order from that
-  // group means cancelling — and refunding — the WHOLE group.
+  // releasePaidOrders releases every awaitingPayment order on a bill
+  // TOGETHER, in one batch, the moment a single payment fully pays it — a
+  // customer can send several carts before paying, each its own Order row,
+  // all gated on the same one Square payment/order. This used to treat
+  // cancelling ONE of those orders as a reason to refund the ENTIRE payment
+  // and cancel EVERY order in the group — a customer cancelling a single
+  // cart got every other cart on the table refunded and pulled too. Fixed:
+  // the refund is scoped to just this order's own item value (reusing
+  // computeOrderRefundTargetCents, the same targeted computation the native
+  // cancel path uses), and only this order is cancelled locally. Square's
+  // Fulfillment API has no notion of partially cancelling one order out of
+  // a group, so the fulfillment-cancel call itself only fires when this was
+  // the LAST remaining active order in the group — cancelling the whole
+  // fulfillment while siblings are still genuinely being prepared would
+  // incorrectly tell Square's kitchen display everything's off.
   //
   // Known limitation (documented, not fixed here — see
   // syncSquareFulfillmentStatus): Bill.squareOrderId holds only the most
@@ -1846,7 +1886,8 @@ async function cancelSquareCustomerOrder(
   const group = await prisma.order.findMany({
     where: { billId, status: "SUBMITTED" },
   });
-  if (!group.some((o) => o.id === orderId)) {
+  const target = group.find((o) => o.id === orderId);
+  if (!target) {
     // Shouldn't happen — the caller already confirmed orderId is SUBMITTED
     // on this exact bill a moment ago. Defensive only.
     return { error: "Order not found." };
@@ -1865,60 +1906,78 @@ async function cancelSquareCustomerOrder(
     return { error: "Couldn't cancel this order. Please ask staff for help." };
   }
 
-  // Full refund of whatever's still outstanding on this payment (goods +
-  // tip + surcharge) — a customer-initiated cancel gives back everything
-  // charged for this order group. Reuses refundBillPayment exactly as
-  // staff refunds do; no duplicated Square refund logic.
-  const envelope = payment.amountCents + payment.tipCents + payment.surchargeCents;
-  const refundable = envelope - payment.refundedCents;
-  if (refundable <= 0) {
-    return { error: "This order has already been refunded." };
-  }
+  // A Square-Connect order is always released from its awaitingPayment gate
+  // by ONE lump-sum payment that never itemises which order it covered
+  // (same reasoning as refundOrderItemsIfPaid's native-path prepay branch)
+  // — so this order's own (non-voided, non-comped) line-item total is what
+  // it owes back, not the whole payment.
+  const items = await prisma.billItem.findMany({ where: { orderId: target.id } });
+  const orderValueCents = computeOrderRefundTargetCents(items, true);
 
-  const refundResult = await refundBillPayment(payment.id, restaurantId, refundable, "Customer cancelled order", {
+  const actor: RefundActor = {
     userId: "system:customer-cancel",
     email: "customer-cancel@tillz.internal",
-  });
+  };
 
-  // Refund didn't succeed (an error, or a non-final PENDING/FAILED status) —
-  // STOP. Do not touch local state; nothing has moved, the customer keeps
-  // their order and can retry, or ask staff for help. A PENDING Square
-  // refund resolves later via the refund.updated webhook, at which point a
-  // retried cancel here will find refundable <= 0 and short-circuit above,
-  // or succeed once Square settles it.
-  if ("error" in refundResult || refundResult.status !== "SUCCEEDED") {
-    log.warn("order.square_cancel_refund_not_succeeded", {
+  if (orderValueCents > 0) {
+    const envelope = payment.amountCents + payment.tipCents + payment.surchargeCents;
+    const refundable = envelope - payment.refundedCents;
+    const refundAmount = Math.min(orderValueCents, refundable);
+    if (refundAmount <= 0) {
+      return { error: "This order has already been refunded." };
+    }
+
+    const refundResult = await refundBillPayment(
+      payment.id,
       restaurantId,
-      billId,
-      paymentId: payment.id,
-      result: "error" in refundResult ? refundResult.error : refundResult.status,
-    });
-    return { error: "Couldn't cancel this order. Please try again or ask staff for help." };
+      refundAmount,
+      "Customer cancelled order",
+      actor,
+    );
+
+    // Refund didn't succeed (an error, or a non-final PENDING/FAILED
+    // status) — STOP. Do not touch local state; nothing has moved, the
+    // customer keeps their order and can retry, or ask staff for help. A
+    // PENDING Square refund resolves later via the refund.updated webhook,
+    // at which point a retried cancel here will find refundable <= 0 and
+    // short-circuit above, or succeed once Square settles it.
+    if ("error" in refundResult || refundResult.status !== "SUCCEEDED") {
+      log.warn("order.square_cancel_refund_not_succeeded", {
+        restaurantId,
+        billId,
+        paymentId: payment.id,
+        result: "error" in refundResult ? refundResult.error : refundResult.status,
+      });
+      return { error: "Couldn't cancel this order. Please try again or ask staff for help." };
+    }
   }
 
-  // Refund succeeded — the customer already has their money back. From here
-  // the Square fulfillment-cancel is deliberately best-effort: proceed with
-  // the local cancel regardless of whether it succeeds, and only log a
-  // warning if it doesn't, so the venue can notice the stray (refunded, but
-  // still showing as active) order on their own Square KDS/POS and clear it
-  // by hand. Blocking the customer's cancel on Square's cooperation here —
-  // after they already have their money back — would be the wrong trade-off.
-  const cancelIdemBase = `fulfcancel_${billId}_${randomBytes(8).toString("hex")}`;
-  const fulfillmentResult = await cancelSquareOrderFulfillment(connection, squareOrderId, cancelIdemBase);
-  if (!fulfillmentResult.ok) {
-    log.warn("order.square_fulfillment_cancel_failed", {
-      restaurantId,
-      billId,
-      squareOrderId,
-      error: fulfillmentResult.error,
-    });
+  // Refund succeeded (or nothing was owed) — the customer already has
+  // their money back. From here the Square fulfillment-cancel is
+  // deliberately best-effort AND only attempted when no sibling order is
+  // still active: proceed with the local cancel regardless of whether it
+  // succeeds, and only log a warning if it doesn't, so the venue can notice
+  // the stray (refunded, but still showing as active) order on their own
+  // Square KDS/POS and clear it by hand. Blocking the customer's cancel on
+  // Square's cooperation here — after they already have their money back —
+  // would be the wrong trade-off.
+  const remainingSiblings = group.filter((o) => o.id !== target.id);
+  if (remainingSiblings.length === 0) {
+    const cancelIdemBase = `fulfcancel_${billId}_${randomBytes(8).toString("hex")}`;
+    const fulfillmentResult = await cancelSquareOrderFulfillment(connection, squareOrderId, cancelIdemBase);
+    if (!fulfillmentResult.ok) {
+      log.warn("order.square_fulfillment_cancel_failed", {
+        restaurantId,
+        billId,
+        squareOrderId,
+        error: fulfillmentResult.error,
+      });
+    }
   }
 
   await prisma.$transaction(async (tx) => {
-    for (const o of group) {
-      await tx.billItem.deleteMany({ where: { orderId: o.id } });
-      await tx.order.update({ where: { id: o.id }, data: { status: "CANCELLED" } });
-    }
+    await tx.billItem.deleteMany({ where: { orderId: target.id } });
+    await tx.order.update({ where: { id: target.id }, data: { status: "CANCELLED" } });
     await recompute(tx, billId);
   });
 
@@ -2158,16 +2217,46 @@ export async function syncSquarePaymentStatus(
   if (!payment || payment.status === newStatus) return;
 
   if (newStatus === "FAILED" && payment.status !== "FAILED") {
-    await prisma.$transaction([
-      prisma.bill.update({
+    // A FAILED payment reversal needs to reach every place the payment
+    // optimistically touched when it was first reserved, not just
+    // amountPaidCents: bill.status (PAID/PARTIALLY_PAID) was never rolled
+    // back, so a bill could sit at "PAID" with a total no longer covered by
+    // any successful payment; and an item-split payment's paidQuantity
+    // bumps (see Payment.itemAllocations) were never undone either, leaving
+    // those units stuck showing as paid with nobody able to pay for them
+    // again.
+    await prisma.$transaction(async (tx) => {
+      const allocations =
+        (payment.itemAllocations as { billItemId: string; count: number }[] | null) ?? [];
+      for (const a of allocations) {
+        await tx.billItem.updateMany({
+          where: { id: a.billItemId },
+          data: { paidQuantity: { decrement: a.count } },
+        });
+      }
+
+      const bill = await tx.bill.findUniqueOrThrow({ where: { id: payment.billId } });
+      const newAmountPaidCents = Math.max(0, bill.amountPaidCents - payment.amountCents);
+      const newTipCents = Math.max(0, bill.tipCents - payment.tipCents);
+      const newBillStatus: BillStatus =
+        newAmountPaidCents <= 0
+          ? "OPEN"
+          : newAmountPaidCents < bill.totalCents
+            ? "PARTIALLY_PAID"
+            : bill.status;
+
+      await tx.bill.update({
         where: { id: payment.billId },
         data: {
-          amountPaidCents: { decrement: payment.amountCents },
-          tipCents: { decrement: payment.tipCents },
+          amountPaidCents: newAmountPaidCents,
+          tipCents: newTipCents,
+          status: newBillStatus,
+          paidAt: newBillStatus === "PAID" ? bill.paidAt : null,
         },
-      }),
-      prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } }),
-    ]);
+      });
+
+      await tx.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
+    });
     log.warn("payment.square_webhook_failed", { paymentId: payment.id, billId: payment.billId });
   } else {
     await prisma.payment.update({ where: { id: payment.id }, data: { status: newStatus } });
@@ -2708,10 +2797,16 @@ async function settleOpenBillAsPaid(
     }
 
     const expectedPaid = bill.amountPaidCents;
+    // Guards totalCents too, not just amountPaidCents — see the matching
+    // comment on payBillAmount's CAS in this file. Without it, a discount/
+    // void/comp/added item landing between the read above and this write
+    // could still pass (amountPaidCents alone was unchanged) and commit
+    // `amountPaidCents: bill.totalCents` using the now-stale total.
     const cas = await prisma.bill.updateMany({
       where: {
         id: bill.id,
         amountPaidCents: expectedPaid,
+        totalCents: bill.totalCents,
         status: { in: ["OPEN", "PARTIALLY_PAID"] },
       },
       data: {
