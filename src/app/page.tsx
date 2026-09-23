@@ -163,11 +163,22 @@ const RECOMMENDED_TIER: PlanDef["tier"] = "GROWTH";
 function PricingCard({ plan }: { plan: PlanDef }) {
   const free = plan.priceCents === 0;
   const recommended = plan.tier === RECOMMENDED_TIER;
+  // Connect is free monthly but not "free" in the Lite sense — it carries a
+  // per-order fee instead of a subscription, so it gets its own visual
+  // treatment (an accent tint + its own badge) rather than either the
+  // "Most popular" ring or Lite's quiet/muted card.
+  const connect = plan.tier === "CONNECT";
   return (
     <Card
-      elevation={recommended ? "raised" : "rest"}
+      elevation={recommended || connect ? "raised" : "rest"}
       className={`relative flex flex-col p-6 h-full ${
-        recommended ? "ring-2 ring-pine" : free ? "bg-surface-2/60" : ""
+        recommended
+          ? "ring-2 ring-pine"
+          : connect
+            ? "ring-1 ring-pine/40 bg-pine-tint"
+            : free
+              ? "bg-surface-2/60"
+              : ""
       }`}
     >
       {recommended && (
@@ -175,13 +186,21 @@ function PricingCard({ plan }: { plan: PlanDef }) {
           Most popular
         </span>
       )}
+      {connect && (
+        <span className="absolute -top-3 left-6 text-[11px] font-semibold uppercase tracking-wide bg-surface text-pine-deep border border-pine/30 px-2.5 py-1 rounded-pill shadow-rest">
+          No subscription
+        </span>
+      )}
       <h3 className="font-display text-display-sm font-semibold">{plan.name}</h3>
       <p className="mt-1 text-sm text-muted min-h-[40px]">{plan.blurb}</p>
       <p className="mt-5 font-display text-display font-semibold">
         {planPriceLabel(plan)}
-        {!free && <span className="text-base text-muted font-normal font-sans tracking-normal"> /month</span>}
+        {plan.cadence === "per month" && (
+          <span className="text-base text-muted font-normal font-sans tracking-normal"> /month</span>
+        )}
       </p>
-      {free && <p className="text-xs text-muted mt-1">No card needed</p>}
+      {plan.cadence === "free" && <p className="text-xs text-muted mt-1">No card needed</p>}
+      {connect && <p className="text-xs text-pine-deep font-medium mt-1">+ ~2% per order — cancel any time</p>}
       <ul className="mt-6 space-y-2.5 text-sm text-ink-soft flex-1">
         {plan.features.map((f) => (
           <li key={f} className="flex items-start gap-2.5">
@@ -212,8 +231,10 @@ function Pricing() {
         </p>
       </Reveal>
       {/* Rendered straight from PLANS so this page can't drift from the
-          catalogue the billing flow uses. */}
-      <RevealGroup className="mt-10 grid sm:grid-cols-2 xl:grid-cols-4 gap-4 pt-3">
+          catalogue the billing flow uses. 5 tiers now (Connect added) —
+          wraps 3-then-2 from lg up, all 5 in one row only once there's
+          genuinely room for it, rather than forcing a horizontal scroll. */}
+      <RevealGroup className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-4 pt-3">
         {PLANS.map((plan) => (
           <RevealItem key={plan.tier} className="h-full">
             <PricingCard plan={plan} />
