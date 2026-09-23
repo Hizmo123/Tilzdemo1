@@ -102,7 +102,7 @@ const TIER_LIMITS: Record<
     analyticsWindowDays: 14,
     showTillzBranding: true,
     prioritySupport: false,
-    appFeeBps: 200, // 2% — see env.squareAppFeeBps()'s old global role, now superseded per-tier here.
+    appFeeBps: 200, // 2% — the org's only revenue relationship with Tillz on this tier.
   },
 };
 
