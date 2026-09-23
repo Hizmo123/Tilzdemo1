@@ -279,6 +279,11 @@ model Restaurant {
   // Set once the onboarding wizard finishes. Backfilled to createdAt for rows
   // that predate the wizard so nobody is re-onboarded by this migration.
   onboardingCompletedAt DateTime?
+  // Set when the owner completes OR skips the dashboard's guided tour
+  // (components/tour). Distinct from onboardingCompletedAt: finishing the
+  // wizard and having seen the tour are different things. Null = the tour
+  // auto-starts on their first Overview visit; "Replay tour" ignores it.
+  dashboardTourCompletedAt DateTime?
   // Whether this venue is actually serving customers — gates /v/[token] and
   // /m/[slug] (see lib/entitlements.ts#isOrgSubscribed and
   // dashboard/actions.ts#publishRestaurant). Distinct from

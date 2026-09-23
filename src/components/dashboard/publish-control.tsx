@@ -31,7 +31,7 @@ export function PublishControl({
 
   if (published) {
     return (
-      <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5 flex flex-wrap items-center justify-between gap-3">
+      <div data-tour="publish" className="rounded-[var(--radius-card)] border border-line bg-surface p-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-pine" />
           <p className="font-medium">You&apos;re live</p>
@@ -48,7 +48,7 @@ export function PublishControl({
   }
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
+    <div data-tour="publish" className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-medium">Not live yet</p>

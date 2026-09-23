@@ -17,7 +17,7 @@ export function CreateTableForm() {
   }, [state]);
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
+    <div data-tour="tables-add" className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
       <h2 className="font-display text-lg font-semibold tracking-tight mb-4">
         Add a table
       </h2>

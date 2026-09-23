@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ReplayTourButton } from "@/components/tour/replay-tour-button";
 
 type Item = { q: string; a: React.ReactNode };
 type Category = { title: string; items: Item[] };
@@ -181,6 +182,9 @@ export default function HelpPage() {
           </Link>
           .
         </p>
+        <div className="mt-3">
+          <ReplayTourButton />
+        </div>
       </div>
 
       {CATEGORIES.map((cat) => (

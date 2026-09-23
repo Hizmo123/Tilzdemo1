@@ -9,6 +9,8 @@ import { prisma } from "@/lib/prisma";
 import { signOut } from "../(auth)/actions";
 import { MobileNav } from "./mobile-nav";
 import { NavSections } from "./nav-sections";
+import { TourProvider } from "@/components/tour/tour-provider";
+import { markDashboardTourComplete } from "./tour-actions";
 
 // Each nav item declares the permission needed to see it. Overview and Bills are
 // visible to every role (all roles have bills:view). This only hides controls —
@@ -214,6 +216,23 @@ export default async function DashboardLayout({
   }
 
   return (
+    // The guided tour lives at layout level so it survives every route
+    // change under /dashboard (its steps span Overview, Menu, Tables and
+    // Settings). The overlay itself is a portal; this only holds state.
+    // Auto-starts once, on the first Overview visit after the wizard, for
+    // someone who can actually act on every step (settings:manage covers
+    // the Integrations step); completion/skip is recorded server-side so it
+    // never auto-starts again. Replay is always available regardless.
+    <TourProvider
+      ordering={entitlements?.ordering ?? true}
+      autoStart={
+        !!restaurant?.onboardingCompletedAt &&
+        !restaurant?.dashboardTourCompletedAt &&
+        !!role &&
+        roleCan(role, "settings:manage")
+      }
+      onFinished={markDashboardTourComplete}
+    >
     <div className="min-h-dvh flex">
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-line bg-surface sticky top-0 h-dvh">
         <div className="px-5 py-5 border-b border-line">
@@ -299,5 +318,6 @@ export default async function DashboardLayout({
         <main className="px-4 py-6 sm:px-8 sm:py-8 max-w-5xl">{children}</main>
       </div>
     </div>
+    </TourProvider>
   );
 }
