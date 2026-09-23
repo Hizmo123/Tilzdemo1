@@ -54,6 +54,12 @@ enum PlanTier {
   BASIC
   GROWTH
   PRO
+  // No monthly subscription — the venue's own Square account settles
+  // payments and owns the kitchen (Square's POS/KDS, not Tillz's). Tillz's
+  // revenue instead comes from a small per-order app fee, applied ONLY to
+  // this tier — see lib/entitlements-core.ts#appFeeBps and
+  // lib/square/pay.ts#chargeBillViaSquare.
+  CONNECT
 }
 
 enum OrderStatus {
