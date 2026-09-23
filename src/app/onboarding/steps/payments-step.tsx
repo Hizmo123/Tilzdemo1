@@ -6,6 +6,8 @@ import type { OnboardingAnswers, PaymentPath } from "@/lib/onboarding-options";
 import type { PendingSquareSummary } from "@/lib/square/pending";
 import { Button } from "@/components/ui/button";
 import { SPRING, SPRING_PRESS } from "@/components/ui/motion";
+import { CHOICE_IDLE, CHOICE_SELECTED } from "@/components/venue-setup/choice";
+import { SELECT_CLASS } from "../wizard-ui";
 import { discardPendingSquare, listPendingSquareLocations, setPendingSquareLocation } from "../actions";
 import type { SquareResult } from "../square-result";
 
@@ -198,7 +200,7 @@ export function PaymentsStep({
                       value={square.locationId ?? ""}
                       disabled={pending || locations === null}
                       onChange={(e) => pickLocation(e.target.value)}
-                      className="w-full h-11 appearance-none rounded-[var(--radius-md)] bg-surface border border-line shadow-rest px-3.5 pr-10 text-sm focus:outline-none focus:border-pine focus:ring-[3px] focus:ring-pine/20 disabled:opacity-60"
+                      className={SELECT_CLASS}
                     >
                       <option value="" disabled>
                         {locations === null ? "Loading locations…" : locations.length === 0 ? "No locations found" : "Choose a location"}
@@ -256,8 +258,8 @@ function PathCard({
       onClick={onClick}
       whileTap={{ scale: 0.98 }}
       transition={SPRING_PRESS}
-      className={`w-full text-left rounded-[var(--radius-card)] bg-surface p-4 flex items-start gap-3 transition-[box-shadow,background-color] duration-[var(--dur-fast)] ${
-        selected ? "ring-2 ring-pine shadow-raised bg-pine-tint" : "border border-line shadow-rest hover:shadow-raised"
+      className={`w-full text-left rounded-[var(--radius-card)] bg-surface border p-4 flex items-start gap-3 transition-[box-shadow,background-color,border-color] duration-[var(--dur-fast)] ${
+        selected ? CHOICE_SELECTED : CHOICE_IDLE
       }`}
     >
       <span

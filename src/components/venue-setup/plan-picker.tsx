@@ -4,6 +4,7 @@ import type { PlanTier } from "@prisma/client";
 import { motion } from "motion/react";
 import { PLANS, planPriceLabel } from "@/lib/plans";
 import { SPRING_PRESS, SPRING } from "@/components/ui/motion";
+import { CHOICE_IDLE, CHOICE_SELECTED } from "./choice";
 
 // The tier we lead with — same call as the marketing pricing section:
 // Growth is where a venue going live across the whole floor lands.
@@ -35,10 +36,8 @@ export function PlanPicker({
             onClick={() => onChange(p.tier)}
             whileTap={{ scale: 0.98 }}
             transition={SPRING_PRESS}
-            className={`relative text-left rounded-[var(--radius-card)] bg-surface p-5 flex flex-col transition-[box-shadow,background-color] duration-[var(--dur-fast)] ${
-              selected
-                ? "ring-2 ring-pine shadow-raised bg-pine-tint"
-                : "border border-line shadow-rest hover:shadow-raised"
+            className={`relative text-left rounded-[var(--radius-card)] bg-surface border p-5 flex flex-col transition-[box-shadow,background-color,border-color] duration-[var(--dur-fast)] ${
+              selected ? CHOICE_SELECTED : CHOICE_IDLE
             }`}
           >
             {recommended && (

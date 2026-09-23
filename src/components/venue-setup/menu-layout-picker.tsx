@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { MENU_LAYOUTS, type MenuLayout } from "@/lib/menu-style";
 import { SPRING_PRESS } from "@/components/ui/motion";
+import { CHOICE_IDLE, CHOICE_SELECTED } from "./choice";
 
 // The four named menu presets from lib/menu-style.ts, each with a tiny
 // wireframe of what that layout does to an item list. Onboarding only picks
@@ -29,8 +30,8 @@ export function MenuLayoutPicker({
             onClick={() => onChange(l.value)}
             whileTap={{ scale: 0.98 }}
             transition={SPRING_PRESS}
-            className={`text-left rounded-[var(--radius-md)] bg-surface p-2.5 transition-[box-shadow,background-color] duration-[var(--dur-fast)] ${
-              active ? "ring-2 ring-pine shadow-raised bg-pine-tint" : "border border-line shadow-rest hover:shadow-raised"
+            className={`text-left rounded-[var(--radius-md)] bg-surface border p-2.5 transition-[box-shadow,background-color,border-color] duration-[var(--dur-fast)] ${
+              active ? CHOICE_SELECTED : CHOICE_IDLE
             }`}
           >
             <Wire layout={l.value} active={active} />
