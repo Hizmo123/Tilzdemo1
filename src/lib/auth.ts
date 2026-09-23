@@ -95,6 +95,16 @@ export const getTenantContext = cache(async () => {
 // Authorization context: the signed-in user's role plus a `can()` check against
 // the permission matrix. Used by server actions to gate mutations, and by the
 // dashboard layout to hide controls a role can't use.
+//
+// IMPORTANT: `role` (and therefore `can()`) is always resolved from THIS ONE
+// membership (getTenantContext's oldest-first pick). Any ownership check a
+// server action runs after `can()` passes MUST scope by THIS SAME
+// `membership.organizationId` — never by "any org the user happens to be a
+// member of" (e.g. a Prisma `organization: { memberships: { some: { userId } } }`
+// filter). A user can hold a high role on one org and a low role on another;
+// role and ownership drifting apart onto different memberships is exactly
+// how a VIEW_ONLY member of org B could act with their OWNER role from org A
+// against org B's data. See getOwnedTable below for the pattern to follow.
 export async function getAuthz() {
   const { user, membership } = await getTenantContext();
   const role = membership?.role ?? null;
@@ -153,17 +163,25 @@ export async function requireOrdering() {
 }
 
 // Tenant-isolation guard for table-scoped operations. Loads a table ONLY if it
-// belongs to a location -> restaurant -> organization the user is a member of.
-// Returns the table (with location + restaurant) or null. Never trust a tableId
-// from the client without passing it through here first (spec §100, §101).
-export async function getOwnedTable(userId: string, tableId: string) {
+// belongs to a location -> restaurant in the GIVEN organization. Returns the
+// table (with location + restaurant) or null. Never trust a tableId from the
+// client without passing it through here first (spec §100, §101).
+//
+// Takes organizationId, not userId — a userId membership check used to allow
+// "any org this user is a member of," which is a different (and wrong)
+// question from "does this table belong to the org whose role I'm acting
+// with." A user who is OWNER on their own org and VIEW_ONLY on a second org
+// could otherwise reach a table in the second org while still authorized as
+// OWNER (their role comes from whichever membership getAuthz() resolved,
+// independent of this check). Callers must pass the SAME organizationId
+// getAuthz()/getTenantContext() used to derive the caller's role — see
+// lib/auth.ts's getAuthz() doc comment.
+export async function getOwnedTable(organizationId: string, tableId: string) {
   return prisma.table.findFirst({
     where: {
       id: tableId,
       location: {
-        restaurant: {
-          organization: { memberships: { some: { userId } } },
-        },
+        restaurant: { organizationId },
       },
     },
     include: {

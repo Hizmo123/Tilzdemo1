@@ -16,12 +16,16 @@ export type ImageActionState = { error?: string; url?: string };
 
 const MAX_BYTES = 3 * 1024 * 1024; // 3 MB safety cap (client already compresses)
 
-async function ownedItem(itemId: string, userId: string) {
+// organizationId, not userId — the SAME membership's org authz.can() already
+// checked the role against. See assertItemOwned's comment in
+// dashboard/menu/actions.ts / getAuthz()'s doc comment in lib/auth.ts for why
+// "any org this user belongs to" is the wrong (and unsafe) question here.
+async function ownedItem(itemId: string, organizationId: string) {
   return prisma.menuItem.findFirst({
     where: {
       id: itemId,
       category: {
-        restaurant: { organization: { memberships: { some: { userId } } } },
+        restaurant: { organizationId },
       },
     },
     include: { category: { include: { restaurant: true } } },
@@ -56,7 +60,7 @@ export async function uploadMenuImage(
   if (!authz.can("menu:manage"))
     return { error: "You don't have permission to edit the menu." };
 
-  const item = await ownedItem(itemId, authz.user.id);
+  const item = await ownedItem(itemId, authz.membership!.organizationId);
   if (!item) return { error: "Item not found." };
 
   const file = formData.get("file");
@@ -112,7 +116,7 @@ export async function removeMenuImage(itemId: string): Promise<ImageActionState>
   const authz = await getAuthz();
   if (!authz.can("menu:manage")) return { error: "Not permitted." };
 
-  const item = await ownedItem(itemId, authz.user.id);
+  const item = await ownedItem(itemId, authz.membership!.organizationId);
   if (!item) return { error: "Item not found." };
 
   if (item.imageUrl) {

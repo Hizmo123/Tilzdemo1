@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireStaffForSlug } from "@/lib/staff-auth";
-import { roleCan } from "@/lib/rbac";
+import { roleCan, type Permission } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import {
   addItemsForTable,
@@ -89,10 +89,18 @@ export async function markBillPaid(slug: string, tableId: string) {
 
 // ---- Bill adjustments (void / comp / discount) -----------------------------
 
-async function authedStaff(slug: string) {
+// `permission` defaults to "orders:manage" (taking/serving orders — every
+// caller below except comp/void/discount). Comp, void and an arbitrary
+// discount can zero out a bill — the same cash-handling risk closing the
+// drawer carries, which is gated on "payments:refund" (manager/owner/admin,
+// not plain STAFF) — so those three callers pass that permission explicitly
+// instead of the default. Picking the stricter of the two available bars
+// deliberately: "orders:manage" (what STAFF holds) was the wrong tier for an
+// action that can hand out free food or erase a bill's total.
+async function authedStaff(slug: string, permission: Permission = "orders:manage") {
   const session = await requireStaffForSlug(slug);
   if (!session) return null;
-  if (!roleCan(session.staff.role, "orders:manage")) return null;
+  if (!roleCan(session.staff.role, permission)) return null;
   return session;
 }
 
@@ -102,7 +110,7 @@ export async function staffVoidItem(
   itemId: string,
   voided: boolean,
 ) {
-  const session = await authedStaff(slug);
+  const session = await authedStaff(slug, "payments:refund");
   if (!session) return { error: "Not permitted." };
   const res = await voidBillItem(itemId, session.restaurant.id, voided);
   if ("error" in res) return res;
@@ -116,7 +124,7 @@ export async function staffCompItem(
   itemId: string,
   comped: boolean,
 ) {
-  const session = await authedStaff(slug);
+  const session = await authedStaff(slug, "payments:refund");
   if (!session) return { error: "Not permitted." };
   const res = await compBillItem(itemId, session.restaurant.id, comped);
   if ("error" in res) return res;
@@ -130,7 +138,7 @@ export async function staffSetDiscount(
   billId: string,
   discountCents: number,
 ) {
-  const session = await authedStaff(slug);
+  const session = await authedStaff(slug, "payments:refund");
   if (!session) return { error: "Not permitted." };
   const res = await setBillDiscount(billId, session.restaurant.id, discountCents);
   if ("error" in res) return res;

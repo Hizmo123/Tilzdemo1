@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireUser, getOwnedTable } from "@/lib/auth";
+import { getAuthz, getOwnedTable } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { qrPngBuffer, qrPrintableSvg } from "@/lib/qr";
 
@@ -11,8 +11,11 @@ export async function GET(
   { params }: { params: Promise<{ tableId: string }> },
 ) {
   const { tableId } = await params;
-  const user = await requireUser();
-  const table = await getOwnedTable(user.id, tableId);
+  const authz = await getAuthz();
+  if (!authz.membership) {
+    return new NextResponse("Not found", { status: 404 });
+  }
+  const table = await getOwnedTable(authz.membership.organizationId, tableId);
   if (!table) {
     return new NextResponse("Not found", { status: 404 });
   }

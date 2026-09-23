@@ -7,11 +7,25 @@ import { emailBillReceipt } from "@/lib/receipt-delivery";
 import { refundBillPayment } from "@/lib/bills";
 import { audit } from "@/lib/audit";
 
-// Owner/staff re-sending a copy of a bill's receipt. Scoped to a bill the
-// signed-in user's org owns — same check as the page itself.
+// Owner/staff re-sending a copy of a bill's receipt. Distinct from
+// v/[token]/actions.ts#emailMyReceipt — that one is the CUSTOMER path,
+// authenticated by possessing the table's token, and is untouched by this
+// fix. This one previously had no permission check at all (unlike its
+// sibling refundPaymentAction below): any authenticated dashboard user could
+// call it, and — combined with the "any org" scoping bug just below —
+// against ANY org's bill, not just their own. Gated on "bills:view": the
+// exact permission that already gates seeing this bill/page at all (every
+// role that can reach /receipt/[billId] holds it), so this can't email a
+// bill the caller couldn't otherwise already view.
 export async function emailReceiptCopy(billId: string, email: string) {
-  const { user } = await getAuthz();
+  const authz = await getAuthz();
+  if (!authz.can("bills:view")) return { error: "Not permitted." };
+  if (!authz.membership) return { error: "No organization found." };
+  const organizationId = authz.membership.organizationId;
 
+  // Scoped by organizationId — the SAME membership's org the permission
+  // check above applies to — never "any org this user belongs to." See
+  // getAuthz()'s doc comment in lib/auth.ts.
   const bill = await prisma.bill.findFirst({
     where: {
       id: billId,
@@ -22,16 +36,12 @@ export async function emailReceiptCopy(billId: string, email: string) {
         {
           table: {
             location: {
-              restaurant: {
-                organization: { memberships: { some: { userId: user.id } } },
-              },
+              restaurant: { organizationId },
             },
           },
         },
         {
-          restaurant: {
-            organization: { memberships: { some: { userId: user.id } } },
-          },
+          restaurant: { organizationId },
         },
       ],
     },
@@ -53,7 +63,12 @@ export async function refundPaymentAction(
 ) {
   const authz = await getAuthz();
   if (!authz.can("payments:refund")) return { error: "Not permitted." };
+  if (!authz.membership) return { error: "No organization found." };
+  const organizationId = authz.membership.organizationId;
 
+  // Scoped by organizationId — the SAME membership's org the permission
+  // check above applies to — never "any org this user belongs to." See
+  // getAuthz()'s doc comment in lib/auth.ts.
   const bill = await prisma.bill.findFirst({
     where: {
       id: billId,
@@ -61,16 +76,12 @@ export async function refundPaymentAction(
         {
           table: {
             location: {
-              restaurant: {
-                organization: { memberships: { some: { userId: authz.user.id } } },
-              },
+              restaurant: { organizationId },
             },
           },
         },
         {
-          restaurant: {
-            organization: { memberships: { some: { userId: authz.user.id } } },
-          },
+          restaurant: { organizationId },
         },
       ],
     },

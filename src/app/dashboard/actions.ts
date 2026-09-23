@@ -5,7 +5,7 @@ import { z } from "zod";
 import { getAuthz, requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
-import { getPublishReadiness } from "@/lib/entitlements";
+import { getPublishReadiness, canCreateVenue } from "@/lib/entitlements";
 
 const createRestaurantSchema = z.object({
   restaurantName: z.string().trim().min(2, "Enter a restaurant name.").max(80),
@@ -36,6 +36,23 @@ export async function createRestaurant(
     return { error: parsed.error.issues[0].message };
   }
   const { restaurantName, locationName } = parsed.data;
+
+  // This form only renders for a user who ALREADY has a membership but no
+  // restaurant under it yet (dashboard/page.tsx's "has an org but somehow no
+  // restaurant/location" edge case) — a genuinely membership-less user is
+  // redirected to /onboarding before ever reaching it. Which means every
+  // real call here has an existing org to check, and previously never did:
+  // completeOnboardingForExistingOrg (the OTHER path that creates an
+  // additional restaurant under an existing org) gates every venue past the
+  // first on canCreateVenue; this path let ANY signed-in user with a
+  // membership mint an unlimited number of further organizations — each a
+  // brand-new LITE org, never counted against any plan's venue limit — by
+  // resubmitting this form. Same gate, same reasoning, applied here.
+  const existingMembership = await prisma.membership.findFirst({ where: { userId: user.id } });
+  if (existingMembership) {
+    const check = await canCreateVenue(existingMembership.organizationId);
+    if (!check.allowed) return { error: check.reason };
+  }
 
   // Ensure a globally-unique slug by appending a short suffix on collision.
   const base = slugify(restaurantName) || "venue";

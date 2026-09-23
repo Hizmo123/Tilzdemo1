@@ -97,7 +97,7 @@ export async function activateStandForTable(
     return { error: "You don't have permission to manage tables." };
   if (!authz.membership) return { error: "No organization found." };
 
-  const table = await getOwnedTable(authz.user.id, tableId);
+  const table = await getOwnedTable(authz.membership!.organizationId, tableId);
   if (!table) return { error: "Table not found." };
 
   const serial = String(formData.get("serial") ?? "").trim();
@@ -130,7 +130,7 @@ export async function regenerateQr(tableId: string): Promise<TableActionState> {
   if (!authz.can("tables:manage"))
     return { error: "You don't have permission to manage tables." };
 
-  const table = await getOwnedTable(authz.user.id, tableId);
+  const table = await getOwnedTable(authz.membership!.organizationId, tableId);
   if (!table) return { error: "Table not found." };
 
   await prisma.$transaction(async (tx) => {
@@ -173,7 +173,7 @@ export async function setTableActive(
   if (!authz.can("tables:manage"))
     return { error: "You don't have permission to manage tables." };
 
-  const table = await getOwnedTable(authz.user.id, tableId);
+  const table = await getOwnedTable(authz.membership!.organizationId, tableId);
   if (!table) return { error: "Table not found." };
 
   await prisma.table.update({ where: { id: table.id }, data: { active } });

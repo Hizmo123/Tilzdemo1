@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireUser, getOwnedTable } from "@/lib/auth";
+import { getAuthz, getOwnedTable } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { qrDataUrl, visitUrl } from "@/lib/qr";
 import { QrActions } from "./qr-actions";
@@ -12,8 +12,9 @@ export default async function TableDetailPage({
   params: Promise<{ tableId: string }>;
 }) {
   const { tableId } = await params;
-  const user = await requireUser();
-  const table = await getOwnedTable(user.id, tableId);
+  const authz = await getAuthz();
+  if (!authz.membership) notFound();
+  const table = await getOwnedTable(authz.membership.organizationId, tableId);
   if (!table) notFound();
 
   const activeToken = await prisma.qrToken.findFirst({

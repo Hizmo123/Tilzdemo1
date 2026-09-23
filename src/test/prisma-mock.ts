@@ -19,18 +19,27 @@ import { vi } from "vitest";
 export function createPrismaMock(): Record<string, unknown> {
   const modelCache = new Map<string, Record<string, ReturnType<typeof vi.fn>>>();
 
+  let transactionMock: ReturnType<typeof vi.fn> | undefined;
+
   const root: Record<string, unknown> = new Proxy(
     {},
     {
       get(_target, prop: string) {
         if (prop === "$transaction") {
-          return vi.fn(async (arg: unknown) => {
-            if (Array.isArray(arg)) return Promise.all(arg);
-            if (typeof arg === "function") {
-              return (arg as (tx: unknown) => unknown)(root);
-            }
-            return arg;
-          });
+          // Cached, same as every model below — a fresh vi.fn() on each
+          // access would make `expect(prisma.$transaction).toHaveBeenCalled()`
+          // always fail, since the assertion and the code under test would be
+          // looking at two different spies.
+          if (!transactionMock) {
+            transactionMock = vi.fn(async (arg: unknown) => {
+              if (Array.isArray(arg)) return Promise.all(arg);
+              if (typeof arg === "function") {
+                return (arg as (tx: unknown) => unknown)(root);
+              }
+              return arg;
+            });
+          }
+          return transactionMock;
         }
         if (prop === "then") return undefined; // never let this be mistaken for a thenable
         if (!modelCache.has(prop)) {

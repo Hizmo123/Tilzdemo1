@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getAuthz, requireUser } from "@/lib/auth";
+import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildReceiptData } from "@/lib/receipts";
 import { TaxInvoice } from "@/components/receipt/tax-invoice";
@@ -19,9 +19,13 @@ export default async function OwnerReceiptPage({
   params: Promise<{ billId: string }>;
 }) {
   const { billId } = await params;
-  const user = await requireUser();
   const authz = await getAuthz();
+  if (!authz.membership) notFound();
+  const organizationId = authz.membership.organizationId;
 
+  // Scoped by organizationId — the SAME membership's org authz.can() (below,
+  // for the refund panel) checks the role against — never "any org this user
+  // belongs to." See getAuthz()'s doc comment in lib/auth.ts.
   const bill = await prisma.bill.findFirst({
     where: {
       id: billId,
@@ -29,16 +33,12 @@ export default async function OwnerReceiptPage({
         {
           table: {
             location: {
-              restaurant: {
-                organization: { memberships: { some: { userId: user.id } } },
-              },
+              restaurant: { organizationId },
             },
           },
         },
         {
-          restaurant: {
-            organization: { memberships: { some: { userId: user.id } } },
-          },
+          restaurant: { organizationId },
         },
       ],
     },

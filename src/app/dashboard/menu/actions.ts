@@ -20,21 +20,28 @@ async function requireRestaurantId(): Promise<string | null> {
   return membership?.organization.restaurants[0]?.id ?? null;
 }
 
-async function assertCategoryOwned(categoryId: string, userId: string) {
+// Takes organizationId — the SAME membership's org that authz.can() already
+// checked the role against — not userId. "Any org this user belongs to" is a
+// different, broader question than "does this belong to the org my role
+// applies to," and answering the broader one here is exactly how a user who
+// is e.g. OWNER on their own org and VIEW_ONLY on a second org could act
+// with their OWNER role against the second org's menu. See getAuthz()'s doc
+// comment in lib/auth.ts.
+async function assertCategoryOwned(categoryId: string, organizationId: string) {
   return prisma.menuCategory.findFirst({
     where: {
       id: categoryId,
-      restaurant: { organization: { memberships: { some: { userId } } } },
+      restaurant: { organizationId },
     },
   });
 }
 
-async function assertItemOwned(itemId: string, userId: string) {
+async function assertItemOwned(itemId: string, organizationId: string) {
   return prisma.menuItem.findFirst({
     where: {
       id: itemId,
       category: {
-        restaurant: { organization: { memberships: { some: { userId } } } },
+        restaurant: { organizationId },
       },
     },
     include: { category: true },
@@ -106,7 +113,7 @@ export async function createItem(
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const owned = await assertCategoryOwned(parsed.data.categoryId, authz.user.id);
+  const owned = await assertCategoryOwned(parsed.data.categoryId, authz.membership!.organizationId);
   if (!owned) return { error: "Category not found." };
 
   const priceCents = dollarsToCents(parsed.data.price);
@@ -146,7 +153,7 @@ export async function toggleItemAvailable(itemId: string, available: boolean) {
   if (!authz.can("menu:availability"))
     return { error: "You don't have permission to change availability." };
 
-  const owned = await assertItemOwned(itemId, authz.user.id);
+  const owned = await assertItemOwned(itemId, authz.membership!.organizationId);
   if (!owned) return { error: "Item not found." };
 
   await prisma.menuItem.update({ where: { id: itemId }, data: { available } });
@@ -170,7 +177,7 @@ export async function deleteItem(itemId: string) {
   if (!authz.can("menu:manage"))
     return { error: "You don't have permission to edit the menu." };
 
-  const owned = await assertItemOwned(itemId, authz.user.id);
+  const owned = await assertItemOwned(itemId, authz.membership!.organizationId);
   if (!owned) return { error: "Item not found." };
 
   await prisma.menuItem.delete({ where: { id: itemId } });
@@ -211,7 +218,7 @@ export async function createModifierGroup(input: {
   const parsed = groupSchema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const owned = await assertItemOwned(parsed.data.itemId, authz.user.id);
+  const owned = await assertItemOwned(parsed.data.itemId, authz.membership!.organizationId);
   if (!owned) return { error: "Item not found." };
 
   const count = await prisma.modifierGroup.count({
@@ -240,7 +247,7 @@ export async function deleteModifierGroup(groupId: string) {
       id: groupId,
       menuItem: {
         category: {
-          restaurant: { organization: { memberships: { some: { userId: authz.user.id } } } },
+          restaurant: { organizationId: authz.membership!.organizationId },
         },
       },
     },
@@ -275,7 +282,7 @@ export async function createModifierOption(input: {
       id: parsed.data.groupId,
       menuItem: {
         category: {
-          restaurant: { organization: { memberships: { some: { userId: authz.user.id } } } },
+          restaurant: { organizationId: authz.membership!.organizationId },
         },
       },
     },
@@ -316,7 +323,7 @@ export async function deleteModifierOption(optionId: string) {
       group: {
         menuItem: {
           category: {
-            restaurant: { organization: { memberships: { some: { userId: authz.user.id } } } },
+            restaurant: { organizationId: authz.membership!.organizationId },
           },
         },
       },
@@ -343,7 +350,7 @@ export async function updateCategoryOptions(
 ): Promise<MenuActionState> {
   const authz = await getAuthz();
   if (!authz.can("menu:manage")) return { error: "Not permitted." };
-  const owned = await assertCategoryOwned(categoryId, authz.user.id);
+  const owned = await assertCategoryOwned(categoryId, authz.membership!.organizationId);
   if (!owned) return { error: "Category not found." };
 
   await prisma.menuCategory.update({
@@ -366,7 +373,7 @@ export async function updateItemStation(
 ): Promise<MenuActionState> {
   const authz = await getAuthz();
   if (!authz.can("menu:manage")) return { error: "Not permitted." };
-  const owned = await assertItemOwned(itemId, authz.user.id);
+  const owned = await assertItemOwned(itemId, authz.membership!.organizationId);
   if (!owned) return { error: "Item not found." };
 
   await prisma.menuItem.update({
@@ -429,7 +436,7 @@ export async function updateItemAllergens(
 ): Promise<MenuActionState> {
   const authz = await getAuthz();
   if (!authz.can("menu:manage")) return { error: "Not permitted." };
-  const owned = await assertItemOwned(itemId, authz.user.id);
+  const owned = await assertItemOwned(itemId, authz.membership!.organizationId);
   if (!owned) return { error: "Item not found." };
 
   const clean = allergens.filter((a) => ALLERGEN_SET.has(a)).slice(0, 20);
@@ -451,7 +458,7 @@ export async function updateCategoryIcon(
 ): Promise<MenuActionState> {
   const authz = await getAuthz();
   if (!authz.can("menu:manage")) return { error: "Not permitted." };
-  const owned = await assertCategoryOwned(categoryId, authz.user.id);
+  const owned = await assertCategoryOwned(categoryId, authz.membership!.organizationId);
   if (!owned) return { error: "Category not found." };
 
   const clean = icon.trim().slice(0, 8);
@@ -469,7 +476,7 @@ export async function updateItemBadges(
 ): Promise<MenuActionState> {
   const authz = await getAuthz();
   if (!authz.can("menu:manage")) return { error: "Not permitted." };
-  const owned = await assertItemOwned(itemId, authz.user.id);
+  const owned = await assertItemOwned(itemId, authz.membership!.organizationId);
   if (!owned) return { error: "Item not found." };
 
   const clean = badges.filter((b) => BADGE_SET.has(b)).slice(0, BADGE_VALUES.length);
@@ -493,7 +500,7 @@ export async function deleteCategoryAction(categoryId: string) {
   const authz = await getAuthz();
   if (!authz.can("menu:manage")) return { error: "Not permitted." };
 
-  const owned = await assertCategoryOwned(categoryId, authz.user.id);
+  const owned = await assertCategoryOwned(categoryId, authz.membership!.organizationId);
   if (!owned) return { error: "Category not found." };
 
   const itemCount = await prisma.menuItem.count({ where: { categoryId } });
@@ -527,7 +534,7 @@ export async function renameCategoryAction(
   const parsed = renameSchema.safeParse({ name: newName });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const owned = await assertCategoryOwned(categoryId, authz.user.id);
+  const owned = await assertCategoryOwned(categoryId, authz.membership!.organizationId);
   if (!owned) return { error: "Category not found." };
 
   await prisma.menuCategory.update({
