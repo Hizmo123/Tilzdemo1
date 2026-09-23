@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { PLANS, type PlanDef } from "@/lib/plans";
-import { formatCents } from "@/lib/money";
+import { PLANS, planPriceLabel, type PlanDef } from "@/lib/plans";
 import { LinkButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MarketingNav } from "@/components/marketing/nav";
@@ -161,12 +160,6 @@ function Positioning() {
 // on-ramp, Pro is for groups.
 const RECOMMENDED_TIER: PlanDef["tier"] = "GROWTH";
 
-function planPrice(p: PlanDef) {
-  if (p.priceCents === 0) return "Free";
-  // "$49", not "$49.00" — whole-dollar plans read cleaner at display size.
-  return formatCents(p.priceCents).replace(/\.00$/, "");
-}
-
 function PricingCard({ plan }: { plan: PlanDef }) {
   const free = plan.priceCents === 0;
   const recommended = plan.tier === RECOMMENDED_TIER;
@@ -185,7 +178,7 @@ function PricingCard({ plan }: { plan: PlanDef }) {
       <h3 className="font-display text-display-sm font-semibold">{plan.name}</h3>
       <p className="mt-1 text-sm text-muted min-h-[40px]">{plan.blurb}</p>
       <p className="mt-5 font-display text-display font-semibold">
-        {planPrice(plan)}
+        {planPriceLabel(plan)}
         {!free && <span className="text-base text-muted font-normal font-sans tracking-normal"> /month</span>}
       </p>
       {free && <p className="text-xs text-muted mt-1">No card needed</p>}

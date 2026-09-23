@@ -13,6 +13,15 @@ import { SAMPLE_MENU } from "@/lib/sample-data";
 import { sameEveryDayHours, weekdayWeekendHours } from "@/lib/hours";
 import { getSetupChecklist, type ChecklistItem } from "@/lib/setup-checklist";
 import { entitlementsForTier, getEntitlements, canCreateVenue } from "@/lib/entitlements";
+import { mockSubscriptionData } from "@/lib/plan-subscription";
+import {
+  attachPendingToRestaurant,
+  discardPending,
+  getPendingSquareSummary,
+  listPendingLocations,
+  setPendingLocation,
+  type PendingSquareSummary,
+} from "@/lib/square/pending";
 import { log } from "@/lib/log";
 import {
   createServiceClient,
@@ -24,6 +33,8 @@ import {
 import {
   VENUE_TYPES,
   SPLIT_METHOD_VALUES,
+  PLAN_TIER_VALUES,
+  EXPERIENCE_MODES,
   type OnboardingAnswers,
   type OnboardingDraftPayload,
 } from "@/lib/onboarding-options";
@@ -43,6 +54,10 @@ const schema = z.object({
   language: z.enum(LANGUAGE_CODES),
   restaurantName: z.string().trim().min(2, "Enter your venue's name.").max(80),
   venueType: z.enum(VENUE_TYPES.map((v) => v.value) as [string, ...string[]]),
+  // Defaults, not required: a draft saved before these steps existed must
+  // still complete (see defaultOnboardingAnswers for why BASIC).
+  plan: z.enum(PLAN_TIER_VALUES).default("BASIC"),
+  paymentPath: z.enum(["square", "tillz"]).default("tillz"),
   experienceMode: z.string().min(1).max(40),
   customerOrdering: z.boolean(),
   customerPayment: z.boolean(),
@@ -107,14 +122,15 @@ function windowFor(categoryName: string): { from: string | null; to: string | nu
 
 // Autosaves the in-progress wizard so a refresh resumes with every selection
 // intact. Keyed by the Supabase user id because no Restaurant/Organization row
-// exists until completeOnboarding runs. A no-op for anyone who already has a
-// venue (nothing left to resume).
+// exists until completeOnboarding runs. Also used by the "+ Add venue" flow
+// (an existing member adding a second venue) — it needs the same resume
+// behaviour, in particular across the Square OAuth round trip, which leaves
+// the wizard and comes back. The draft is deleted by whichever completion
+// action finishes it.
 export async function saveOnboardingDraft(
   payload: OnboardingDraftPayload,
 ): Promise<{ ok: true } | { error: string }> {
   const user = await requireUser();
-  const existing = await prisma.membership.findFirst({ where: { userId: user.id } });
-  if (existing) return { ok: true };
 
   await prisma.onboardingDraft.upsert({
     where: { userId: user.id },
@@ -169,6 +185,56 @@ export async function uploadOnboardingLogo(
 
   const { data: pub } = supabase.storage.from(MENU_IMAGE_BUCKET).getPublicUrl(path);
   return { url: pub.publicUrl };
+}
+
+// ---- Square during onboarding --------------------------------------------
+// The wizard's Payments step. The OAuth round trip itself is
+// /api/square/authorize?flow=onboarding → Square → /api/square/callback,
+// which parks the tokens in PendingSquareConnection; these actions are how
+// the wizard reads/steers that pending row. Nothing here ever returns token
+// material (see lib/square/pending.ts).
+
+export async function getPendingSquare(): Promise<PendingSquareSummary | null> {
+  const user = await requireUser();
+  return getPendingSquareSummary(user.id);
+}
+
+export async function listPendingSquareLocations(): Promise<{ id: string; name: string }[]> {
+  const user = await requireUser();
+  try {
+    return await listPendingLocations(user.id);
+  } catch (e) {
+    log.error("onboarding.square_locations_failed", {
+      userId: user.id,
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return [];
+  }
+}
+
+export async function setPendingSquareLocation(locationId: string): Promise<{ ok: true } | { error: string }> {
+  const user = await requireUser();
+  if (!locationId) return { error: "Choose a location." };
+  await setPendingLocation(user.id, locationId);
+  return { ok: true };
+}
+
+export async function discardPendingSquare(): Promise<{ ok: true }> {
+  const user = await requireUser();
+  await discardPending(user.id);
+  return { ok: true };
+}
+
+// Lite is menu-only: whatever the experience step said (or a stale draft
+// carried), the persisted venue can't have ordering or payment on. Applied
+// server-side so the client's step-skipping is a convenience, not the guard.
+function forceMenuOnly(a: z.infer<typeof schema>): z.infer<typeof schema> {
+  return {
+    ...a,
+    experienceMode: "digital_menu",
+    ...EXPERIENCE_MODES.digital_menu.settings,
+    paymentPath: "tillz",
+  };
 }
 
 // Shared by completeOnboarding (new org) and completeOnboardingForExistingOrg
@@ -338,10 +404,17 @@ async function createRestaurantAndSeedFromAnswers(
     if (optionRows.length) await tx.modifierOption.createMany({ data: optionRows });
   }
 
+  // Square, if they connected it in the Payments step: the pending row
+  // becomes this restaurant's real SquareConnection. (A pending row left
+  // behind after they switched back to Tillz payments was already revoked
+  // and dropped by the caller before this transaction started.)
+  const square =
+    a.paymentPath === "square" ? await attachPendingToRestaurant(tx, userId, restaurant.id) : null;
+
   // The draft's only job was surviving a mid-wizard refresh — done now.
   await tx.onboardingDraft.deleteMany({ where: { userId } });
 
-  return restaurant;
+  return { restaurant, square };
 }
 
 // Creates the whole venue from the wizard's answers in one transaction:
@@ -362,7 +435,8 @@ export async function completeOnboarding(
 
   const parsed = schema.safeParse(answers);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const a = parsed.data;
+  const tier = entitlementsForTier(parsed.data.plan);
+  const a = tier.ordering ? parsed.data : forceMenuOnly(parsed.data);
 
   const hours =
     a.hoursMode === "later"
@@ -385,10 +459,20 @@ export async function completeOnboarding(
     slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
   }
 
+  // They connected Square at some point but finished on Tillz payments:
+  // revoke + drop the parked tokens rather than leave them lying around.
+  if (a.paymentPath !== "square") await discardPending(user.id);
+
   let txResult;
   try {
     txResult = await prisma.$transaction(async (tx) => {
-    const org = await tx.organization.create({ data: { name: a.restaurantName } });
+    // The plan chosen in the wizard is applied at creation — the same mock
+    // "active" subscription the Billing page's switcher writes — so a new
+    // venue can publish straight away instead of first detouring through
+    // Billing to confirm a plan it already picked.
+    const org = await tx.organization.create({
+      data: { name: a.restaurantName, ...mockSubscriptionData(a.plan) },
+    });
 
     await tx.membership.create({
       data: {
@@ -399,23 +483,20 @@ export async function completeOnboarding(
       },
     });
 
-    // A brand new organisation always starts on LITE (Organization.plan's
-    // default), whose tableLimit is 0 — LITE is menu-only, no live ordering
-    // at all — so this clamp uses LITE's limit specifically, not whatever
-    // tier happens to exist (there isn't one yet). See
+    // Table clamp uses the tier they just chose (Lite = 0: menu-only). See
     // completeOnboardingForExistingOrg for why an ADDED venue clamps
     // against the org's actual current tier instead.
-    const restaurant = await createRestaurantAndSeedFromAnswers(
+    const { restaurant, square } = await createRestaurantAndSeedFromAnswers(
       tx,
       org.id,
       user.id,
       a,
       hours,
       slug,
-      entitlementsForTier("LITE").tableLimit,
+      tier.tableLimit,
     );
 
-    return { organizationId: org.id, restaurant };
+    return { organizationId: org.id, restaurant, square };
   }, { timeout: 15000 });
   } catch (e) {
     // Whatever actually broke here — a timed-out transaction, a constraint
@@ -429,7 +510,7 @@ export async function completeOnboarding(
     });
     return { error: "Something went wrong creating your venue. Please try again." };
   }
-  const { organizationId, restaurant } = txResult;
+  const { organizationId, restaurant, square } = txResult;
 
   await audit({
     organizationId,
@@ -441,10 +522,30 @@ export async function completeOnboarding(
     metadata: {
       venueType: a.venueType,
       experienceMode: a.experienceMode,
+      plan: a.plan,
+      paymentPath: a.paymentPath,
       tables: a.tableCount,
       sampleMenu: a.sampleMenu,
     },
   });
+  await audit({
+    organizationId,
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "billing.subscribed",
+    metadata: { plan: a.plan, via: "onboarding" },
+  });
+  if (square) {
+    await audit({
+      organizationId,
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "square.connected",
+      resourceType: "Restaurant",
+      resourceId: restaurant.id,
+      metadata: { ...square, via: "onboarding" },
+    });
+  }
 
   const checklist = await getSetupChecklist(restaurant);
 
@@ -478,7 +579,14 @@ export async function completeOnboardingForExistingOrg(
 
   const parsed = schema.safeParse(answers);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const a = parsed.data;
+
+  // Unlike a brand-new org, this org is already on whatever tier let it
+  // reach canCreateVenue's allowed:true past its first venue — in practice
+  // always PRO today, since every other tier hard-blocks a 2nd venue
+  // outright. Its tier — not the wizard's (skipped) plan answer — decides
+  // both the table clamp and whether ordering exists for the new venue.
+  const ent = await getEntitlements(organizationId);
+  const a = ent.ordering ? parsed.data : forceMenuOnly(parsed.data);
 
   const hours =
     a.hoursMode === "later"
@@ -500,20 +608,18 @@ export async function completeOnboardingForExistingOrg(
     slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
   }
 
-  // Unlike a brand-new org (always LITE), this org is already on whatever
-  // tier let it reach canCreateVenue's allowed:true past its first venue —
-  // in practice always PRO today, since every other tier hard-blocks a 2nd
-  // venue outright. Its table limit, not LITE's, is what a newly ADDED
-  // venue should be clamped to.
-  const ent = await getEntitlements(organizationId);
+  if (a.paymentPath !== "square") await discardPending(user.id);
 
   let restaurant;
+  let square: { merchantId: string; environment: string } | null = null;
   try {
-    restaurant = await prisma.$transaction(
+    const result = await prisma.$transaction(
       (tx) =>
         createRestaurantAndSeedFromAnswers(tx, organizationId, user.id, a, hours, slug, ent.tableLimit),
       { timeout: 15000 },
     );
+    restaurant = result.restaurant;
+    square = result.square;
   } catch (e) {
     log.error("onboarding.add_venue_failed", {
       userId: user.id,
@@ -533,9 +639,21 @@ export async function completeOnboardingForExistingOrg(
     metadata: {
       venueType: a.venueType,
       tables: a.tableCount,
+      paymentPath: a.paymentPath,
       requiresPayment: "requiresPayment" in check ? check.requiresPayment : false,
     },
   });
+  if (square) {
+    await audit({
+      organizationId,
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "square.connected",
+      resourceType: "Restaurant",
+      resourceId: restaurant.id,
+      metadata: { ...square, via: "onboarding" },
+    });
+  }
 
   // Make the just-created venue the active one immediately (task G.2) —
   // same cookie lib/auth.ts#getTenantContext reads, set directly here

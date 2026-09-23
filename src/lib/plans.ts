@@ -77,6 +77,15 @@ export function planByTier(tier: PlanTier): PlanDef {
   return PLANS.find((p) => p.tier === tier) ?? PLANS[0];
 }
 
+// Display-only: "Free" or a whole-dollar "$49" (AUD). Shared by the
+// marketing pricing section and the onboarding plan step so the two render
+// the same figure the same way. Never used for arithmetic.
+export function planPriceLabel(p: PlanDef): string {
+  if (p.priceCents === 0) return "Free";
+  const dollars = p.priceCents / 100;
+  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
+}
+
 // Price for one physical Tillz stand, ordered from the dashboard (spec: the
 // order/fulfilment addendum). Flat, regardless of plan tier or quantity.
 export const STAND_UNIT_PRICE_CENTS = 2900;

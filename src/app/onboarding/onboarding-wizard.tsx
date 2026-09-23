@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import type { PlanTier } from "@prisma/client";
 import {
   completeOnboarding,
   completeOnboardingForExistingOrg,
@@ -11,10 +12,16 @@ import {
 } from "./actions";
 import {
   defaultOnboardingAnswers,
+  planAllowsOrdering,
+  EXPERIENCE_MODES,
   type OnboardingAnswers,
   type OnboardingDraftPayload,
   type ExperienceModeKey,
 } from "@/lib/onboarding-options";
+import type { PendingSquareSummary } from "@/lib/square/pending";
+import type { SquareResult } from "./square-result";
+import { PaymentsStep } from "./steps/payments-step";
+import { PlanPicker } from "@/components/venue-setup/plan-picker";
 import type { ChecklistItem } from "@/lib/setup-checklist";
 import { THEME_PRESETS, FONT_THEMES, ACCENT_SWATCHES, type ThemeKey, type FontKey, type CornerKey } from "@/lib/theme";
 import { COUNTRIES, timezonesForCountry, currencyForCountry, hasTaxRules } from "@/lib/countries";
@@ -31,7 +38,9 @@ import { NotificationsPicker } from "@/components/venue-setup/notifications-pick
 type StepId =
   | "location"
   | "venue"
+  | "plan"
   | "experience"
+  | "payments"
   | "tables"
   | "hours"
   | "menu"
@@ -44,7 +53,9 @@ type StepId =
 const STEP_TITLES: Record<StepId, string> = {
   location: "Location",
   venue: "Venue",
+  plan: "Plan",
   experience: "Setup",
+  payments: "Payments",
   tables: "Tables",
   hours: "Hours",
   menu: "Menu",
@@ -55,17 +66,26 @@ const STEP_TITLES: Record<StepId, string> = {
   alerts: "Alerts",
 };
 
-function activeSteps(a: OnboardingAnswers): StepId[] {
-  const steps: StepId[] = [
-    "location",
-    "venue",
-    "experience",
-    "tables",
-    "hours",
-    "menu",
-  ];
-  if (a.customerPayment) steps.push("split");
-  steps.push("tipping", "branding", "tax", "alerts");
+// Which steps this run of the wizard shows, given the answers so far. The
+// plan decides most of it: Lite is menu-only, so every ordering/payment step
+// (experience, payments, tables, split, tipping, tax, kitchen alerts) is
+// skipped outright — same pattern the split step already used for
+// customerPayment. `fixedPlan` is the "+ Add venue" flow: the org already
+// has a tier, so there's no plan step and that tier is what gates the rest.
+function activeSteps(a: OnboardingAnswers, fixedPlan?: PlanTier): StepId[] {
+  const tier = fixedPlan ?? a.plan;
+  const ordering = planAllowsOrdering(tier);
+  const steps: StepId[] = ["location", "venue"];
+  if (!fixedPlan) steps.push("plan");
+  if (ordering) {
+    steps.push("experience");
+    if (a.customerPayment) steps.push("payments");
+    steps.push("tables");
+  }
+  steps.push("hours", "menu");
+  if (ordering && a.customerPayment) steps.push("split", "tipping");
+  steps.push("branding");
+  if (ordering) steps.push("tax", "alerts");
   return steps;
 }
 
@@ -75,6 +95,10 @@ const FONT_KEYS = Object.keys(FONT_THEMES) as FontKey[];
 export function OnboardingWizard({
   initialDraft,
   organizationId,
+  fixedPlan,
+  initialSquare,
+  squareResult,
+  returnTo,
 }: {
   initialDraft: OnboardingDraftPayload | null;
   // Set only by task G's "+ Add venue" flow (/venues/new) — when present,
@@ -83,13 +107,26 @@ export function OnboardingWizard({
   // draft-resume, and UI are otherwise completely unchanged between the two
   // modes; only which server action completes it differs.
   organizationId?: string;
+  // The existing org's tier, in that same flow — replaces the plan step.
+  fixedPlan?: PlanTier;
+  // Square connected mid-wizard (PendingSquareConnection), if any — set by
+  // the page from the server; kept in state here as the Payments step
+  // changes it (location pick, disconnect).
+  initialSquare: PendingSquareSummary | null;
+  // Present only on the render right after the Square OAuth round trip
+  // lands back here. Consumed once, then stripped from the URL.
+  squareResult: SquareResult | null;
+  returnTo: "/onboarding" | "/venues/new";
 }) {
   const router = useRouter();
   const [step, setStep] = useState(initialDraft?.step ?? 0);
   const [answers, setAnswers] = useState<OnboardingAnswers>({
+    // Every key has a default, so a draft saved before a step existed (plan,
+    // payments, …) resumes with sensible values instead of undefined.
     ...defaultOnboardingAnswers(),
     ...(initialDraft?.answers ?? {}),
   });
+  const [square, setSquare] = useState<PendingSquareSummary | null>(initialSquare);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ checklist: ChecklistItem[] } | null>(null);
@@ -98,10 +135,39 @@ export function OnboardingWizard({
     setAnswers((a) => ({ ...a, ...patch }));
   }
 
-  const steps = useMemo(() => activeSteps(answers), [answers]);
+  // Picking a plan can change what the later steps even mean: Lite has no
+  // ordering, so its experience is fixed to the digital-menu preset; coming
+  // back OFF Lite restores the wizard's normal order-and-pay default so the
+  // experience step isn't silently stuck on menu-only.
+  function choosePlan(plan: PlanTier) {
+    const ordering = planAllowsOrdering(plan);
+    if (!ordering) {
+      update({ plan, experienceMode: "digital_menu", ...EXPERIENCE_MODES.digital_menu.settings });
+    } else if (answers.experienceMode === "digital_menu" && !planAllowsOrdering(answers.plan)) {
+      update({ plan, experienceMode: "order_and_pay", ...EXPERIENCE_MODES.order_and_pay.settings });
+    } else {
+      update({ plan });
+    }
+  }
+
+  const steps = useMemo(() => activeSteps(answers, fixedPlan), [answers, fixedPlan]);
   const clampedStep = Math.min(step, steps.length - 1);
   const stepId = steps[clampedStep];
   const last = steps.length - 1;
+  const ordering = planAllowsOrdering(fixedPlan ?? answers.plan);
+
+  // Landing back from Square: make sure we're on the Payments step (the
+  // draft normally puts us there already — this covers a failed draft save),
+  // then drop ?square=… from the URL so a refresh doesn't replay the result.
+  const squareHandled = useRef(false);
+  useEffect(() => {
+    if (!squareResult || squareHandled.current) return;
+    squareHandled.current = true;
+    const idx = steps.indexOf("payments");
+    if (idx >= 0 && idx !== clampedStep) setStep(idx);
+    router.replace(returnTo, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [squareResult]);
 
   // Autosave the draft (debounced) after every change, so a refresh resumes
   // exactly here. Skipped on the very first render — nothing has changed yet.
@@ -122,6 +188,10 @@ export function OnboardingWizard({
   function validateStep(id: StepId): string | null {
     if (id === "venue" && answers.restaurantName.trim().length < 2) {
       return "Enter your venue's name.";
+    }
+    if (id === "payments" && answers.paymentPath === "square") {
+      if (!square) return "Connect your Square account, or choose Tillz payments to continue.";
+      if (!square.locationId) return "Choose which Square location this venue is.";
     }
     return null;
   }
@@ -164,9 +234,13 @@ export function OnboardingWizard({
     return <FinishScreen checklist={result.checklist} restaurantName={answers.restaurantName} onDone={() => { router.push("/dashboard"); router.refresh(); }} />;
   }
 
+  // The plan cards need room to sit two-up; every other step reads best at
+  // the narrower form width.
+  const wide = stepId === "plan";
+
   return (
     <main className="min-h-dvh bg-paper flex flex-col">
-      <div className="w-full max-w-md mx-auto px-5 py-8 flex-1 flex flex-col">
+      <div className={`w-full mx-auto px-5 py-8 flex-1 flex flex-col transition-[max-width] duration-[var(--dur-base)] ${wide ? "max-w-2xl" : "max-w-md"}`}>
         {/* Progress */}
         <div className="mb-2 flex items-center justify-between text-xs text-muted">
           <span>
@@ -262,6 +336,40 @@ export function OnboardingWizard({
               <VenueTypePicker
                 value={answers.venueType}
                 onChange={(venueType) => update({ venueType })}
+              />
+            </Step>
+          )}
+
+          {stepId === "plan" && (
+            <Step
+              title="Choose your plan"
+              subtitle="Start on Lite with a digital menu, or go live with ordering straight away. Test mode — no card needed, switch any time from Billing."
+            >
+              <PlanPicker value={answers.plan} onChange={choosePlan} />
+            </Step>
+          )}
+
+          {stepId === "payments" && (
+            <Step
+              title="How will you take payments?"
+              subtitle="Connect the Square account you already use, or run on Tillz's own payment flow. You can change this later in Settings → Integrations."
+            >
+              <PaymentsStep
+                answers={answers}
+                update={update}
+                square={square}
+                onSquareChange={setSquare}
+                squareResult={squareResult}
+                returnTo={returnTo}
+                onBeforeRedirect={async () => {
+                  // Square's consent screen leaves the wizard; the draft is
+                  // how we come back to exactly this step with everything
+                  // intact.
+                  await saveOnboardingDraft({
+                    step: clampedStep,
+                    answers: { ...answers, paymentPath: "square" },
+                  });
+                }}
               />
             </Step>
           )}
@@ -383,21 +491,26 @@ export function OnboardingWizard({
                     />
                   </div>
 
-                  <p className="text-sm font-medium mb-2">Kitchen routing</p>
-                  <div className="space-y-2">
-                    <ChoiceWide
-                      active={!answers.menuStations}
-                      onClick={() => update({ menuStations: false })}
-                      title="One kitchen"
-                      desc="Every ticket goes to the same board."
-                    />
-                    <ChoiceWide
-                      active={answers.menuStations}
-                      onClick={() => update({ menuStations: true })}
-                      title="Kitchen + bar + coffee"
-                      desc="Route tickets to the right station automatically."
-                    />
-                  </div>
+                  {/* Lite has no kitchen screen — nothing to route to. */}
+                  {ordering && (
+                    <>
+                      <p className="text-sm font-medium mb-2">Kitchen routing</p>
+                      <div className="space-y-2">
+                        <ChoiceWide
+                          active={!answers.menuStations}
+                          onClick={() => update({ menuStations: false })}
+                          title="One kitchen"
+                          desc="Every ticket goes to the same board."
+                        />
+                        <ChoiceWide
+                          active={answers.menuStations}
+                          onClick={() => update({ menuStations: true })}
+                          title="Kitchen + bar + coffee"
+                          desc="Route tickets to the right station automatically."
+                        />
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </Step>

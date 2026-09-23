@@ -86,3 +86,10 @@ revoke all on "ModifierOptionSquareMap" from anon, authenticated;
 -- Prisma — same blanket policy as every other table here.
 alter table "ProcessedSquareWebhook" enable row level security;
 revoke all on "ProcessedSquareWebhook" from anon, authenticated;
+
+-- Added with the onboarding overhaul: PendingSquareConnection holds a
+-- venue's encrypted Square OAuth tokens between the wizard's Payments step
+-- and "Create my venue" (before the Restaurant row exists). Same rule as
+-- SquareConnection — only ever reached via Prisma as the table owner.
+alter table "PendingSquareConnection" enable row level security;
+revoke all on "PendingSquareConnection" from anon, authenticated;

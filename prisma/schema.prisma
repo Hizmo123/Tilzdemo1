@@ -354,6 +354,30 @@ model ProcessedSquareWebhook {
   receivedAt DateTime @default(now())
 }
 
+// A Square OAuth result captured DURING onboarding, before the Restaurant it
+// belongs to exists (SquareConnection is keyed by restaurantId, and the
+// wizard only creates the restaurant at its very last step). Keyed by the
+// signed-in user instead; completeOnboarding / completeOnboardingForExistingOrg
+// move it onto the new restaurant as a real SquareConnection and delete this
+// row in the same transaction. Same encrypted token columns and the same
+// never-to-the-client rule as SquareConnection. Short-lived by design — it
+// only exists between the wizard's Payments step and "Create my venue".
+model PendingSquareConnection {
+  userId          String   @id
+  merchantId      String
+  environment     String
+  accessTokenEnc  String
+  refreshTokenEnc String
+  tokenExpiresAt  DateTime
+  merchantName    String?
+  scopes          String[]
+  // Chosen in the wizard's Payments step (or auto-picked when the merchant
+  // has exactly one). Copied onto SquareConnection.locationId on attach.
+  locationId      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
 // Square catalog <-> Tillz menu id mappings (Phase 2 — import/reconcile only,
 // no order-push yet). Each is unique on the Tillz id so re-importing updates
 // the existing row instead of creating a duplicate mapping.
