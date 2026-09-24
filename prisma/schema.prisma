@@ -187,6 +187,19 @@ model Restaurant {
   tipPresets     Int[]           @default([5, 10, 15])
   customerOrdering Boolean       @default(true)
   customerPayment  Boolean       @default(true)
+  // Meaningful ONLY while customerOrdering and customerPayment are both
+  // false ("fully staffed" — staff take orders AND handle payment, so
+  // customers never scan a table QR for either). true means this venue uses
+  // ONE shared venue-wide QR (the same /m/[slug] mechanism Lite uses)
+  // instead of per-table QR codes — set automatically when a fresh
+  // onboarding chooses fully-staffed mode (nothing to lose), or explicitly
+  // by the owner when an EXISTING venue with tables switches into
+  // fully-staffed mode via Settings -> Service (see
+  // dashboard/settings/venue-setup/actions.ts#updateVenueSetup — that flow
+  // never silently deletes Table/QrToken rows either way). Irrelevant, and
+  // never consulted, once the venue leaves fully-staffed mode — per-table
+  // creation is simply available again whenever isFullyStaffedMode is false.
+  useSharedQr      Boolean       @default(false)
   // Orders from customers wait for staff to accept before hitting the kitchen.
   staffApproval    Boolean       @default(false)
   // When customers pay: "after" = running tab, pay when ready (default);

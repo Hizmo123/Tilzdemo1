@@ -20,6 +20,16 @@ export function planAllowsOrdering(tier: PlanTier): boolean {
   return entitlementsForTier(tier).ordering;
 }
 
+// "Fully staffed": staff take orders AND handle payment entirely — the
+// customer never scans a table QR for either, whether this combination was
+// picked directly (the "Digital menu" preset) or arrived at via Custom.
+// Used everywhere the wizard/settings decide whether per-table QR codes
+// make sense for THIS venue's own workflow, distinct from planAllowsOrdering
+// (which only answers whether the PLAN permits ordering at all).
+export function isFullyStaffedMode(customerOrdering: boolean, customerPayment: boolean): boolean {
+  return !customerOrdering && !customerPayment;
+}
+
 // Connect's whole model IS a Square connection — there's no Tillz-payments
 // fallback on this tier. Drives: the wizard forcing customerOrdering/
 // customerPayment on and always showing the Payments step, that step

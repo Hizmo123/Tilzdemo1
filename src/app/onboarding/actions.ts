@@ -36,6 +36,7 @@ import {
   SPLIT_METHOD_VALUES,
   PLAN_TIER_VALUES,
   EXPERIENCE_MODES,
+  isFullyStaffedMode,
   type OnboardingAnswers,
   type OnboardingDraftPayload,
 } from "@/lib/onboarding-options";
@@ -310,6 +311,12 @@ async function createRestaurantAndSeedFromAnswers(
   kdsStationLimit: number | null,
 ) {
   const stations = stationsFor(a, kdsStationLimit);
+  // Fully staffed (staff take orders AND handle payment) means no customer
+  // ever scans a table QR — re-derived from the actual answers here, not
+  // from which wizard steps were shown, so a stale tableCount left over
+  // from a draft (or a `fixedPlan` skip of the plan step) can't cause N
+  // per-table codes to be minted for a venue that will never use them.
+  const fullyStaffed = isFullyStaffedMode(a.customerOrdering, a.customerPayment);
   const restaurant = await tx.restaurant.create({
     data: {
       organizationId,
@@ -343,6 +350,10 @@ async function createRestaurantAndSeedFromAnswers(
       hours: hours === null ? Prisma.JsonNull : (hours as Prisma.InputJsonValue),
       onboardingCompletedAt: new Date(),
       locations: { create: { name: "Main" } },
+      // Nothing to lose on a fresh venue — no confirmation needed the way
+      // Settings -> Service requires for an EXISTING venue with tables
+      // already printed (see updateVenueSetup).
+      useSharedQr: fullyStaffed,
     },
     include: { locations: true },
   });
@@ -350,9 +361,11 @@ async function createRestaurantAndSeedFromAnswers(
 
   // Tables 1..N with QR tokens, in two round trips instead of N. Clamped to
   // this org's actual table limit so the account can't silently end up with
-  // more tables than its plan includes.
+  // more tables than its plan includes. Zero when fully staffed — this
+  // venue gets ONE shared QR (Restaurant.useSharedQr above), not per-table
+  // codes nobody will scan.
   const cappedTableLimit = tableLimit ?? a.tableCount;
-  const tableCount = Math.min(a.tableCount, cappedTableLimit);
+  const tableCount = fullyStaffed ? 0 : Math.min(a.tableCount, cappedTableLimit);
   if (tableCount > 0) {
     const created = await tx.table.createManyAndReturn({
       data: Array.from({ length: tableCount }, (_, i) => ({

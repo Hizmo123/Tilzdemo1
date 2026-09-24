@@ -7,6 +7,7 @@ import { startOfTodayInTz } from "@/lib/time";
 import { countOpenRequests } from "@/lib/requests";
 import { getSetupChecklist } from "@/lib/setup-checklist";
 import { getEntitlements, isOrgSubscribed, getPublishReadiness } from "@/lib/entitlements";
+import { isFullyStaffedMode } from "@/lib/onboarding-options";
 import { PublicMenuLink } from "@/components/dashboard/public-menu-link";
 import { PublishControl } from "@/components/dashboard/publish-control";
 import { CreateRestaurantForm } from "./create-restaurant-form";
@@ -170,6 +171,10 @@ export default async function DashboardHome() {
     getPublishReadiness(restaurant.organizationId),
   ]);
   const squareDisconnected = !readiness.ready && readiness.reason === "square_disconnected";
+  // See dashboard/tables/page.tsx's matching comment — the same "lead with
+  // the shared QR, don't hide any existing per-table codes" logic.
+  const showSharedQr =
+    isFullyStaffedMode(restaurant.customerOrdering, restaurant.customerPayment) && restaurant.useSharedQr;
 
   return (
     <div className="space-y-8">
@@ -230,61 +235,65 @@ export default async function DashboardHome() {
 
       {tables.length === 0 && <LoadSampleButton />}
 
-      <div>
-        <h2 className="font-display text-lg font-semibold tracking-tight mb-3">
-          Live tables
-        </h2>
-        {tables.length === 0 ? (
-          <div className="rounded-[var(--radius-card)] border border-dashed border-line bg-surface p-8 text-center">
-            <p className="text-muted">
-              No tables yet.{" "}
-              <Link href="/dashboard/tables" className="text-pine hover:underline">
-                Add your first table
-              </Link>
-              .
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {tables.map((t) => {
-              const bill = t.bills[0];
-              const openAmount = bill
-                ? bill.totalCents - bill.amountPaidCents
-                : 0;
-              return (
-                <Link
-                  key={t.id}
-                  href={`/dashboard/tables/${t.id}`}
-                  prefetch={false}
-                  className="rounded-[var(--radius-card)] border border-line bg-surface p-4 hover:border-pine/40 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-display text-lg font-semibold tracking-tight">
-                      {t.label}
-                    </span>
-                    {!t.active ? (
-                      <span className="text-[10px] uppercase tracking-wide text-muted">
-                        Off
-                      </span>
-                    ) : bill ? (
-                      <span className="text-[10px] uppercase tracking-wide text-amber-700">
-                        Open
-                      </span>
-                    ) : (
-                      <span className="text-[10px] uppercase tracking-wide text-muted/60">
-                        Empty
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted mt-2 tabular-nums">
-                    {bill ? formatCents(openAmount, currency) : "—"}
-                  </p>
+      {showSharedQr ? (
+        <PublicMenuLink slug={restaurant.slug} />
+      ) : (
+        <div>
+          <h2 className="font-display text-lg font-semibold tracking-tight mb-3">
+            Live tables
+          </h2>
+          {tables.length === 0 ? (
+            <div className="rounded-[var(--radius-card)] border border-dashed border-line bg-surface p-8 text-center">
+              <p className="text-muted">
+                No tables yet.{" "}
+                <Link href="/dashboard/tables" className="text-pine hover:underline">
+                  Add your first table
                 </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                .
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {tables.map((t) => {
+                const bill = t.bills[0];
+                const openAmount = bill
+                  ? bill.totalCents - bill.amountPaidCents
+                  : 0;
+                return (
+                  <Link
+                    key={t.id}
+                    href={`/dashboard/tables/${t.id}`}
+                    prefetch={false}
+                    className="rounded-[var(--radius-card)] border border-line bg-surface p-4 hover:border-pine/40 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-display text-lg font-semibold tracking-tight">
+                        {t.label}
+                      </span>
+                      {!t.active ? (
+                        <span className="text-[10px] uppercase tracking-wide text-muted">
+                          Off
+                        </span>
+                      ) : bill ? (
+                        <span className="text-[10px] uppercase tracking-wide text-amber-700">
+                          Open
+                        </span>
+                      ) : (
+                        <span className="text-[10px] uppercase tracking-wide text-muted/60">
+                          Empty
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted mt-2 tabular-nums">
+                      {bill ? formatCents(openAmount, currency) : "—"}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
   defaultOnboardingAnswers,
   planAllowsOrdering,
   planRequiresSquare,
+  isFullyStaffedMode,
   EXPERIENCE_MODES,
   type OnboardingAnswers,
   type OnboardingDraftPayload,
@@ -104,7 +105,13 @@ function activeSteps(a: OnboardingAnswers, fixedPlan?: PlanTier): StepId[] {
   if (ordering) {
     steps.push("experience");
     if (a.customerPayment || squareMandatory) steps.push("payments");
-    steps.push("tables");
+    // Fully-staffed venues (staff take orders AND handle payment) never have
+    // a customer scan a table QR — asking for a table count and generating
+    // N per-table codes nobody will scan is exactly the bug this skips.
+    // createRestaurantAndSeedFromAnswers (actions.ts) independently derives
+    // the same fully-staffed check from the actual answers at finish time,
+    // so this stays correct even if a stale tableCount lingers in the draft.
+    if (!isFullyStaffedMode(a.customerOrdering, a.customerPayment)) steps.push("tables");
   }
   steps.push("hours", "menu");
   if (ordering && a.customerPayment) steps.push("split", "tipping");

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { isFullyStaffedMode } from "@/lib/onboarding-options";
 
 export type ChecklistItem = {
   id: string;
@@ -16,6 +17,9 @@ export async function getSetupChecklist(restaurant: {
   slug: string;
   experienceMode: string | null;
   abnVerifiedAt: Date | null;
+  customerOrdering: boolean;
+  customerPayment: boolean;
+  useSharedQr: boolean;
 }): Promise<ChecklistItem[]> {
   const [tableCount, menuItemCount, staffAccountCount, orderCount] = await Promise.all([
     prisma.table.count({ where: { location: { restaurantId: restaurant.id } } }),
@@ -26,6 +30,14 @@ export async function getSetupChecklist(restaurant: {
 
   const mode = restaurant.experienceMode;
   const paymentFocused = mode === "payment_only";
+  // Staff take orders AND handle payment — this venue never has a customer
+  // scan a table QR (isFullyStaffedMode), whether the preset was "Digital
+  // menu" or an equivalent Custom combination. useSharedQr is the owner's
+  // choice (see dashboard/settings/venue-setup/actions.ts) to actually lead
+  // with the one shared QR rather than whatever per-table codes it still
+  // has from before.
+  const fullyStaffed = isFullyStaffedMode(restaurant.customerOrdering, restaurant.customerPayment);
+  const usesSharedQr = fullyStaffed && restaurant.useSharedQr;
 
   const menuItem: ChecklistItem = {
     id: "menu",
@@ -33,17 +45,22 @@ export async function getSetupChecklist(restaurant: {
     href: "/dashboard/menu",
     done: menuItemCount > 0,
   };
-  const tablesItem: ChecklistItem = {
-    id: "tables",
-    label:
-      tableCount > 0
-        ? `${tableCount} table${tableCount === 1 ? "" : "s"} and QR codes generated`
-        : "Create your tables",
-    href: "/dashboard/tables",
-    done: tableCount > 0,
-  };
+  // Neither makes sense once this venue is on the shared QR — there's
+  // nothing per-table to create or print, and pointing at Tables here would
+  // be exactly the stale guidance this mode exists to avoid.
+  const tablesItem: ChecklistItem | null = usesSharedQr
+    ? null
+    : {
+        id: "tables",
+        label:
+          tableCount > 0
+            ? `${tableCount} table${tableCount === 1 ? "" : "s"} and QR codes generated`
+            : "Create your tables",
+        href: "/dashboard/tables",
+        done: tableCount > 0,
+      };
   const printItem: ChecklistItem | null =
-    tableCount > 0
+    !usesSharedQr && tableCount > 0
       ? { id: "print", label: "Print your table QR cards", href: "/dashboard/tables", done: false }
       : null;
   const staffItem: ChecklistItem = {
@@ -59,12 +76,15 @@ export async function getSetupChecklist(restaurant: {
     done: !!restaurant.abnVerifiedAt,
   };
 
-  const testItem: ChecklistItem =
-    mode === "digital_menu"
-      ? { id: "test", label: "Scan a table QR to preview your menu", href: "/dashboard/tables", done: orderCount > 0 }
-      : mode === "payment_only"
-        ? { id: "test", label: "Test paying a bill from your phone", href: "/dashboard/tables", done: orderCount > 0 }
-        : { id: "test", label: "Place a test order from your phone", href: "/dashboard/tables", done: orderCount > 0 };
+  const testHref = usesSharedQr ? "/dashboard" : "/dashboard/tables";
+  const testItem: ChecklistItem = fullyStaffed
+    ? {
+        id: "test",
+        label: paymentFocused ? "Test paying a bill from your phone" : "Scan your QR to preview your menu",
+        href: testHref,
+        done: orderCount > 0,
+      }
+    : { id: "test", label: "Place a test order from your phone", href: testHref, done: orderCount > 0 };
 
   const items = paymentFocused
     ? [tablesItem, printItem, menuItem, staffItem, abnItem, testItem]

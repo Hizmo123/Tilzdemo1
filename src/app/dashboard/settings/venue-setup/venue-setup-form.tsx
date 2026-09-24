@@ -36,8 +36,12 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set only when the server holds the save pending a choice between the
+  // venue's existing per-table QR codes and the one shared QR — see
+  // updateVenueSetup's needsTableQrChoice.
+  const [tableQrPrompt, setTableQrPrompt] = useState<number | null>(null);
 
-  function save() {
+  function save(tableQrChoice?: "shared" | "keep") {
     setError(null);
     setMsg(null);
     start(async () => {
@@ -46,7 +50,13 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
         experienceMode,
         ...settings,
         splitMethods,
+        tableQrChoice,
       });
+      if ("needsTableQrChoice" in res) {
+        setTableQrPrompt(res.tableCount);
+        return;
+      }
+      setTableQrPrompt(null);
       if (res.error) setError(res.error);
       else {
         setMsg("Saved.");
@@ -85,9 +95,38 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
         </section>
       )}
 
+      {tableQrPrompt !== null && (
+        <section className="rounded-[var(--radius-card)] border border-pine/30 bg-pine-soft/40 p-6 space-y-3">
+          <h2 className="font-display text-lg font-semibold tracking-tight">
+            You have {tableQrPrompt} existing table QR code{tableQrPrompt === 1 ? "" : "s"}
+          </h2>
+          <p className="text-sm text-muted">
+            This mode doesn&apos;t need a QR code per table — customers never scan one for
+            ordering or payment. Nothing is deleted either way; this only changes what your
+            dashboard leads with.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => save("shared")}
+              disabled={pending}
+              className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+            >
+              Switch to one shared QR
+            </button>
+            <button
+              onClick={() => save("keep")}
+              disabled={pending}
+              className="rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-medium hover:border-ink/30 disabled:opacity-60"
+            >
+              Keep my existing per-table codes
+            </button>
+          </div>
+        </section>
+      )}
+
       <div className="sticky bottom-4 flex items-center gap-3">
         <button
-          onClick={save}
+          onClick={() => save()}
           disabled={pending}
           className="rounded-xl bg-pine text-[color:var(--on-accent,#fff)] px-6 py-3 font-medium hover:bg-pine-deep disabled:opacity-60 shadow-sm"
         >

@@ -12,6 +12,7 @@ import { generateToken } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
 import { canCreateTable, getEntitlements } from "@/lib/entitlements";
 import { activateStandBySerial } from "@/lib/stands";
+import { isFullyStaffedMode } from "@/lib/onboarding-options";
 
 export type TableActionState = { error?: string };
 
@@ -39,6 +40,18 @@ export async function createTable(
   if (authz.membership) {
     const check = await canCreateTable(authz.membership.organizationId);
     if (!check.allowed) return { error: check.reason };
+  }
+
+  // Fully staffed (staff take orders AND handle payment): a customer never
+  // scans a table QR, so minting a new one is never right regardless of how
+  // this Server Action is reached (the Tables page's own "Add a table" form
+  // is already hidden in this mode — see dashboard/tables/page.tsx). This
+  // never touches EXISTING tables, only blocks creating new ones.
+  const restaurant = authz.membership?.organization.restaurants[0];
+  if (restaurant && isFullyStaffedMode(restaurant.customerOrdering, restaurant.customerPayment)) {
+    return {
+      error: "This venue's service mode doesn't use per-table QR codes — see Settings → Service.",
+    };
   }
 
   const { location } = await requireActiveLocation();
