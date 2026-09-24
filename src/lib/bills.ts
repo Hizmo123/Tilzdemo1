@@ -2474,6 +2474,59 @@ export async function getOrderHistory(
   }));
 }
 
+export type BillHistoryEntry = {
+  id: string;
+  tableId: string | null;
+  tableLabel: string;
+  totalCents: number;
+  paidAt: Date | null;
+  status: string;
+};
+
+// Paid/closed bills for the dashboard Bills page's history section — General
+// (whole floor) and Per-table (opts.tableId) share this one query, scoped
+// directly by Bill.restaurantId rather than through the (nullable, counter-
+// bill-breaking) table relation. `range` is expected to already be
+// entitlement-clamped by the caller, same convention as getOrderHistory
+// above. Returns a page (opts.limit/offset) plus the total match count so
+// the caller can paginate.
+export async function getPaidBillsHistory(
+  restaurantId: string,
+  range: { from: Date; to: Date },
+  opts: { tableId?: string; limit?: number; offset?: number } = {},
+): Promise<{ bills: BillHistoryEntry[]; total: number }> {
+  const { tableId, limit = 20, offset = 0 } = opts;
+  const where: Prisma.BillWhereInput = {
+    restaurantId,
+    status: "PAID",
+    paidAt: { gte: range.from, lt: range.to },
+    ...(tableId ? { tableId } : {}),
+  };
+
+  const [bills, total] = await Promise.all([
+    prisma.bill.findMany({
+      where,
+      orderBy: { paidAt: "desc" },
+      take: limit,
+      skip: offset,
+      include: { table: true },
+    }),
+    prisma.bill.count({ where }),
+  ]);
+
+  return {
+    bills: bills.map((b) => ({
+      id: b.id,
+      tableId: b.tableId,
+      tableLabel: b.table ? `Table ${b.table.label}` : "Counter",
+      totalCents: b.totalCents,
+      paidAt: b.paidAt,
+      status: b.status,
+    })),
+    total,
+  };
+}
+
 // ---- Bump / recall ---------------------------------------------------------
 
 // Orders served in the last `minutes`, so the kitchen can recall one bumped by
