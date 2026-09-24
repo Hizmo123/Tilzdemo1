@@ -1,10 +1,10 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { PlanTier } from "@prisma/client";
-import { subscribe, cancelSubscription } from "./actions";
+import { subscribe, cancelSubscription, setConnectPlusEnabled, setConnectBrandingHidden } from "./actions";
 import { PLANS } from "@/lib/plans";
 import { formatCents } from "@/lib/money";
 
@@ -12,6 +12,8 @@ export function Billing({
   currentPlan,
   planStatus,
   squareConnected,
+  connectPlusEnabled,
+  connectBrandingHidden,
 }: {
   currentPlan: PlanTier;
   planStatus: string;
@@ -21,6 +23,10 @@ export function Billing({
   // Settings → Integrations first (see api/square/callback/route.ts's
   // connectPlanIntent, which completes the switch once that succeeds).
   squareConnected: boolean;
+  // The org's two Connect-only mock addon flags — only meaningful while
+  // currentPlan is CONNECT (see lib/entitlements-core.ts).
+  connectPlusEnabled: boolean;
+  connectBrandingHidden: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -151,6 +157,102 @@ export function Billing({
           );
         })}
       </div>
+
+      {currentPlan === "CONNECT" && active && (
+        <ConnectAddons connectPlusEnabled={connectPlusEnabled} connectBrandingHidden={connectBrandingHidden} />
+      )}
+    </div>
+  );
+}
+
+// Beneath the Connect card, not on it — these are addons on the tier, not
+// selectable plans of their own, same as how Pro's extra-venue cost is
+// described as text on Pro's own card rather than a separate pricing card.
+function ConnectAddons({
+  connectPlusEnabled,
+  connectBrandingHidden,
+}: {
+  connectPlusEnabled: boolean;
+  connectBrandingHidden: boolean;
+}) {
+  const router = useRouter();
+
+  return (
+    <div className="rounded-[var(--radius-card)] border border-pine/30 bg-pine-tint p-5 space-y-1">
+      <h3 className="font-display text-lg font-semibold tracking-tight">Connect addons</h3>
+      <p className="text-sm text-muted mb-3">
+        Mock toggles for now — no charge is made either way.
+      </p>
+      <AddonToggle
+        label="Connect Plus"
+        description="Full cross-venue dashboard — trends, comparisons and combined exports across every venue."
+        priceLabel="$19/mo"
+        checked={connectPlusEnabled}
+        onChange={(next) =>
+          setConnectPlusEnabled(next).then(() => router.refresh())
+        }
+      />
+      <div className="border-t border-pine/20" />
+      <AddonToggle
+        label='Remove "Powered by Tillz"'
+        description="Hides the Tillz mark from your customer ordering page."
+        priceLabel="$9/mo"
+        checked={connectBrandingHidden}
+        onChange={(next) =>
+          setConnectBrandingHidden(next).then(() => router.refresh())
+        }
+      />
+    </div>
+  );
+}
+
+function AddonToggle({
+  label,
+  description,
+  priceLabel,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  priceLabel: string;
+  checked: boolean;
+  onChange: (next: boolean) => Promise<void>;
+}) {
+  const [pending, start] = useTransition();
+  const [value, setValue] = useState(checked);
+
+  function toggle() {
+    const next = !value;
+    setValue(next);
+    start(() => onChange(next));
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">
+          {label} <span className="text-muted font-normal">— {priceLabel}</span>
+        </p>
+        <p className="text-xs text-muted mt-0.5">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
+        disabled={pending}
+        onClick={toggle}
+        className={`relative shrink-0 w-11 h-6 rounded-pill transition-colors duration-[var(--dur-fast)] focus:outline-none focus:ring-[3px] focus:ring-pine/20 disabled:opacity-50 ${
+          value ? "bg-pine" : "bg-line-strong"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-pill bg-surface shadow-rest transition-transform duration-[var(--dur-fast)] ${
+            value ? "translate-x-5" : ""
+          }`}
+        />
+      </button>
     </div>
   );
 }

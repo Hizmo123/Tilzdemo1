@@ -60,7 +60,13 @@ export default async function BillingPage() {
         </p>
       </div>
 
-      <Billing currentPlan={org.plan} planStatus={org.planStatus} squareConnected={squareConnected} />
+      <Billing
+        currentPlan={org.plan}
+        planStatus={org.planStatus}
+        squareConnected={squareConnected}
+        connectPlusEnabled={org.connectPlusEnabled}
+        connectBrandingHidden={org.connectBrandingHidden}
+      />
     </div>
   );
 }

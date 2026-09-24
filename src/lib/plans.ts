@@ -82,6 +82,8 @@ export const PLANS: PlanDef[] = [
       "Orders appear on your Square kitchen/POS",
       "No monthly fee — pay only as you sell",
       "\"Powered by Tillz\" shown on your ordering page",
+      "Addon: Connect Plus — full cross-venue dashboard",
+      "Addon: remove \"Powered by Tillz\" branding",
     ],
   },
 ];
