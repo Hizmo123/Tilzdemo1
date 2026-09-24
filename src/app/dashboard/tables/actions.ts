@@ -149,6 +149,54 @@ export async function activateStandForTable(
   return {};
 }
 
+// Resolves whatever the camera decoded (stand-scanner.tsx) to a serial the
+// EXISTING activateStandForTable action above can use unchanged — scanning
+// only changes how the serial gets into that form's input.
+//
+// Today's actual printed stand QR encodes /s/<qrToken> (see lib/qr.ts's
+// standQrPng and lib/urls.ts#standUrl) — the CUSTOMER-facing redirect code,
+// not the human-readable serial ("TZ-000123") staff type in manually. There
+// is no separate machine-readable encoding of the serial on a stand today;
+// that would be a print-spec change on the hardware side, not something
+// fixable here (see the task report). So this tries two things, in order:
+//   1. The scanned text IS already a bare serial (matches TZ-###### — covers
+//      a future print spec that encodes it directly, or someone scanning a
+//      printed/typed serial some other way).
+//   2. The scanned text is a stand URL (today's real case) — extract its
+//      qrToken and look up that SAME stand's serial, scoped to this org, so
+//      scan-to-activate genuinely works against stands shipped today.
+// Anything else is an unrecognised code, reported as an error so the caller
+// can retry or fall back to typing.
+const SERIAL_FORMAT = /^TZ-\d+$/i;
+const QR_TOKEN_IN_PATH = /\/s\/([A-Za-z0-9]+)/;
+
+export async function resolveScannedStandCode(
+  rawScannedText: string,
+): Promise<{ serial: string } | { error: string }> {
+  const authz = await getAuthz();
+  if (!authz.can("tables:manage")) return { error: "Not permitted." };
+  if (!authz.membership) return { error: "No organization found." };
+
+  const trimmed = rawScannedText.trim();
+  if (!trimmed) return { error: "That code didn't decode to anything." };
+
+  if (SERIAL_FORMAT.test(trimmed)) {
+    return { serial: trimmed.toUpperCase() };
+  }
+
+  const match = trimmed.match(QR_TOKEN_IN_PATH);
+  const qrToken = match?.[1];
+  if (qrToken) {
+    const stand = await prisma.tillzStand.findFirst({
+      where: { qrToken, organizationId: authz.membership.organizationId },
+      select: { serial: true },
+    });
+    if (stand) return { serial: stand.serial };
+  }
+
+  return { error: "That doesn't look like a Tillz stand code. Try again or type the serial." };
+}
+
 export async function regenerateQr(tableId: string): Promise<TableActionState> {
   const authz = await getAuthz();
   if (!authz.can("tables:manage"))

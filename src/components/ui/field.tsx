@@ -15,14 +15,19 @@ export function Label({
 // Text input on the Phase 0 tokens: 44px tall (tap target), radius-md like
 // the md Button so a field and the button under it line up, resting shadow,
 // accent focus ring. `invalid` (or aria-invalid) swaps the ring to danger.
+// `ref` forwards straight to the DOM node — React 19's ref-as-prop, no
+// forwardRef wrapper needed — for callers that need to read/set the
+// uncontrolled input imperatively (e.g. filling in a scanned value).
 export function Input({
   className = "",
   invalid,
+  ref,
   ...props
-}: React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }) {
+}: React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean; ref?: React.Ref<HTMLInputElement> }) {
   const isInvalid = invalid || props["aria-invalid"] === true || props["aria-invalid"] === "true";
   return (
     <input
+      ref={ref}
       aria-invalid={isInvalid || undefined}
       className={`w-full h-11 rounded-[var(--radius-md)] bg-surface px-3.5 text-ink placeholder:text-muted/70 border shadow-rest transition-[border-color,box-shadow] duration-[var(--dur-fast)] focus:outline-none focus:ring-[3px] ${
         isInvalid
