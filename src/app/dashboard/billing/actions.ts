@@ -22,9 +22,11 @@ export async function subscribe(tier: PlanTier): Promise<BillingState> {
   const org = authz.membership?.organization;
   if (!org) return { error: "Create your restaurant first." };
 
+  const data = mockSubscriptionData(tier, org.hasUsedTrial);
+
   await prisma.organization.update({
     where: { id: org.id },
-    data: mockSubscriptionData(tier),
+    data,
   });
 
   await audit({
@@ -32,7 +34,7 @@ export async function subscribe(tier: PlanTier): Promise<BillingState> {
     actorUserId: authz.user.id,
     actorEmail: authz.user.email ?? "",
     action: "billing.subscribed",
-    metadata: { plan: tier },
+    metadata: { plan: tier, startedTrial: data.trialEndsAt instanceof Date },
   });
 
   revalidatePath("/dashboard/billing");
@@ -111,10 +113,14 @@ export async function cancelSubscription(): Promise<BillingState> {
 
   // Lite is the free tier, not a "no subscription" state — returning to it
   // stays planStatus "active" so isOrgSubscribed/publish gating keeps
-  // treating this org normally rather than as lapsed/canceled.
+  // treating this org normally rather than as lapsed/canceled. trialEndsAt
+  // clears (Lite has no trial concept to show); hasUsedTrial is
+  // DELIBERATELY left untouched — that's the whole point of tracking it
+  // separately, so cancelling and re-subscribing later can't grant a
+  // second trial.
   await prisma.organization.update({
     where: { id: org.id },
-    data: { plan: "LITE", planStatus: "active", cardLast4: null },
+    data: { plan: "LITE", planStatus: "active", cardLast4: null, trialEndsAt: null },
   });
 
   await audit({

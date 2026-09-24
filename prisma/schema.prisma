@@ -114,6 +114,16 @@ model Organization {
   // dashboard/billing/actions.ts for the (mock, no-charge) toggles.
   connectPlusEnabled    Boolean @default(false)
   connectBrandingHidden Boolean @default(false)
+  // A real (if still mock-billing) free trial for a subscription tier
+  // (Basic/Growth/Pro) — null means no active trial. Lite has no
+  // subscription to trial (it's free forever) and Connect has no
+  // subscription either (a flat per-order fee, not a monthly charge), so
+  // neither ever sets this — see lib/plan-subscription.ts's
+  // TRIALABLE_TIERS. hasUsedTrial below is the ONE-TIME gate: once true, a
+  // later switch to any trialable tier (even after cancelling back to Lite
+  // first) never grants a second trial.
+  trialEndsAt   DateTime?
+  hasUsedTrial  Boolean   @default(false)
   // A self-service "please delete my account" request, not an instant purge.
   // Paid bills are tax invoices — Australian tax law requires keeping those
   // for 5 years, so financial records survive this request regardless; the
@@ -200,6 +210,14 @@ model Restaurant {
   // never consulted, once the venue leaves fully-staffed mode — per-table
   // creation is simply available again whenever isFullyStaffedMode is false.
   useSharedQr      Boolean       @default(false)
+  // The onboarding wizard's "How will you get your table QR stands?" step —
+  // "diy" (print their own, using the existing Tables page SVG/PNG
+  // downloads) or "ordered_from_tillz" (the real dashboard/stands ordering
+  // flow). Purely advisory: only read by getSetupChecklist to show the right
+  // reminder item ("Print your QR cards" vs "Order your stands"). null means
+  // unanswered (a draft from before this step existed, or fully-staffed/Lite
+  // venues that skip it) — never gates anything.
+  qrStandSourcing  String?
   // Orders from customers wait for staff to accept before hitting the kitchen.
   staffApproval    Boolean       @default(false)
   // When customers pay: "after" = running tab, pay when ready (default);

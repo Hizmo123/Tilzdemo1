@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "../(auth)/actions";
 import { NavSections, type NavSection } from "./nav-sections";
+import type { TrialStatus } from "@/lib/plan-subscription";
 
 // Mobile top bar + slide-over drawer. The desktop sidebar is hidden below `md`,
 // so without this a phone has no way to reach Tables/Orders/Team/etc. The nav
@@ -15,11 +16,13 @@ export function MobileNav({
   restaurantName,
   userEmail,
   showVenueSwitcher = false,
+  trialStatus,
 }: {
   sections: NavSection[];
   restaurantName: string;
   userEmail: string;
   showVenueSwitcher?: boolean;
+  trialStatus?: TrialStatus;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -89,6 +92,11 @@ export function MobileNav({
                 <p className="text-xs text-muted mt-0.5 truncate">
                   {restaurantName}
                 </p>
+                {trialStatus?.inTrial && (
+                  <span className="mt-1 inline-flex items-center rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
+                    Trial — {trialStatus.daysRemaining} day{trialStatus.daysRemaining === 1 ? "" : "s"} left
+                  </span>
+                )}
                 {showVenueSwitcher && (
                   <Link
                     href="/venues"

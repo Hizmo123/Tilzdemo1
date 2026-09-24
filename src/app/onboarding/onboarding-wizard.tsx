@@ -63,6 +63,7 @@ type StepId =
   | "experience"
   | "payments"
   | "tables"
+  | "stands"
   | "hours"
   | "menu"
   | "split"
@@ -78,6 +79,7 @@ const STEP_TITLES: Record<StepId, string> = {
   experience: "Setup",
   payments: "Payments",
   tables: "Tables",
+  stands: "QR stands",
   hours: "Hours",
   menu: "Menu",
   split: "Splitting",
@@ -111,7 +113,7 @@ function activeSteps(a: OnboardingAnswers, fixedPlan?: PlanTier): StepId[] {
     // createRestaurantAndSeedFromAnswers (actions.ts) independently derives
     // the same fully-staffed check from the actual answers at finish time,
     // so this stays correct even if a stale tableCount lingers in the draft.
-    if (!isFullyStaffedMode(a.customerOrdering, a.customerPayment)) steps.push("tables");
+    if (!isFullyStaffedMode(a.customerOrdering, a.customerPayment)) steps.push("tables", "stands");
   }
   steps.push("hours", "menu");
   if (ordering && a.customerPayment) steps.push("split", "tipping");
@@ -472,6 +474,44 @@ export function OnboardingWizard({
                     ? `We'll create ${answers.tableCount} table${answers.tableCount === 1 ? "" : "s"} and their QR codes.`
                     : "No tables yet — you can add them anytime from Tables."}
                 </p>
+              </StepFrame>
+            )}
+
+            {stepId === "stands" && (
+              <StepFrame
+                title="How will you get your table QR stands?"
+                subtitle="Each table needs something on it customers can scan — a printed card, a stand-mounted code, or both."
+              >
+                <div role="radiogroup" className="space-y-2 mb-4">
+                  <ChoiceCard
+                    selected={answers.qrStandSourcing === "diy"}
+                    onClick={() => update({ qrStandSourcing: "diy" })}
+                    title="I'll print my own"
+                    desc="Download each table's QR code and print it yourself."
+                  />
+                  <ChoiceCard
+                    selected={answers.qrStandSourcing === "ordered_from_tillz"}
+                    onClick={() => update({ qrStandSourcing: "ordered_from_tillz" })}
+                    title="Order pre-made stands from Tillz"
+                    desc="Ready-made stand-mounted QR codes, shipped to you."
+                  />
+                </div>
+                {answers.qrStandSourcing === "diy" && (
+                  <div className="rounded-[var(--radius-md)] bg-surface-2/60 px-3.5 py-3 text-sm text-ink-soft space-y-1.5">
+                    <p>Once your venue is set up:</p>
+                    <p>1. Go to Tables — each one has a QR code.</p>
+                    <p>2. Use &quot;Download card (SVG)&quot; or &quot;Download PNG&quot; on each table.</p>
+                    <p>3. Print at any print shop or at home, and mount using your own stands or holders.</p>
+                  </div>
+                )}
+                {answers.qrStandSourcing === "ordered_from_tillz" && (
+                  <div className="rounded-[var(--radius-md)] bg-surface-2/60 px-3.5 py-3 text-sm text-ink-soft space-y-1.5">
+                    <p>Once your venue is set up:</p>
+                    <p>1. Go to Menu &amp; Hardware → Order Tillz stands.</p>
+                    <p>2. Pick a product and how many tables need one.</p>
+                    <p>3. We&apos;ll ship them to you — no design or printing needed.</p>
+                  </div>
+                )}
               </StepFrame>
             )}
 

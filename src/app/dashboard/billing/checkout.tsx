@@ -7,6 +7,7 @@ import type { PlanTier } from "@prisma/client";
 import { subscribe, cancelSubscription, setConnectPlusEnabled, setConnectBrandingHidden } from "./actions";
 import { PLANS } from "@/lib/plans";
 import { formatCents } from "@/lib/money";
+import { isTrialableTier, TRIAL_DAYS, type TrialStatus } from "@/lib/plan-subscription";
 
 export function Billing({
   currentPlan,
@@ -14,6 +15,7 @@ export function Billing({
   squareConnected,
   connectPlusEnabled,
   connectBrandingHidden,
+  trialStatus,
 }: {
   currentPlan: PlanTier;
   planStatus: string;
@@ -27,6 +29,7 @@ export function Billing({
   // currentPlan is CONNECT (see lib/entitlements-core.ts).
   connectPlusEnabled: boolean;
   connectBrandingHidden: boolean;
+  trialStatus: TrialStatus;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -47,6 +50,11 @@ export function Billing({
             <span className="text-sm font-normal text-pine-deep"> · active</span>
           )}
         </p>
+        {trialStatus.inTrial && (
+          <span className="mt-2 inline-flex items-center rounded-full bg-pine/10 px-2.5 py-1 text-xs font-medium text-pine">
+            Trial — {trialStatus.daysRemaining} day{trialStatus.daysRemaining === 1 ? "" : "s"} left
+          </span>
+        )}
         {active && currentPlan !== "LITE" && (
           <button
             onClick={() =>
@@ -123,6 +131,11 @@ export function Billing({
               {connect && (
                 <p className="text-xs text-pine-deep font-medium mt-1">
                   + ~2% per order — cancel any time
+                </p>
+              )}
+              {isTrialableTier(p.tier) && (
+                <p className="text-xs text-pine-deep font-medium mt-1">
+                  {TRIAL_DAYS}-day free trial
                 </p>
               )}
               <ul className="mt-5 space-y-2 text-sm text-ink-soft flex-1">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PLANS, planPriceLabel, type PlanDef } from "@/lib/plans";
+import { isTrialableTier, TRIAL_DAYS } from "@/lib/plan-subscription";
 import { LinkButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MarketingNav } from "@/components/marketing/nav";
@@ -201,6 +202,9 @@ function PricingCard({ plan }: { plan: PlanDef }) {
       </p>
       {plan.cadence === "free" && <p className="text-xs text-muted mt-1">No card needed</p>}
       {connect && <p className="text-xs text-pine-deep font-medium mt-1">+ ~2% per order — cancel any time</p>}
+      {isTrialableTier(plan.tier) && (
+        <p className="text-xs text-pine-deep font-medium mt-1">{TRIAL_DAYS}-day free trial</p>
+      )}
       <ul className="mt-6 space-y-2.5 text-sm text-ink-soft flex-1">
         {plan.features.map((f) => (
           <li key={f} className="flex items-start gap-2.5">

@@ -20,6 +20,7 @@ export async function getSetupChecklist(restaurant: {
   customerOrdering: boolean;
   customerPayment: boolean;
   useSharedQr: boolean;
+  qrStandSourcing: string | null;
 }): Promise<ChecklistItem[]> {
   const [tableCount, menuItemCount, staffAccountCount, orderCount] = await Promise.all([
     prisma.table.count({ where: { location: { restaurantId: restaurant.id } } }),
@@ -59,9 +60,17 @@ export async function getSetupChecklist(restaurant: {
         href: "/dashboard/tables",
         done: tableCount > 0,
       };
+  // "Order your stands" only for those who chose the Tillz ordering path in
+  // onboarding (or later chose it — see dashboard/stands); everyone else
+  // (DIY, or unanswered) gets the existing "print your own" reminder, same
+  // as before this field existed.
   const printItem: ChecklistItem | null =
-    !usesSharedQr && tableCount > 0
+    !usesSharedQr && tableCount > 0 && restaurant.qrStandSourcing !== "ordered_from_tillz"
       ? { id: "print", label: "Print your table QR cards", href: "/dashboard/tables", done: false }
+      : null;
+  const orderStandsItem: ChecklistItem | null =
+    !usesSharedQr && tableCount > 0 && restaurant.qrStandSourcing === "ordered_from_tillz"
+      ? { id: "order-stands", label: "Order your stands", href: "/dashboard/stands", done: false }
       : null;
   const staffItem: ChecklistItem = {
     id: "staff",
@@ -87,8 +96,8 @@ export async function getSetupChecklist(restaurant: {
     : { id: "test", label: "Place a test order from your phone", href: testHref, done: orderCount > 0 };
 
   const items = paymentFocused
-    ? [tablesItem, printItem, menuItem, staffItem, abnItem, testItem]
-    : [menuItem, tablesItem, printItem, staffItem, abnItem, testItem];
+    ? [tablesItem, printItem, orderStandsItem, menuItem, staffItem, abnItem, testItem]
+    : [menuItem, tablesItem, printItem, orderStandsItem, staffItem, abnItem, testItem];
 
   return [
     { id: "venue", label: "Venue created", href: null, done: true },

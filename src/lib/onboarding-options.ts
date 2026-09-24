@@ -210,7 +210,13 @@ export type OnboardingAnswers = {
   currency: string;
   timezone: string;
   kitchenChime: boolean;
+  // "How will you get your table QR stands?" — null means unanswered (the
+  // step defaults it before finish, see the wizard). Purely advisory: read
+  // only by getSetupChecklist to show the right reminder item.
+  qrStandSourcing: QrStandSourcing;
 };
+
+export type QrStandSourcing = "diy" | "ordered_from_tillz" | null;
 
 // What actually gets persisted mid-wizard — the answers so far plus which
 // step they were on, so a refresh resumes in the same place, not just with
@@ -257,5 +263,6 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     currency: "AUD",
     timezone: "Australia/Sydney",
     kitchenChime: true,
+    qrStandSourcing: null,
   };
 }

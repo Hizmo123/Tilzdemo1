@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { roleCan, type Permission } from "@/lib/rbac";
 import type { Role } from "@prisma/client";
 import { getEntitlements } from "@/lib/entitlements";
+import { getTrialStatus } from "@/lib/plan-subscription";
 import { prisma } from "@/lib/prisma";
 import { signOut } from "../(auth)/actions";
 import { MobileNav } from "./mobile-nav";
@@ -200,6 +201,12 @@ export default async function DashboardLayout({
   // nothing in this layout blocks rendering `children`. Also drives the nav
   // filtering below (LITE hides everything tied to live service).
   const entitlements = membership ? await getEntitlements(membership.organizationId) : null;
+  // Free-trial badge (see lib/plan-subscription.ts) — pure derivation from
+  // the org's own plan/trialEndsAt, not part of Entitlements (that type is
+  // capability-derivation only, not billing status). Shown in the sidebar
+  // and mobile drawer, near the plan/restaurant name, on every dashboard
+  // page — not just Billing.
+  const trialStatus = membership ? getTrialStatus(membership.organization) : { inTrial: false as const };
 
   const visibleSections = buildVisibleSections(
     restaurant?.experienceMode ?? null,
@@ -265,6 +272,11 @@ export default async function DashboardLayout({
           <p className="text-xs text-muted mt-0.5 truncate">
             {restaurant?.name ?? "No restaurant yet"}
           </p>
+          {trialStatus.inTrial && (
+            <span className="mt-1 inline-flex items-center rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
+              Trial — {trialStatus.daysRemaining} day{trialStatus.daysRemaining === 1 ? "" : "s"} left
+            </span>
+          )}
           {(membership?.organization.restaurants.length ?? 0) > 1 && (
             <Link
               href="/venues"
@@ -321,6 +333,7 @@ export default async function DashboardLayout({
           restaurantName={restaurant?.name ?? "No restaurant yet"}
           userEmail={user.email ?? ""}
           showVenueSwitcher={(membership?.organization.restaurants.length ?? 0) > 1}
+          trialStatus={trialStatus}
         />
         {entitlements?.lapsed && (
           <div

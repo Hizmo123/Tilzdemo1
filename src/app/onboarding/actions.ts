@@ -98,6 +98,7 @@ const schema = z.object({
   currency: z.enum(CURRENCIES),
   timezone: z.enum(TIMEZONES),
   kitchenChime: z.boolean(),
+  qrStandSourcing: z.enum(["diy", "ordered_from_tillz"]).nullable().default(null),
 });
 
 function slugify(input: string): string {
@@ -354,6 +355,10 @@ async function createRestaurantAndSeedFromAnswers(
       // Settings -> Service requires for an EXISTING venue with tables
       // already printed (see updateVenueSetup).
       useSharedQr: fullyStaffed,
+      // Skipped along with the "tables" step for Lite/fully-staffed venues,
+      // so this stays null for them — getSetupChecklist already gates both
+      // its reminder items on there being tables at all.
+      qrStandSourcing: fullyStaffed ? null : a.qrStandSourcing,
     },
     include: { locations: true },
   });
@@ -544,9 +549,12 @@ export async function completeOnboarding(
     // The plan chosen in the wizard is applied at creation — the same mock
     // "active" subscription the Billing page's switcher writes — so a new
     // venue can publish straight away instead of first detouring through
-    // Billing to confirm a plan it already picked.
+    // Billing to confirm a plan it already picked. hasUsedTrial is always
+    // false here: this org doesn't exist yet, so a paid-tier choice at
+    // signup starts its one trial exactly the same way a later upgrade via
+    // Billing would.
     const org = await tx.organization.create({
-      data: { name: a.restaurantName, ...mockSubscriptionData(a.plan) },
+      data: { name: a.restaurantName, ...mockSubscriptionData(a.plan, false) },
     });
 
     await tx.membership.create({
