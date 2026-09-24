@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, type PanInfo } from "motion/react";
 import { SPRING, easeOut } from "./motion";
 
@@ -8,6 +8,10 @@ import { SPRING, easeOut } from "./motion";
 // to dismiss (past a third of its height or with a decent flick), fades its
 // scrim, locks body scroll and closes on Escape. The sheet's own body
 // scrolls; the header stays put.
+//
+// side="right" keeps the phone bottom sheet but, from md up, becomes a
+// full-height slide-over panel anchored to the right edge — the "edit this
+// record beside the table" pattern the dashboard's menu editor uses.
 //
 // Content is only mounted while open, so anything that attaches to the DOM
 // (the Square card field in the pay sheet) can rely on its container
@@ -19,6 +23,7 @@ export function Sheet({
   children,
   footer,
   size = "md",
+  side = "bottom",
 }: {
   open: boolean;
   onClose: () => void;
@@ -26,8 +31,11 @@ export function Sheet({
   children: React.ReactNode;
   footer?: React.ReactNode;
   size?: "md" | "lg";
+  side?: "bottom" | "right";
 }) {
   const titleId = useId();
+  const desktop = useIsDesktop();
+  const slideOver = side === "right" && desktop;
 
   useEffect(() => {
     if (!open) return;
@@ -47,10 +55,19 @@ export function Sheet({
     if (info.offset.y > 120 || info.velocity.y > 600) onClose();
   }
 
+  const hidden = slideOver ? { x: "100%", opacity: 0.6 } : { y: "100%", opacity: 0.6 };
+  const shown = slideOver ? { x: 0, opacity: 1 } : { y: 0, opacity: 1 };
+
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:p-6">
+        <div
+          className={`fixed inset-0 z-40 flex ${
+            slideOver
+              ? "items-stretch justify-end"
+              : "items-end justify-center md:items-center md:p-6"
+          }`}
+        >
           <motion.button
             type="button"
             aria-label="Close"
@@ -65,22 +82,28 @@ export function Sheet({
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? titleId : undefined}
-            initial={{ y: "100%", opacity: 0.6 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: "100%", opacity: 0.6, transition: easeOut(0.22) }}
+            initial={hidden}
+            animate={shown}
+            exit={{ ...hidden, transition: easeOut(0.22) }}
             transition={SPRING}
-            drag="y"
+            drag={slideOver ? false : "y"}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.7 }}
             onDragEnd={onDragEnd}
-            className={`relative w-full bg-surface text-ink shadow-float flex flex-col max-h-[90dvh] rounded-t-[var(--radius-xl)] md:rounded-[var(--radius-xl)] md:max-h-[85vh] ${
-              size === "lg" ? "md:max-w-lg" : "md:max-w-md"
+            className={`relative w-full bg-surface text-ink shadow-float flex flex-col ${
+              slideOver
+                ? `h-full max-h-none rounded-none ${size === "lg" ? "md:max-w-xl" : "md:max-w-md"}`
+                : `max-h-[90dvh] rounded-t-[var(--radius-xl)] md:rounded-[var(--radius-xl)] md:max-h-[85vh] ${
+                    size === "lg" ? "md:max-w-lg" : "md:max-w-md"
+                  }`
             }`}
           >
             {/* Grab handle — the drag affordance on phones. */}
-            <div className="md:hidden pt-2.5 pb-1 flex justify-center touch-none">
-              <span className="h-1.5 w-10 rounded-pill bg-line-strong" />
-            </div>
+            {!slideOver && (
+              <div className="md:hidden pt-2.5 pb-1 flex justify-center touch-none">
+                <span className="h-1.5 w-10 rounded-pill bg-line-strong" />
+              </div>
+            )}
             {title !== undefined && (
               <div className="px-5 pt-2 md:pt-5 pb-3 flex items-center justify-between gap-3 border-b border-line">
                 <h2 id={titleId} className="font-display text-display-sm font-semibold">
@@ -106,5 +129,21 @@ export function Sheet({
         </div>
       )}
     </AnimatePresence>
+  );
+}
+
+// md breakpoint, read the React-18 way so server and first client render
+// agree (false) and it only flips once the browser has actually measured.
+const DESKTOP_QUERY = "(min-width: 768px)";
+function subscribe(cb: () => void) {
+  const mql = window.matchMedia(DESKTOP_QUERY);
+  mql.addEventListener("change", cb);
+  return () => mql.removeEventListener("change", cb);
+}
+function useIsDesktop() {
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(DESKTOP_QUERY).matches,
+    () => false,
   );
 }

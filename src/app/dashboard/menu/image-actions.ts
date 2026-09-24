@@ -142,3 +142,51 @@ export async function removeMenuImage(itemId: string): Promise<ImageActionState>
   revalidatePath("/dashboard/menu");
   return {};
 }
+
+// The item panel's second image input: paste a URL instead of uploading a
+// file. Only http(s) URLs are accepted; nothing is fetched server-side (it's
+// the browser that renders it), so this can't be turned into an SSRF probe.
+// If the item previously had a photo in our own bucket, that file is
+// removed best-effort, same policy as removeMenuImage above.
+export async function setMenuImageUrl(itemId: string, url: string): Promise<ImageActionState> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage")) return { error: "Not permitted." };
+
+  const item = await ownedItem(itemId, authz.membership!.organizationId);
+  if (!item) return { error: "Item not found." };
+
+  const clean = url.trim();
+  if (clean.length > 2048) return { error: "That URL is too long." };
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(clean);
+  } catch {
+    return { error: "Enter a full image URL, starting with https://." };
+  }
+  if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+    return { error: "Enter a full image URL, starting with https://." };
+  }
+
+  if (item.imageUrl && item.imageUrl !== clean) {
+    const old = pathFromUrl(item.imageUrl);
+    if (old) {
+      try {
+        const supabase = createServiceClient();
+        await supabase.storage.from(MENU_IMAGE_BUCKET).remove([old]);
+      } catch (e) {
+        log.error("menu_image.remove_failed", {
+          itemId,
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+  }
+
+  await prisma.menuItem.update({
+    where: { id: item.id },
+    data: { imageUrl: clean },
+  });
+
+  revalidatePath("/dashboard/menu");
+  return { url: clean };
+}

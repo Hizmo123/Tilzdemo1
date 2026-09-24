@@ -30,12 +30,15 @@ export const DASHBOARD_TOUR: TourStep[] = [
     body: "This list tracks what's left before you open the doors. It updates itself as you go — when it's empty, you're ready.",
     requiresOrdering: true,
   },
+  // Points at the Items view's "Add item" button — the default view of
+  // /dashboard/menu. (The provider matches step.page against the bare
+  // pathname, so a target on the ?view=categories tab can't be reached.)
   {
     id: "menu",
     page: "/dashboard/menu",
-    target: "menu-add-category",
+    target: "menu-add-item",
     title: "Build your menu",
-    body: "Start with a category, then add items inside it — prices, photos, options and allergens all live on the item. Edit anything, any time.",
+    body: "Add items from here — price, photo, prep station, options and allergens all live on the item. Categories have their own tab. Edit anything, any time.",
   },
   {
     id: "tables",

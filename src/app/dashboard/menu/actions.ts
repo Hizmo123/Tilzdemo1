@@ -147,6 +147,114 @@ export async function createItem(
   return {};
 }
 
+// ---- Item panel: create or update every scalar field in one save -----------
+
+// The slide-over item panel (item-panel.tsx) saves name/description/price/
+// category/station/availability/badges/allergens together, for a new item
+// or an existing one. This sits ALONGSIDE the granular actions above and
+// below (createItem's form path, toggleItemAvailable, updateItemStation,
+// updateItemBadges, updateItemAllergens) rather than replacing them — the
+// items table still uses those for its inline controls, and the CSV
+// importer / sample loader never touch this. Validation limits mirror
+// those actions exactly (name 80, description 240, station 24, allergens
+// filtered by ALLERGEN_SET, badges by BADGE_SET). Returns the item id so the
+// panel can attach a photo to a just-created item before it closes.
+const saveItemSchema = z.object({
+  itemId: z.string().min(1).nullable(),
+  categoryId: z.string().min(1, "Choose a category."),
+  name: z.string().trim().min(1, "Enter an item name.").max(80, "Keep the name under 80 characters."),
+  description: z
+    .string()
+    .trim()
+    .max(240, "Keep the description under 240 characters.")
+    .optional()
+    .transform((v) => (v ? v : null)),
+  price: z.string().trim().min(1, "Enter a price."),
+  station: z
+    .string()
+    .optional()
+    .transform((v) => (v ?? "").trim().slice(0, 24) || null),
+  available: z.boolean(),
+  badges: z.array(z.string()),
+  allergens: z.array(z.string()),
+});
+
+export type SaveItemResult = { error: string } | { ok: true; itemId: string };
+
+export async function saveMenuItem(input: {
+  itemId: string | null;
+  categoryId: string;
+  name: string;
+  description: string;
+  price: string;
+  station: string;
+  available: boolean;
+  badges: string[];
+  allergens: string[];
+}): Promise<SaveItemResult> {
+  const authz = await getAuthz();
+  if (!authz.can("menu:manage"))
+    return { error: "You don't have permission to edit the menu." };
+  const organizationId = authz.membership!.organizationId;
+
+  const parsed = saveItemSchema.safeParse(input);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const d = parsed.data;
+
+  const priceCents = dollarsToCents(d.price);
+  if (priceCents === null) return { error: "Enter a valid price, e.g. 24 or 24.50." };
+
+  const category = await assertCategoryOwned(d.categoryId, organizationId);
+  if (!category) return { error: "Category not found." };
+
+  const data = {
+    categoryId: d.categoryId,
+    name: d.name,
+    description: d.description,
+    priceCents,
+    station: d.station,
+    available: d.available,
+    badges: d.badges.filter((b) => BADGE_SET.has(b)).slice(0, BADGE_VALUES.length),
+    allergens: d.allergens.filter((a) => ALLERGEN_SET.has(a)).slice(0, 20),
+  };
+
+  if (d.itemId) {
+    const owned = await assertItemOwned(d.itemId, organizationId);
+    if (!owned) return { error: "Item not found." };
+
+    await prisma.menuItem.update({ where: { id: d.itemId }, data });
+
+    await audit({
+      organizationId,
+      actorUserId: authz.user.id,
+      actorEmail: authz.user.email ?? "",
+      action: "menu.item.updated",
+      resourceType: "MenuItem",
+      resourceId: d.itemId,
+      metadata: { name: data.name, priceCents, categoryId: data.categoryId },
+    });
+
+    revalidatePath("/dashboard/menu");
+    return { ok: true, itemId: d.itemId };
+  }
+
+  const count = await prisma.menuItem.count({ where: { categoryId: d.categoryId } });
+  const item = await prisma.menuItem.create({ data: { ...data, sortOrder: count } });
+
+  await audit({
+    organizationId,
+    actorUserId: authz.user.id,
+    actorEmail: authz.user.email ?? "",
+    action: "menu.item.created",
+    resourceType: "MenuItem",
+    resourceId: item.id,
+    metadata: { name: item.name, priceCents },
+  });
+
+  revalidatePath("/dashboard/menu");
+  return { ok: true, itemId: item.id };
+}
+
 // Sold-out toggle (spec §28) — allowed for STAFF too, via menu:availability.
 export async function toggleItemAvailable(itemId: string, available: boolean) {
   const authz = await getAuthz();

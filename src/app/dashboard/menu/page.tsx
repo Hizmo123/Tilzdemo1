@@ -2,17 +2,23 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { getActiveLocation } from "@/lib/auth";
 import { MenuListData } from "./menu-list-data";
+import { MenuTabs } from "./menu-tabs";
+import type { MenuView } from "./menu-types";
 
 function MenuSkeleton() {
   return (
     <div className="space-y-3 animate-pulse">
-      <div className="h-40 rounded-[var(--radius-card)] bg-line/40" />
-      <div className="h-40 rounded-[var(--radius-card)] bg-line/40" />
+      <div className="h-11 rounded-[var(--radius-md)] bg-line/40" />
+      <div className="h-64 rounded-[var(--radius-card)] bg-line/40" />
     </div>
   );
 }
 
-export default async function MenuPage() {
+export default async function MenuPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   const ctx = await getActiveLocation();
 
   if (!ctx) {
@@ -32,8 +38,11 @@ export default async function MenuPage() {
     );
   }
 
+  const sp = await searchParams;
+  const view: MenuView = sp.view === "categories" ? "categories" : "items";
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight">
@@ -49,12 +58,15 @@ export default async function MenuPage() {
         </Link>
       </div>
 
+      <MenuTabs active={view} />
+
       <Suspense fallback={<MenuSkeleton />}>
         <MenuListData
           restaurantId={ctx.restaurant.id}
           restaurantName={ctx.restaurant.name}
           currency={ctx.restaurant.currency}
           kitchenStations={ctx.restaurant.kitchenStations}
+          view={view}
         />
       </Suspense>
     </div>
