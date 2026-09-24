@@ -50,13 +50,13 @@ export function MfaForm() {
         onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
         onKeyDown={(e) => e.key === "Enter" && code.length === 6 && verify()}
         placeholder="123456"
-        className="w-full rounded-lg border border-line bg-surface px-3.5 py-3 text-center text-2xl tracking-[0.3em] focus:border-pine focus:outline-none"
+        className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-3 text-center text-2xl tracking-[0.3em] focus:border-pine focus:outline-none"
       />
       {error && <p className="text-sm text-danger mt-3">{error}</p>}
       <button
         disabled={busy || code.length < 6}
         onClick={verify}
-        className="mt-4 w-full rounded-xl bg-pine text-white py-3 font-medium hover:bg-pine-deep disabled:opacity-50"
+        className="mt-4 w-full rounded-[var(--radius-md)] bg-pine text-white py-3 font-medium hover:bg-pine-deep disabled:opacity-50"
       >
         {busy ? "Verifying…" : "Verify"}
       </button>

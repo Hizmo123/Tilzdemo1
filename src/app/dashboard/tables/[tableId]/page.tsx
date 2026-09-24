@@ -6,6 +6,7 @@ import { qrDataUrl, visitUrl } from "@/lib/qr";
 import { QrActions } from "./qr-actions";
 import { NfcSection } from "./nfc-section";
 import { ActivateStandForm } from "./activate-stand-form";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 export default async function TableDetailPage({
   params,
@@ -44,7 +45,7 @@ export default async function TableDetailPage({
             Table {table.label}
           </h1>
           <span
-            className={`text-[11px] uppercase tracking-wide px-2 py-0.5 rounded ${
+            className={`text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-[var(--radius-xs)] ${
               table.active
                 ? "bg-pine-soft text-pine-deep"
                 : "bg-paper text-muted"
@@ -93,13 +94,13 @@ export default async function TableDetailPage({
             <div className="flex flex-wrap gap-2">
               <a
                 href={`/dashboard/tables/${table.id}/qr?format=svg`}
-                className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium hover:border-ink/30 transition-colors"
+                className={buttonClasses("secondary", "sm")}
               >
                 Download card (SVG)
               </a>
               <a
                 href={`/dashboard/tables/${table.id}/qr?format=png`}
-                className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium hover:border-ink/30 transition-colors"
+                className={buttonClasses("secondary", "sm")}
               >
                 Download PNG
               </a>

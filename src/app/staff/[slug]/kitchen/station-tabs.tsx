@@ -43,7 +43,7 @@ export function StationTabs({
   }
 
   const tabClass = (on: boolean) =>
-    `text-sm rounded-lg px-3 py-1 transition-colors ${
+    `text-sm rounded-[var(--radius-sm)] px-3 py-1 transition-colors ${
       on ? "bg-pine text-[color:var(--on-accent,#fff)]" : "border border-line hover:border-ink/30"
     }`;
 

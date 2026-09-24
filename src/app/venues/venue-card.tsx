@@ -23,7 +23,7 @@ export function VenueCard({
             {name}
           </span>
           <span
-            className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0 ${
+            className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] shrink-0 ${
               published ? "bg-pine-soft text-pine-deep" : "bg-paper text-muted"
             }`}
           >

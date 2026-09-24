@@ -51,7 +51,7 @@ export function ImageUploader({
 
   return (
     <div className="flex items-center gap-3">
-      <div className="w-14 h-14 rounded-lg overflow-hidden bg-paper border border-line shrink-0 flex items-center justify-center">
+      <div className="w-14 h-14 rounded-[var(--radius-sm)] overflow-hidden bg-paper border border-line shrink-0 flex items-center justify-center">
         {imageUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img src={imageUrl} alt="" className="w-full h-full object-cover" />
@@ -73,7 +73,7 @@ export function ImageUploader({
           <button
             disabled={working}
             onClick={() => inputRef.current?.click()}
-            className="text-xs rounded-md border border-line px-2.5 py-1.5 hover:border-ink/30 disabled:opacity-50"
+            className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30 disabled:opacity-50"
           >
             {working ? "Uploading…" : imageUrl ? "Replace photo" : "Add photo"}
           </button>

@@ -25,31 +25,31 @@ export default async function AdminLayout({
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           <Link
             href="/admin"
-            className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+            className="flex items-center rounded-[var(--radius-sm)] px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
           >
             Overview
           </Link>
           <Link
             href="/admin/orgs"
-            className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+            className="flex items-center rounded-[var(--radius-sm)] px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
           >
             Organisations
           </Link>
           <Link
             href="/admin/accounts"
-            className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+            className="flex items-center rounded-[var(--radius-sm)] px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
           >
             Accounts
           </Link>
           <Link
             href="/admin/fulfilment"
-            className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+            className="flex items-center rounded-[var(--radius-sm)] px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
           >
             Fulfilment
           </Link>
           <Link
             href="/admin/products"
-            className="flex items-center rounded-lg px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+            className="flex items-center rounded-[var(--radius-sm)] px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
           >
             Products
           </Link>

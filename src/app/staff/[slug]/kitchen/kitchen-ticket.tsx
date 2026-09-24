@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { advanceOrder, refireTicketItems } from "./actions";
 import { staffSetAvailable } from "../menu/actions";
 import type { OrderStatusName } from "@/lib/bills";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 type TicketItem = {
   id: string;
@@ -38,8 +39,8 @@ export const NEXT_LABEL: Partial<Record<OrderStatusName, { to: OrderStatusName; 
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  SUBMITTED: "bg-amber-50 text-amber-700",
-  PREPARING: "bg-blue-50 text-blue-700",
+  SUBMITTED: "bg-warn-soft text-warn",
+  PREPARING: "bg-info-soft text-info",
   READY: "bg-pine-soft text-pine-deep",
 };
 
@@ -111,7 +112,7 @@ export function KitchenTicket({
           {shortcutNumber && (
             <span
               title={`Press ${shortcutNumber} to bump this ticket`}
-              className="shrink-0 w-6 h-6 rounded-full bg-paper border border-line text-xs font-medium flex items-center justify-center text-muted"
+              className="shrink-0 w-6 h-6 rounded-pill bg-paper border border-line text-xs font-medium flex items-center justify-center text-muted"
             >
               {shortcutNumber}
             </span>
@@ -123,13 +124,13 @@ export function KitchenTicket({
         </span>
         <div className="flex items-center gap-1.5 shrink-0">
           {ticket.isRefire && (
-            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-danger-soft text-danger font-semibold">
+            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-danger-soft text-danger font-semibold">
               ↻ Re-fire
             </span>
           )}
           {ticket.prepay && (
             <span
-              className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded font-semibold ${
+              className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] font-semibold ${
                 ticket.billPaid
                   ? "bg-pine-soft text-pine-deep"
                   : "bg-danger-soft text-danger"
@@ -139,7 +140,7 @@ export function KitchenTicket({
             </span>
           )}
           <span
-            className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+            className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] ${
               STATUS_STYLE[ticket.status] ?? "bg-paper text-muted"
             }`}
           >
@@ -165,7 +166,7 @@ export function KitchenTicket({
                     disabled={pending}
                     onClick={() => eighty6(it.menuItemId!)}
                     title="86 this item — mark sold out"
-                    className="text-[10px] rounded border border-line px-1.5 py-0.5 text-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
+                    className="text-[10px] rounded-[var(--radius-xs)] border border-line px-1.5 py-0.5 text-muted hover:border-danger/40 hover:text-danger disabled:opacity-50"
                   >
                     86
                   </button>
@@ -174,21 +175,21 @@ export function KitchenTicket({
                   disabled={pending}
                   onClick={() => refireLine(it.id, it.name)}
                   title="Re-fire — needs re-cooking"
-                  className="text-[10px] rounded border border-line px-1.5 py-0.5 text-muted hover:border-ink/30 disabled:opacity-50"
+                  className="text-[10px] rounded-[var(--radius-xs)] border border-line px-1.5 py-0.5 text-muted hover:border-ink/30 disabled:opacity-50"
                 >
                   ↻
                 </button>
               </span>
             </div>
             {it.note && (
-              <p className="mt-0.5 text-xs text-amber-800 bg-amber-50 rounded px-2 py-0.5 inline-block">
+              <p className="mt-0.5 text-xs text-warn bg-warn-soft rounded-[var(--radius-xs)] px-2 py-0.5 inline-block">
                 Note: {it.note}
               </p>
             )}
             {/* Allergens must be unmissable, not a small grey tag — this is a
                 safety warning, not metadata. */}
             {it.allergens.length > 0 && (
-              <p className="mt-0.5 text-xs font-semibold text-danger bg-danger-soft rounded px-2 py-1 inline-block">
+              <p className="mt-0.5 text-xs font-semibold text-danger bg-danger-soft rounded-[var(--radius-xs)] px-2 py-1 inline-block">
                 ⚠ Contains: {it.allergens.join(", ")}
               </p>
             )}
@@ -197,7 +198,7 @@ export function KitchenTicket({
       </ul>
 
       {ticket.note && (
-        <p className="mb-3 rounded-lg bg-amber-50 text-amber-800 text-sm px-3 py-2 border border-amber-200">
+        <p className="mb-3 rounded-[var(--radius-sm)] bg-warn-soft text-warn text-sm px-3 py-2 border border-warn/40">
           <span className="font-semibold">Note:</span> {ticket.note}
         </p>
       )}
@@ -214,7 +215,7 @@ export function KitchenTicket({
             <button
               disabled={pending}
               onClick={() => move(next.to)}
-              className="flex-1 rounded-lg bg-pine text-white py-3 text-base font-medium hover:bg-pine-deep disabled:opacity-50 min-h-[48px]"
+              className={buttonClasses("primary", "lg", false, "flex-1 disabled:opacity-50")}
             >
               {pending ? "…" : next.label}
             </button>
@@ -222,7 +223,7 @@ export function KitchenTicket({
           <button
             disabled={pending}
             onClick={() => move("CANCELLED")}
-            className="rounded-lg border border-line px-3 py-3 text-sm text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50 min-h-[48px]"
+            className={buttonClasses("secondary", "lg", false, "text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50")}
           >
             Cancel
           </button>

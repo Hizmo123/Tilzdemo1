@@ -164,7 +164,7 @@ export default async function OrdersPage({
                   <span className="tabular-nums text-sm font-medium">
                     {formatCents(o.totalCents, currency)}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wide bg-paper text-muted px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] uppercase tracking-wide bg-paper text-muted px-1.5 py-0.5 rounded-[var(--radius-xs)]">
                     {o.status}
                   </span>
                 </div>

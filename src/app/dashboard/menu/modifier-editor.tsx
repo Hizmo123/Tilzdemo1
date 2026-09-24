@@ -74,7 +74,7 @@ export function ModifierEditor({
       </button>
 
       {open && (
-        <div className="mt-3 rounded-lg bg-paper p-3 space-y-3">
+        <div className="mt-3 rounded-[var(--radius-sm)] bg-paper p-3 space-y-3">
           {groups.map((g) => (
             <GroupBlock
               key={g.id}
@@ -85,14 +85,14 @@ export function ModifierEditor({
             />
           ))}
 
-          <div className="rounded-lg border border-line bg-surface p-3">
+          <div className="rounded-[var(--radius-sm)] border border-line bg-surface p-3">
             <p className="text-xs font-medium text-muted mb-2">Add an option group</p>
             <div className="flex flex-wrap items-end gap-2">
               <input
                 value={gName}
                 onChange={(e) => setGName(e.target.value)}
                 placeholder="Sauce"
-                className="rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm w-32"
+                className="rounded-[var(--radius-xs)] border border-line bg-surface px-2.5 py-1.5 text-sm w-32"
               />
               <label className="flex items-center gap-1 text-xs text-muted">
                 <input
@@ -111,13 +111,13 @@ export function ModifierEditor({
                   max={20}
                   value={gMax}
                   onChange={(e) => setGMax(Number(e.target.value))}
-                  className="rounded-md border border-line bg-surface px-2 py-1 text-sm w-14"
+                  className="rounded-[var(--radius-xs)] border border-line bg-surface px-2 py-1 text-sm w-14"
                 />
               </label>
               <button
                 onClick={addGroup}
                 disabled={pending}
-                className="rounded-md bg-ink text-surface px-3 py-1.5 text-sm disabled:opacity-50"
+                className="rounded-[var(--radius-xs)] bg-ink text-surface px-3 py-1.5 text-sm disabled:opacity-50"
               >
                 Add group
               </button>
@@ -166,7 +166,7 @@ function GroupBlock({
   }
 
   return (
-    <div className="rounded-lg border border-line bg-surface p-3">
+    <div className="rounded-[var(--radius-sm)] border border-line bg-surface p-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium">
           {group.name}
@@ -219,18 +219,18 @@ function GroupBlock({
           value={oName}
           onChange={(e) => setOName(e.target.value)}
           placeholder="BBQ"
-          className="rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm flex-1"
+          className="rounded-[var(--radius-xs)] border border-line bg-surface px-2.5 py-1.5 text-sm flex-1"
         />
         <input
           value={oPrice}
           onChange={(e) => setOPrice(e.target.value)}
           placeholder="+$ (blank = free)"
-          className="rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm w-32"
+          className="rounded-[var(--radius-xs)] border border-line bg-surface px-2.5 py-1.5 text-sm w-32"
         />
         <button
           onClick={addOption}
           disabled={pending}
-          className="rounded-md border border-line px-3 py-1.5 text-sm hover:border-ink/30 disabled:opacity-50"
+          className="rounded-[var(--radius-xs)] border border-line px-3 py-1.5 text-sm hover:border-ink/30 disabled:opacity-50"
         >
           Add
         </button>

@@ -2,7 +2,7 @@
 
 import { BG_PATTERNS, type CardStyle } from "@/lib/menu-style";
 
-const SEGMENT = "px-3 py-1.5 text-sm rounded-md transition-colors";
+const SEGMENT = "px-3 py-1.5 text-sm rounded-[var(--radius-xs)] transition-colors";
 const SEGMENT_ACTIVE = "bg-pine text-[color:var(--on-accent,#fff)]";
 const SEGMENT_INACTIVE = "text-muted hover:text-ink";
 
@@ -16,7 +16,7 @@ function Segmented<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="inline-flex flex-wrap rounded-lg border border-line p-0.5 gap-0.5">
+    <div className="inline-flex flex-wrap rounded-[var(--radius-sm)] border border-line p-0.5 gap-0.5">
       {options.map((o) => (
         <button
           key={o.value}
@@ -211,7 +211,7 @@ export function CustomisationPicker({
           </div>
         )}
         {bgTreatment === "photo" && !hasBgImage && (
-          <p className="text-xs text-amber-700 bg-amber-50 rounded px-2.5 py-1.5 mt-2">
+          <p className="text-xs text-warn bg-warn-soft rounded-[var(--radius-xs)] px-2.5 py-1.5 mt-2">
             Upload a background photo below to use this — until then the page
             shows the solid background instead.
           </p>

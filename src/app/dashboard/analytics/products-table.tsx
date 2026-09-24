@@ -66,7 +66,7 @@ export function ProductsTable({
               {formatCents(r.revenueCents, currency)}
             </p>
             <div className="flex items-center gap-2 justify-end">
-              <div className="w-14 h-1.5 rounded-full bg-paper overflow-hidden">
+              <div className="w-14 h-1.5 rounded-pill bg-paper overflow-hidden">
                 <div
                   className="h-full bg-pine"
                   style={{ width: `${(r.revenueCents / maxRev) * 100}%` }}

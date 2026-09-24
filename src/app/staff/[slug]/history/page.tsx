@@ -7,8 +7,8 @@ import { getRecentOrders, HISTORY_DAYS } from "@/lib/bills";
 export const dynamic = "force-dynamic";
 
 const STATUS_STYLE: Record<string, string> = {
-  SUBMITTED: "bg-amber-50 text-amber-700",
-  PREPARING: "bg-blue-50 text-blue-700",
+  SUBMITTED: "bg-warn-soft text-warn",
+  PREPARING: "bg-info-soft text-info",
   READY: "bg-pine-soft text-pine-deep",
   SERVED: "bg-paper text-muted",
   CANCELLED: "bg-danger-soft text-danger",
@@ -113,7 +113,7 @@ export default async function HistoryPage({
                           {o.source === "STAFF" ? " · staff" : ""}
                         </span>
                         <span
-                          className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                          className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] ${
                             STATUS_STYLE[o.status] ?? "bg-paper text-muted"
                           }`}
                         >
@@ -131,7 +131,7 @@ export default async function HistoryPage({
                         ))}
                       </ul>
                       {o.note && (
-                        <p className="mt-1.5 text-xs text-amber-800">
+                        <p className="mt-1.5 text-xs text-warn">
                           Note: {o.note}
                         </p>
                       )}

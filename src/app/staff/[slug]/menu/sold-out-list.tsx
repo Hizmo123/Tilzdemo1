@@ -69,7 +69,7 @@ function Row({
       <button
         onClick={toggle}
         disabled={pending}
-        className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50 ${
+        className={`shrink-0 rounded-[var(--radius-sm)] px-4 py-2 text-sm font-medium disabled:opacity-50 ${
           item.available
             ? "border border-line hover:border-danger/40"
             : "bg-pine text-white hover:bg-pine-deep"

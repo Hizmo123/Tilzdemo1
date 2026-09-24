@@ -5,10 +5,11 @@ import { getEntitlements } from "@/lib/entitlements";
 import { getVenuesOverview } from "@/lib/venues-overview";
 import { formatCents } from "@/lib/money";
 import { RangeComparison } from "./range-comparison";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 const SQUARE_HEALTH_LABEL: Record<string, { label: string; className: string }> = {
   connected: { label: "Square connected", className: "bg-pine-soft text-pine-deep" },
-  needs_location: { label: "Needs a Square location", className: "bg-amber-50 text-amber-800" },
+  needs_location: { label: "Needs a Square location", className: "bg-warn-soft text-warn" },
   revoked: { label: "Square disconnected", className: "bg-danger-soft text-danger" },
   not_connected: { label: "Not connected", className: "bg-paper text-muted" },
 };
@@ -119,7 +120,7 @@ export default async function VenuesOverviewPage({
           </p>
           <Link
             href="/dashboard/billing"
-            className="mt-4 inline-block text-sm rounded-lg bg-pine text-white px-4 py-2.5 font-medium hover:bg-pine-deep"
+            className={buttonClasses("primary", "sm", false, "mt-4")}
           >
             {ent.tier === "CONNECT" ? "Add Connect Plus" : "See plans"}
           </Link>

@@ -47,7 +47,7 @@ export function CustomerPreview({
   const content = (
     <div
       style={style}
-      className="relative rounded-2xl border border-line overflow-hidden bg-paper"
+      className="relative rounded-[var(--radius-card)] border border-line overflow-hidden bg-paper"
     >
       {bgImageUrl && (
         <>
@@ -109,7 +109,7 @@ export function CustomerPreview({
 
   return (
     <div className="mx-auto w-full max-w-[230px]">
-      <div className="rounded-[2.2rem] border-[6px] border-ink bg-ink p-1.5 shadow-xl">
+      <div className="rounded-[2.2rem] border-[6px] border-ink bg-ink p-1.5 shadow-float">
         <div className="rounded-[1.7rem] overflow-hidden">{content}</div>
       </div>
     </div>

@@ -8,6 +8,7 @@ import { RevenueBarChart } from "@/components/dashboard/bar-chart";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { PrintButton } from "@/components/receipt/print-button";
 import { HistoryWindowNote } from "@/components/dashboard/history-window-note";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 export default async function WeeklyReportPage({
   searchParams,
@@ -102,26 +103,26 @@ export default async function WeeklyReportPage({
         {weekOffset > minOffset ? (
           <Link
             href={`/dashboard/analytics/weekly?week=${weekOffset - 1}`}
-            className="rounded-lg border border-line px-3 py-1.5 text-sm hover:border-ink/30"
+            className={buttonClasses("secondary", "sm")}
           >
             ← Previous week
           </Link>
         ) : (
-          <span className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted/50 cursor-not-allowed">
+          <span className={buttonClasses("secondary", "sm", false, "opacity-50 cursor-not-allowed")}>
             ← Previous week
           </span>
         )}
         {!isCurrentWeek && (
           <Link
             href="/dashboard/analytics/weekly"
-            className="rounded-lg border border-line px-3 py-1.5 text-sm hover:border-ink/30"
+            className={buttonClasses("secondary", "sm")}
           >
             This week
           </Link>
         )}
         <Link
           href={`/dashboard/analytics/weekly?week=${weekOffset + 1}`}
-          className="rounded-lg border border-line px-3 py-1.5 text-sm hover:border-ink/30"
+          className={buttonClasses("secondary", "sm")}
         >
           Next week →
         </Link>

@@ -25,13 +25,13 @@ export async function PublicMenuLink({ slug }: { slug: string }) {
           <div className="flex flex-wrap gap-2">
             <a
               href="/dashboard/menu/qr?format=svg"
-              className="rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium hover:border-ink/30 transition-colors"
+              className="rounded-[var(--radius-sm)] border border-line bg-surface px-3.5 py-2 text-sm font-medium hover:border-ink/30 transition-colors"
             >
               Download card (SVG)
             </a>
             <a
               href="/dashboard/menu/qr?format=png"
-              className="rounded-lg border border-line bg-surface px-3.5 py-2 text-sm font-medium hover:border-ink/30 transition-colors"
+              className="rounded-[var(--radius-sm)] border border-line bg-surface px-3.5 py-2 text-sm font-medium hover:border-ink/30 transition-colors"
             >
               Download PNG
             </a>

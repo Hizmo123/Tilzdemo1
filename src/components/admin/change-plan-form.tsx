@@ -33,7 +33,7 @@ export function ChangePlanForm({
       <select
         value={tier}
         onChange={(e) => setTier(e.target.value as PlanTier)}
-        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
+        className="rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
       >
         {tiers.map((t) => (
           <option key={t.tier} value={t.tier}>
@@ -45,7 +45,7 @@ export function ChangePlanForm({
         type="button"
         disabled={pending || tier === currentTier}
         onClick={save}
-        className="text-xs rounded-md border border-line px-2.5 py-2 hover:border-ink/30 disabled:opacity-40"
+        className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-2 hover:border-ink/30 disabled:opacity-40"
       >
         {pending ? "Saving…" : "Change plan"}
       </button>

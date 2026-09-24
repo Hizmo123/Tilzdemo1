@@ -5,35 +5,12 @@ import Link from "next/link";
 import { motion, type HTMLMotionProps } from "motion/react";
 import { SPRING_PRESS } from "./motion";
 import { Spinner } from "./spinner";
+import { buttonClasses, type ButtonVariant, type ButtonSize } from "./button-classes";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "soft" | "ink";
-export type ButtonSize = "sm" | "md" | "lg";
-
-const VARIANT: Record<ButtonVariant, string> = {
-  // The one loud action on a screen. Accent gradient + accent glow, so it
-  // re-themes to the venue colour on customer pages.
-  primary:
-    "bg-accent-gradient text-on-accent shadow-accent hover:brightness-105 active:brightness-95",
-  secondary:
-    "bg-surface text-ink border border-line shadow-rest hover:border-line-strong hover:shadow-raised",
-  ghost: "bg-transparent text-ink-soft hover:bg-surface-2 hover:text-ink",
-  soft: "bg-pine-soft text-pine-deep hover:brightness-95",
-  ink: "bg-ink text-surface hover:opacity-90",
-  danger: "bg-danger text-white hover:brightness-95",
-};
-
-const SIZE: Record<ButtonSize, string> = {
-  sm: "h-9 px-3.5 text-sm rounded-[var(--radius-sm)]",
-  md: "h-11 px-5 text-sm rounded-[var(--radius-md)]",
-  lg: "h-13 min-h-[52px] px-6 text-base rounded-[var(--radius-lg)]",
-};
-
-const BASE =
-  "inline-flex items-center justify-center gap-2 font-medium select-none transition-[filter,box-shadow,border-color,background-color] duration-[var(--dur-fast)]";
-
-export function buttonClasses(variant: ButtonVariant, size: ButtonSize, full = false, extra = "") {
-  return `${BASE} ${VARIANT[variant]} ${SIZE[size]} ${full ? "w-full" : ""} ${extra}`;
-}
+// The class strings live in ./button-classes (no "use client") so Server
+// Components can style a <Link> identically; re-exported here so nothing
+// that already imports them from this module has to change.
+export { buttonClasses, type ButtonVariant, type ButtonSize };
 
 type Props = Omit<HTMLMotionProps<"button">, "children"> & {
   variant?: ButtonVariant;

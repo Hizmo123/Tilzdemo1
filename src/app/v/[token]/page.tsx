@@ -36,7 +36,7 @@ function InvalidState({ reason }: { reason: string }) {
   return (
     <main className="min-h-dvh bg-paper flex flex-col items-center justify-center px-6 py-10">
       <div className="w-full max-w-sm rounded-[var(--radius-card)] border border-line bg-surface p-8 text-center">
-        <div className="w-12 h-12 rounded-full bg-danger-soft text-danger flex items-center justify-center mx-auto mb-4 text-xl">
+        <div className="w-12 h-12 rounded-pill bg-danger-soft text-danger flex items-center justify-center mx-auto mb-4 text-xl">
           !
         </div>
         <h1 className="font-display text-xl font-semibold tracking-tight">

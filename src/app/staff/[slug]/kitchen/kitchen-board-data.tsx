@@ -173,10 +173,10 @@ export async function KitchenBoardData({
             (see KitchenHeader), so there's nothing left to show here. */}
         {!lockedStation && (
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="inline-flex rounded-lg border border-line p-0.5">
+            <div className="inline-flex rounded-[var(--radius-sm)] border border-line p-0.5">
               <Link
                 href={`/staff/${slug}/kitchen${active ? `?station=${encodeURIComponent(active)}` : ""}`}
-                className={`px-3.5 py-1.5 text-sm rounded-md transition-colors ${
+                className={`px-3.5 py-1.5 text-sm rounded-[var(--radius-xs)] transition-colors ${
                   !passView ? "bg-pine text-[color:var(--on-accent,#fff)]" : "text-muted hover:text-ink"
                 }`}
               >
@@ -184,7 +184,7 @@ export async function KitchenBoardData({
               </Link>
               <Link
                 href={`/staff/${slug}/kitchen?view=pass`}
-                className={`px-3.5 py-1.5 text-sm rounded-md transition-colors ${
+                className={`px-3.5 py-1.5 text-sm rounded-[var(--radius-xs)] transition-colors ${
                   passView ? "bg-pine text-[color:var(--on-accent,#fff)]" : "text-muted hover:text-ink"
                 }`}
               >
@@ -217,7 +217,7 @@ export async function KitchenBoardData({
 
             {pendingCards.length > 0 && (
               <section>
-                <h2 className="text-sm font-semibold text-amber-700 mb-2">
+                <h2 className="text-sm font-semibold text-warn mb-2">
                   Awaiting approval ({pendingCards.length})
                 </h2>
                 <div className="grid sm:grid-cols-2 gap-3">

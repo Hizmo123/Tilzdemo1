@@ -14,7 +14,7 @@ export function CreateRestaurantForm() {
   const [state, action] = useActionState(createRestaurant, initial);
 
   return (
-    <div className="max-w-md rounded-[var(--radius-card)] border border-line bg-surface p-7 shadow-sm">
+    <div className="max-w-md rounded-[var(--radius-card)] border border-line bg-surface p-5 shadow-rest">
       <h2 className="font-display text-xl font-semibold tracking-tight">
         Create your restaurant
       </h2>

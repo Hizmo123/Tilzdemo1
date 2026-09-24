@@ -106,7 +106,7 @@ export default async function RegisterPage({
                 <h2 className="font-display text-lg font-semibold tracking-tight">
                   {openLocation?.name ?? "Drawer"} — open
                 </h2>
-                <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-pine-soft text-pine-deep">
+                <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-pine-soft text-pine-deep">
                   Open
                 </span>
               </div>

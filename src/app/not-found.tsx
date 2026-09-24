@@ -12,7 +12,7 @@ export default function NotFound() {
         </p>
         <Link
           href="/"
-          className="mt-5 inline-block rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink/30"
+          className="mt-5 inline-block rounded-[var(--radius-sm)] border border-line px-4 py-2 text-sm font-medium hover:border-ink/30"
         >
           Go home
         </Link>

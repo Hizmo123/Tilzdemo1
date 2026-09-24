@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buttonClasses } from "@/components/ui/button-classes";
 import { getActiveLocation } from "@/lib/auth";
 import { getEntitlements } from "@/lib/entitlements";
 import { prisma } from "@/lib/prisma";
@@ -149,7 +150,7 @@ export default async function BillsPage({
                     <p className="font-medium tabular-nums">
                       {formatCents(remaining, currency)}
                     </p>
-                    <p className="text-[10px] uppercase tracking-wide text-amber-700">
+                    <p className="text-[10px] uppercase tracking-wide text-warn">
                       {b.status === "PARTIALLY_PAID" ? "Part-paid" : "Open"}
                     </p>
                   </div>
@@ -168,7 +169,7 @@ export default async function BillsPage({
           <div className="flex gap-2 text-sm">
             <Link
               href={historyHref({ view: null, table: null, page: null })}
-              className={`rounded-lg px-3 py-1.5 transition-colors ${
+              className={`rounded-[var(--radius-sm)] px-3 py-1.5 transition-colors ${
                 view === "all" ? "bg-ink text-surface" : "border border-line hover:border-ink/30"
               }`}
             >
@@ -176,7 +177,7 @@ export default async function BillsPage({
             </Link>
             <Link
               href={historyHref({ view: "table", page: null })}
-              className={`rounded-lg px-3 py-1.5 transition-colors ${
+              className={`rounded-[var(--radius-sm)] px-3 py-1.5 transition-colors ${
                 view === "table" ? "bg-ink text-surface" : "border border-line hover:border-ink/30"
               }`}
             >
@@ -209,7 +210,7 @@ export default async function BillsPage({
               id="table-select"
               name="table"
               defaultValue={sp.table ?? ""}
-              className="rounded-lg border border-line px-3 py-1.5 text-sm bg-surface"
+              className="h-9 rounded-[var(--radius-sm)] border border-line bg-surface px-3 text-sm shadow-rest"
             >
               <option value="" disabled>
                 Choose a table…
@@ -223,7 +224,7 @@ export default async function BillsPage({
             </select>
             <button
               type="submit"
-              className="rounded-lg border border-line px-3 py-1.5 text-sm hover:border-ink/30"
+              className={buttonClasses("secondary", "sm")}
             >
               Go
             </button>
@@ -269,7 +270,7 @@ export default async function BillsPage({
                     </div>
                     <Link
                       href={`/receipt/${b.id}`}
-                      className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+                      className={buttonClasses("secondary", "sm")}
                     >
                       Receipt
                     </Link>
@@ -283,7 +284,7 @@ export default async function BillsPage({
                 {page > 1 ? (
                   <Link
                     href={historyHref({ page: page - 1 === 1 ? null : String(page - 1) })}
-                    className="rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+                    className={buttonClasses("secondary", "sm")}
                   >
                     ← Newer
                   </Link>
@@ -296,7 +297,7 @@ export default async function BillsPage({
                 {page < totalPages ? (
                   <Link
                     href={historyHref({ page: String(page + 1) })}
-                    className="rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+                    className={buttonClasses("secondary", "sm")}
                   >
                     Older →
                   </Link>

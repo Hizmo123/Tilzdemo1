@@ -71,7 +71,7 @@ export function ActivateStandForm({ tableId }: { tableId: string }) {
         onClick={() => setOpen(true)}
         className="w-full flex items-center gap-3 rounded-[var(--radius-card)] border border-dashed border-line bg-surface px-6 py-4 text-left hover:border-pine/40 transition-colors"
       >
-        <span className="shrink-0 w-9 h-9 rounded-full bg-pine-soft text-pine-deep flex items-center justify-center">
+        <span className="shrink-0 w-9 h-9 rounded-pill bg-pine-soft text-pine-deep flex items-center justify-center">
           <svg viewBox="0 0 20 20" className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <rect x="3" y="3" width="6" height="6" rx="1" />
             <rect x="11" y="3" width="6" height="6" rx="1" />

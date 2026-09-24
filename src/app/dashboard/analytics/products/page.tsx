@@ -97,7 +97,7 @@ export default async function ProductAnalyticsPage({
                 {data.notSelling.map((n) => (
                   <span
                     key={n.name}
-                    className="text-sm rounded-lg border border-line px-3 py-1.5"
+                    className="text-sm rounded-[var(--radius-sm)] border border-line px-3 py-1.5"
                   >
                     {n.name}
                     {!n.available && <span className="text-muted"> · sold out</span>}

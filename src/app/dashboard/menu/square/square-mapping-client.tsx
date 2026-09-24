@@ -28,7 +28,7 @@ const STATUS_LABEL: Record<Row["status"], string> = {
 
 const STATUS_CLASS: Record<Row["status"], string> = {
   mapped: "bg-pine/10 text-pine-deep",
-  auto_matched: "bg-amber-50 text-amber-800",
+  auto_matched: "bg-warn-soft text-warn",
   unmapped: "bg-paper text-muted",
 };
 
@@ -77,7 +77,7 @@ export function SquareMappingClient({
           <button
             onClick={doImport}
             disabled={pending}
-            className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60 shrink-0"
+            className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60 shrink-0"
           >
             {pending ? "Importing…" : hasSynced ? "Re-sync from Square" : "Import from Square"}
           </button>
@@ -180,7 +180,7 @@ function ItemRow({
       <td className="px-4 py-2.5">{row.name}</td>
       <td className="px-4 py-2.5 text-muted">{row.categoryName}</td>
       <td className="px-4 py-2.5">
-        <span className={`text-xs rounded-full px-2.5 py-1 font-medium ${STATUS_CLASS[row.status]}`}>
+        <span className={`text-xs rounded-pill px-2.5 py-1 font-medium ${STATUS_CLASS[row.status]}`}>
           {STATUS_LABEL[row.status]}
         </span>
       </td>
@@ -189,7 +189,7 @@ function ItemRow({
           value={currentKey}
           disabled={pending || optionsLoading}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm focus:border-pine focus:outline-none"
+          className="w-full max-w-xs rounded-[var(--radius-md)] border border-line bg-surface px-2.5 py-1.5 text-sm focus:border-pine focus:outline-none"
         >
           <option value="">{optionsLoading ? "Loading…" : "— choose a Square item —"}</option>
           {options.map((o) => (

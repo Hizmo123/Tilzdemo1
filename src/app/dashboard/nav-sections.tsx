@@ -107,7 +107,7 @@ export function NavSections({
                       href={item.href}
                       prefetch={false}
                       onClick={onNavigate}
-                      className={`flex items-center rounded-lg px-3 py-2 text-sm transition-colors ${
+                      className={`flex items-center rounded-[var(--radius-sm)] px-3 py-2 text-sm transition-colors ${
                         active
                           ? "bg-pine-soft text-pine-deep font-medium"
                           : "text-ink hover:bg-paper"

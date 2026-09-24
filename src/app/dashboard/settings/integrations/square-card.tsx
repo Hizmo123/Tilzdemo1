@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { listSquareLocations, setSquareLocation, disconnectSquare } from "./actions";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 type Connection = {
   merchantName: string | null;
@@ -43,10 +44,10 @@ export function SquareCard({
         </div>
         {connection && (
           <span
-            className={`text-xs rounded-full px-2.5 py-1 font-medium ${
+            className={`text-xs rounded-pill px-2.5 py-1 font-medium ${
               connection.environment === "production"
                 ? "bg-pine/10 text-pine-deep"
-                : "bg-amber-50 text-amber-800"
+                : "bg-warn-soft text-warn"
             }`}
           >
             {environmentLabel}
@@ -61,7 +62,7 @@ export function SquareCard({
               ? `/api/square/authorize?intent=${connectIntent}`
               : "/api/square/authorize"
           }
-          className="mt-4 inline-block rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
+          className={buttonClasses("primary", "sm", false, "mt-4")}
         >
           Connect Square
         </a>
@@ -86,7 +87,7 @@ export function SquareCard({
                   await setSquareLocation(id);
                 });
               }}
-              className="w-full max-w-sm rounded-lg border border-line bg-surface px-3.5 py-2.5 focus:border-pine focus:outline-none"
+              className="w-full max-w-sm rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 focus:border-pine focus:outline-none"
             >
               <option value="" disabled>
                 {locations === null ? "Loading…" : "Choose a location"}

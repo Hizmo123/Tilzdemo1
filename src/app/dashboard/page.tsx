@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { buttonClasses } from "@/components/ui/button-classes";
 import { getActiveLocation, getTenantContext } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/money";
@@ -83,7 +84,7 @@ export default async function DashboardHome() {
           </div>
           <Link
             href="/dashboard/billing"
-            className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep"
+            className={buttonClasses("primary", "sm")}
           >
             See plans
           </Link>
@@ -99,7 +100,7 @@ export default async function DashboardHome() {
           </p>
           <Link
             href="/dashboard/menu"
-            className="inline-block rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
+            className={buttonClasses("primary", "sm")}
           >
             Edit menu
           </Link>
@@ -212,7 +213,7 @@ export default async function DashboardHome() {
             {checklist.map((item) => (
               <li key={item.id} className="flex items-center gap-3">
                 <span
-                  className={`shrink-0 w-4.5 h-4.5 rounded-full border flex items-center justify-center text-[9px] ${
+                  className={`shrink-0 w-4.5 h-4.5 rounded-pill border flex items-center justify-center text-[9px] ${
                     item.done ? "bg-pine border-pine text-white" : "border-line text-transparent"
                   }`}
                 >
@@ -275,7 +276,7 @@ export default async function DashboardHome() {
                           Off
                         </span>
                       ) : bill ? (
-                        <span className="text-[10px] uppercase tracking-wide text-amber-700">
+                        <span className="text-[10px] uppercase tracking-wide text-warn">
                           Open
                         </span>
                       ) : (

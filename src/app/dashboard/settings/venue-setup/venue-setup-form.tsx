@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateVenueSetup } from "./actions";
+import { buttonClasses } from "@/components/ui/button-classes";
 import type { ExperienceModeKey, SplitMethod } from "@/lib/onboarding-options";
 import { VenueTypePicker } from "@/components/venue-setup/venue-type-picker";
 import { ExperienceModePicker } from "@/components/venue-setup/experience-mode-picker";
@@ -109,14 +110,14 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
             <button
               onClick={() => save("shared")}
               disabled={pending}
-              className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+              className={buttonClasses("primary", "sm", false, "disabled:opacity-60")}
             >
               Switch to one shared QR
             </button>
             <button
               onClick={() => save("keep")}
               disabled={pending}
-              className="rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-medium hover:border-ink/30 disabled:opacity-60"
+              className={buttonClasses("secondary", "sm", false, "disabled:opacity-60")}
             >
               Keep my existing per-table codes
             </button>
@@ -128,7 +129,7 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
         <button
           onClick={() => save()}
           disabled={pending}
-          className="rounded-xl bg-pine text-[color:var(--on-accent,#fff)] px-6 py-3 font-medium hover:bg-pine-deep disabled:opacity-60 shadow-sm"
+          className={buttonClasses("primary", "lg", false, "disabled:opacity-60")}
         >
           {pending ? "Saving…" : "Save"}
         </button>

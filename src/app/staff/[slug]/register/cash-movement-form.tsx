@@ -42,14 +42,14 @@ export function CashMovementForm({ slug, sessionId }: { slug: string; sessionId:
         <button
           type="button"
           onClick={() => setOpen("PAID_IN")}
-          className="text-xs rounded-md border border-line px-2.5 py-1.5 hover:border-ink/30"
+          className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"
         >
           Paid in
         </button>
         <button
           type="button"
           onClick={() => setOpen("PAID_OUT")}
-          className="text-xs rounded-md border border-line px-2.5 py-1.5 hover:border-ink/30"
+          className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"
         >
           Paid out
         </button>
@@ -58,7 +58,7 @@ export function CashMovementForm({ slug, sessionId }: { slug: string; sessionId:
   }
 
   return (
-    <div className="rounded-lg border border-line p-3 space-y-2 max-w-xs">
+    <div className="rounded-[var(--radius-sm)] border border-line p-3 space-y-2 max-w-xs">
       <p className="text-xs font-medium">
         {open === "PAID_IN" ? "Paid in" : "Paid out"}
       </p>
@@ -69,21 +69,21 @@ export function CashMovementForm({ slug, sessionId }: { slug: string; sessionId:
           value={amountDollars}
           onChange={(e) => setAmountDollars(e.target.value)}
           placeholder="20.00"
-          className="w-full rounded-lg border border-line bg-surface pl-7 pr-3.5 py-2 text-sm focus:border-pine focus:outline-none"
+          className="w-full rounded-[var(--radius-md)] border border-line bg-surface pl-7 pr-3.5 py-2 text-sm focus:border-pine focus:outline-none"
         />
       </div>
       <input
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         placeholder="Reason (e.g. petty cash, safe drop)"
-        className="w-full rounded-lg border border-line bg-surface px-3.5 py-2 text-sm focus:border-pine focus:outline-none"
+        className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2 text-sm focus:border-pine focus:outline-none"
       />
       <div className="flex items-center gap-2">
         <button
           type="button"
           disabled={pending}
           onClick={submit}
-          className="text-xs rounded-md bg-ink text-surface px-2.5 py-1.5 disabled:opacity-50"
+          className="text-xs rounded-[var(--radius-xs)] bg-ink text-surface px-2.5 py-1.5 disabled:opacity-50"
         >
           {pending ? "Saving…" : "Confirm"}
         </button>

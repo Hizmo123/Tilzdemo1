@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { approveOrder, rejectOrder } from "./actions";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 type Pending = {
   id: string;
@@ -36,11 +37,11 @@ export function ApprovalCard({
   }
 
   return (
-    <div className="rounded-[var(--radius-card)] border-2 border-amber-300 bg-amber-50/50 p-4">
+    <div className="rounded-[var(--radius-card)] border-2 border-warn/40 bg-warn-soft/50 p-4">
       <div className="flex items-center justify-between mb-2">
         <span className="font-display text-lg font-semibold tracking-tight">
           {order.orderNumber != null && (
-            <span className="text-amber-700">#{order.orderNumber} · </span>
+            <span className="text-warn">#{order.orderNumber} · </span>
           )}
           Table {order.tableLabel}
         </span>
@@ -54,13 +55,13 @@ export function ApprovalCard({
           <li key={it.id} className="text-sm">
             <span className="font-medium tabular-nums">{it.quantity}×</span>{" "}
             {it.name}
-            {it.note && <span className="block text-xs text-amber-800">Note: {it.note}</span>}
+            {it.note && <span className="block text-xs text-warn">Note: {it.note}</span>}
           </li>
         ))}
       </ul>
 
       {order.note && (
-        <p className="mb-3 rounded-lg bg-amber-100 text-amber-800 text-sm px-3 py-2">
+        <p className="mb-3 rounded-[var(--radius-sm)] bg-warn-soft text-warn text-sm px-3 py-2">
           <span className="font-semibold">Note:</span> {order.note}
         </p>
       )}
@@ -71,14 +72,14 @@ export function ApprovalCard({
         <button
           disabled={pending}
           onClick={() => act(() => approveOrder(slug, order.id))}
-          className="flex-1 rounded-lg bg-pine text-[color:var(--on-accent,#fff)] py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-50"
+          className={buttonClasses("primary", "lg", false, "flex-1 disabled:opacity-50")}
         >
           {pending ? "…" : "Accept"}
         </button>
         <button
           disabled={pending}
           onClick={() => act(() => rejectOrder(slug, order.id))}
-          className="rounded-lg border border-line px-3 py-2 text-sm text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50"
+          className={buttonClasses("secondary", "lg", false, "text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50")}
         >
           Reject
         </button>

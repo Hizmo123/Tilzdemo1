@@ -50,7 +50,7 @@ export function StaffLoginForm({
               <button
                 key={s.id}
                 onClick={() => setSelected(s.id)}
-                className="rounded-xl border border-line bg-surface py-3 font-medium hover:border-pine/50 transition-colors"
+                className="rounded-[var(--radius-md)] border border-line bg-surface py-3 font-medium hover:border-pine/50 transition-colors"
               >
                 {s.name}
               </button>
@@ -82,7 +82,7 @@ export function StaffLoginForm({
           if (e.key === "Enter") submit();
         }}
         placeholder="• • • • •"
-        className="w-full text-center text-2xl tracking-[0.4em] rounded-xl border border-line bg-surface py-3 focus:border-pine focus:outline-none"
+        className="w-full text-center text-2xl tracking-[0.4em] rounded-[var(--radius-md)] border border-line bg-surface py-3 focus:border-pine focus:outline-none"
       />
 
       {error && <p className="text-sm text-danger mt-3">{error}</p>}
@@ -94,14 +94,14 @@ export function StaffLoginForm({
             setPin("");
             setError(null);
           }}
-          className="rounded-xl border border-line px-4 py-3 font-medium hover:border-ink/30"
+          className="rounded-[var(--radius-md)] border border-line px-4 py-3 font-medium hover:border-ink/30"
         >
           Back
         </button>
         <button
           onClick={submit}
           disabled={pending || pin.length < 4}
-          className="flex-1 rounded-xl bg-pine text-white py-3 font-medium hover:bg-pine-deep disabled:opacity-50 transition-colors"
+          className="flex-1 rounded-[var(--radius-md)] bg-pine text-white py-3 font-medium hover:bg-pine-deep disabled:opacity-50 transition-colors"
         >
           {pending ? "Checking…" : "Sign in"}
         </button>

@@ -11,8 +11,8 @@ type PassTicket = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  SUBMITTED: "bg-amber-50 text-amber-700",
-  PREPARING: "bg-blue-50 text-blue-700",
+  SUBMITTED: "bg-warn-soft text-warn",
+  PREPARING: "bg-info-soft text-info",
   READY: "bg-pine-soft text-pine-deep",
 };
 
@@ -59,12 +59,12 @@ export function PassView({ tickets }: { tickets: PassTicket[] }) {
               </span>
               <div className="flex items-center gap-1.5">
                 {t.isRefire && (
-                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-danger-soft text-danger font-semibold">
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-danger-soft text-danger font-semibold">
                     ↻ Re-fire
                   </span>
                 )}
                 <span
-                  className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                  className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] ${
                     STATUS_STYLE[t.status] ?? "bg-paper text-muted"
                   }`}
                 >
@@ -74,7 +74,7 @@ export function PassView({ tickets }: { tickets: PassTicket[] }) {
             </div>
             <p className="text-xs text-muted mb-3">
               {t.minutesAgo === 0 ? "just now" : `${t.minutesAgo} min ago`}
-              {mixed && <span className="text-amber-700"> · spans {t.byStation.length} stations</span>}
+              {mixed && <span className="text-warn"> · spans {t.byStation.length} stations</span>}
             </p>
 
             <div className="space-y-2.5">

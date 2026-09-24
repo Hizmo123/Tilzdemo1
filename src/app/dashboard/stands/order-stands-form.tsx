@@ -94,7 +94,7 @@ export function OrderStandsForm({
                   onChange={() => setProductId(p.id)}
                   className="sr-only"
                 />
-                <div className="w-16 h-16 rounded-lg overflow-hidden bg-paper border border-line shrink-0 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-[var(--radius-sm)] overflow-hidden bg-paper border border-line shrink-0 flex items-center justify-center">
                   {p.imageUrl ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
@@ -107,7 +107,7 @@ export function OrderStandsForm({
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm">{p.title}</span>
-                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper text-muted">
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-paper text-muted">
                       {p.type}
                     </span>
                   </div>
@@ -136,7 +136,7 @@ export function OrderStandsForm({
           {tables.map((t) => (
             <label
               key={t.id}
-              className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm cursor-pointer hover:border-ink/30 transition-colors"
+              className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm cursor-pointer hover:border-ink/30 transition-colors"
             >
               <input
                 type="checkbox"
@@ -150,7 +150,7 @@ export function OrderStandsForm({
                 {t.section ? ` · ${t.section}` : ""}
               </span>
               {t.hasStand && (
-                <span className="ml-auto text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-pine-soft text-pine-deep">
+                <span className="ml-auto text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-pine-soft text-pine-deep">
                   Has stand
                 </span>
               )}

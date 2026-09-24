@@ -70,7 +70,7 @@ export default async function TablesPage() {
                       {t.label}
                     </span>
                     <span
-                      className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                      className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] ${
                         t.active
                           ? "bg-pine-soft text-pine-deep"
                           : "bg-paper text-muted"

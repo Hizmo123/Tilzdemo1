@@ -60,7 +60,7 @@ export function DangerZone({
           type="button"
           disabled={categoryCount === 0}
           onClick={() => setConfirming(true)}
-          className="text-sm rounded-lg border border-danger/40 text-danger px-3.5 py-2 font-medium hover:bg-danger-soft disabled:opacity-40 disabled:cursor-not-allowed"
+          className="text-sm rounded-[var(--radius-sm)] border border-danger/40 text-danger px-3.5 py-2 font-medium hover:bg-danger-soft disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Delete whole menu…
         </button>

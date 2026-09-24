@@ -12,6 +12,7 @@ import {
   removeBackground,
 } from "./actions";
 import { CURRENCIES } from "./constants";
+import { buttonClasses } from "@/components/ui/button-classes";
 import { COUNTRIES, timezonesForCountry, currencyForCountry, hasTaxRules } from "@/lib/countries";
 import { LANGUAGES } from "@/lib/languages";
 import { compressImage } from "@/lib/compress-image";
@@ -335,7 +336,7 @@ export function SettingsForm({
   }
 
   const field =
-    "w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 focus:border-pine focus:outline-none";
+    "w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 focus:border-pine focus:outline-none";
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -409,7 +410,7 @@ export function SettingsForm({
             </div>
           </div>
         ) : (
-          <p className="text-sm text-muted rounded-lg border border-line bg-paper px-3.5 py-3">
+          <p className="text-sm text-muted rounded-[var(--radius-sm)] border border-line bg-paper px-3.5 py-3">
             We don&apos;t have tax rules for your country wired up yet.
           </p>
         )}
@@ -488,20 +489,20 @@ export function SettingsForm({
                     <button
                       key={key}
                       onClick={() => setTheme(key)}
-                      className={`text-left rounded-xl border-2 p-2.5 transition-colors ${
+                      className={`text-left rounded-[var(--radius-md)] border-2 p-2.5 transition-colors ${
                         active ? "border-pine" : "border-line hover:border-ink/20"
                       }`}
                     >
                       <div
-                        className="h-10 rounded-lg mb-2 flex items-center gap-1 px-2"
+                        className="h-10 rounded-[var(--radius-sm)] mb-2 flex items-center gap-1 px-2"
                         style={{ background: pal.paper, border: `1px solid ${pal.line}` }}
                       >
                         <span
-                          className="w-4 h-4 rounded-full"
+                          className="w-4 h-4 rounded-pill"
                           style={{ background: brandColor || p.defaultAccent }}
                         />
                         <span
-                          className="flex-1 h-2 rounded"
+                          className="flex-1 h-2 rounded-[var(--radius-xs)]"
                           style={{ background: pal.surface }}
                         />
                       </div>
@@ -514,12 +515,12 @@ export function SettingsForm({
 
             <div>
               <label className="text-sm text-muted block mb-2">Base</label>
-              <div className="inline-flex rounded-lg border border-line p-0.5">
+              <div className="inline-flex rounded-[var(--radius-sm)] border border-line p-0.5">
                 {(["light", "dark"] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setThemeMode(m)}
-                    className={`px-4 py-1.5 text-sm rounded-md capitalize transition-colors ${
+                    className={`px-4 py-1.5 text-sm rounded-[var(--radius-xs)] capitalize transition-colors ${
                       themeMode === m
                         ? "bg-pine text-[color:var(--on-accent,#fff)]"
                         : "text-muted hover:text-ink"
@@ -539,7 +540,7 @@ export function SettingsForm({
                     key={c}
                     onClick={() => setBrandColor(c)}
                     aria-label={`Accent ${c}`}
-                    className={`w-9 h-9 rounded-full border-2 ${
+                    className={`w-9 h-9 rounded-pill border-2 ${
                       brandColor.toLowerCase() === c.toLowerCase()
                         ? "border-ink"
                         : "border-transparent"
@@ -552,7 +553,7 @@ export function SettingsForm({
                     type="color"
                     value={/^#[0-9a-fA-F]{6}$/.test(brandColor) ? brandColor : "#0f5c42"}
                     onChange={(e) => setBrandColor(e.target.value)}
-                    className="w-9 h-9 rounded-full border border-line bg-transparent cursor-pointer p-0"
+                    className="w-9 h-9 rounded-pill border border-line bg-transparent cursor-pointer p-0"
                     aria-label="Custom accent colour"
                   />
                   Custom
@@ -575,7 +576,7 @@ export function SettingsForm({
                     <button
                       key={key}
                       onClick={() => setFontTheme(key)}
-                      className={`rounded-xl border-2 p-3 min-w-0 overflow-hidden transition-colors ${
+                      className={`rounded-[var(--radius-md)] border-2 p-3 min-w-0 overflow-hidden transition-colors ${
                         active ? "border-pine" : "border-line hover:border-ink/20"
                       }`}
                     >
@@ -615,7 +616,7 @@ export function SettingsForm({
                     key={l.value}
                     type="button"
                     onClick={() => setMenuLayout(l.value)}
-                    className={`text-left rounded-xl border-2 p-3 transition-colors ${
+                    className={`text-left rounded-[var(--radius-md)] border-2 p-3 transition-colors ${
                       menuLayout === l.value
                         ? "border-pine bg-pine-soft"
                         : "border-line hover:border-ink/20"
@@ -729,7 +730,7 @@ export function SettingsForm({
 
         {/* Logo */}
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-lg border border-line bg-paper overflow-hidden flex items-center justify-center shrink-0">
+          <div className="w-16 h-16 rounded-[var(--radius-sm)] border border-line bg-paper overflow-hidden flex items-center justify-center shrink-0">
             {logoUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
@@ -752,7 +753,7 @@ export function SettingsForm({
             <button
               disabled={logoBusy}
               onClick={() => logoRef.current?.click()}
-              className="text-sm rounded-md border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
+              className="text-sm rounded-[var(--radius-xs)] border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
             >
               {logoBusy ? "Uploading…" : logoUrl ? "Replace logo" : "Upload logo"}
             </button>
@@ -773,7 +774,7 @@ export function SettingsForm({
             Banner image{" "}
             <span className="text-xs">(small header strip)</span>
           </label>
-          <div className="rounded-lg border border-line bg-paper overflow-hidden h-24 flex items-center justify-center mb-2">
+          <div className="rounded-[var(--radius-sm)] border border-line bg-paper overflow-hidden h-24 flex items-center justify-center mb-2">
             {coverUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={coverUrl} alt="" className="w-full h-full object-cover" />
@@ -786,7 +787,7 @@ export function SettingsForm({
             <button
               disabled={coverBusy}
               onClick={() => coverRef.current?.click()}
-              className="text-sm rounded-md border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
+              className="text-sm rounded-[var(--radius-xs)] border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
             >
               {coverBusy ? "Uploading…" : coverUrl ? "Replace banner" : "Upload banner"}
             </button>
@@ -807,7 +808,7 @@ export function SettingsForm({
             Page background{" "}
             <span className="text-xs">(full-screen photo behind everything)</span>
           </label>
-          <div className="rounded-lg border border-line bg-paper overflow-hidden h-28 flex items-center justify-center mb-2">
+          <div className="rounded-[var(--radius-sm)] border border-line bg-paper overflow-hidden h-28 flex items-center justify-center mb-2">
             {bgImageUrl ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={bgImageUrl} alt="" className="w-full h-full object-cover" />
@@ -820,7 +821,7 @@ export function SettingsForm({
             <button
               disabled={bgBusy}
               onClick={() => bgRef.current?.click()}
-              className="text-sm rounded-md border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
+              className="text-sm rounded-[var(--radius-xs)] border border-line px-3 py-1.5 hover:border-ink/30 disabled:opacity-50"
             >
               {bgBusy ? "Uploading…" : bgImageUrl ? "Replace background" : "Upload background"}
             </button>
@@ -902,7 +903,7 @@ export function SettingsForm({
 
         <div>
           <p className="text-sm font-medium mb-1">When do customers pay?</p>
-          <div className="inline-flex rounded-lg border border-line p-0.5">
+          <div className="inline-flex rounded-[var(--radius-sm)] border border-line p-0.5">
             {(
               [
                 ["after", "After — running tab"],
@@ -913,7 +914,7 @@ export function SettingsForm({
                 key={v}
                 type="button"
                 onClick={() => setPaymentTiming(v)}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                className={`px-3 py-1.5 text-sm rounded-[var(--radius-xs)] transition-colors ${
                   paymentTiming === v
                     ? "bg-pine text-[color:var(--on-accent,#fff)]"
                     : "text-muted hover:text-ink"
@@ -974,7 +975,7 @@ export function SettingsForm({
                 inputMode="decimal"
                 value={surchargePercentStr}
                 onChange={(e) => setSurchargePercentStr(e.target.value)}
-                className="w-20 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm focus:border-pine focus:outline-none"
+                className="w-20 rounded-[var(--radius-md)] border border-line bg-surface px-3 py-1.5 text-sm focus:border-pine focus:outline-none"
               />
               <span className="text-sm text-muted">% surcharge, added to every card payment</span>
             </div>
@@ -1043,7 +1044,7 @@ export function SettingsForm({
         <button
           onClick={save}
           disabled={pending}
-          className="rounded-xl bg-pine text-[color:var(--on-accent,#fff)] px-6 py-3 font-medium hover:bg-pine-deep disabled:opacity-60 shadow-sm"
+          className={buttonClasses("primary", "lg", false, "disabled:opacity-60")}
         >
           {pending ? "Saving…" : "Save settings"}
         </button>

@@ -78,7 +78,7 @@ export function PrivacyDataSection({
         </p>
         <a
           href="/dashboard/settings/export"
-          className="inline-block text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+          className="inline-block text-sm rounded-[var(--radius-sm)] border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
         >
           Download export
         </a>
@@ -87,7 +87,7 @@ export function PrivacyDataSection({
       <div className="border-t border-line pt-5">
         <p className="text-sm font-medium mb-1">Deactivate your account</p>
         {deactivateDone ? (
-          <p className="text-sm text-muted rounded-lg bg-paper px-3.5 py-3">
+          <p className="text-sm text-muted rounded-[var(--radius-sm)] bg-paper px-3.5 py-3">
             Your account is now deactivated. Check your email for a link to
             reactivate — you&apos;ll be signed out shortly.
           </p>
@@ -113,13 +113,13 @@ export function PrivacyDataSection({
             <input
               value={deactivateName}
               onChange={(e) => setDeactivateName(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface px-3.5 py-2 text-sm focus:border-danger focus:outline-none"
+              className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2 text-sm focus:border-danger focus:outline-none"
             />
             <div className="flex gap-2">
               <button
                 disabled={pending}
                 onClick={submitDeactivate}
-                className="rounded-lg bg-danger text-white px-3.5 py-2 text-sm font-medium disabled:opacity-50"
+                className="rounded-[var(--radius-sm)] bg-danger text-white px-3.5 py-2 text-sm font-medium disabled:opacity-50"
               >
                 {pending ? "Deactivating…" : "Confirm deactivation"}
               </button>
@@ -130,7 +130,7 @@ export function PrivacyDataSection({
                   setDeactivateName("");
                   setDeactivateError(null);
                 }}
-                className="rounded-lg border border-line px-3.5 py-2 text-sm disabled:opacity-50"
+                className="rounded-[var(--radius-sm)] border border-line px-3.5 py-2 text-sm disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -143,7 +143,7 @@ export function PrivacyDataSection({
       <div className="border-t border-line pt-5">
         <p className="text-sm font-medium mb-1 text-danger">Delete your account</p>
         {deletionRequestedAt ? (
-          <div className="rounded-lg bg-danger-soft text-danger px-3.5 py-3 text-sm space-y-2">
+          <div className="rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-3 text-sm space-y-2">
             <p>
               Deletion requested on{" "}
               {new Date(deletionRequestedAt).toLocaleDateString("en-AU")}. Your
@@ -155,7 +155,7 @@ export function PrivacyDataSection({
               <button
                 disabled={pending}
                 onClick={cancel}
-                className="rounded-lg border border-danger/30 px-3 py-1.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50"
+                className="rounded-[var(--radius-sm)] border border-danger/30 px-3 py-1.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50"
               >
                 Cancel request
               </button>
@@ -180,13 +180,13 @@ export function PrivacyDataSection({
             <input
               value={confirmName}
               onChange={(e) => setConfirmName(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface px-3.5 py-2 text-sm focus:border-danger focus:outline-none"
+              className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2 text-sm focus:border-danger focus:outline-none"
             />
             <div className="flex gap-2">
               <button
                 disabled={pending}
                 onClick={submitRequest}
-                className="rounded-lg bg-danger text-white px-3.5 py-2 text-sm font-medium disabled:opacity-50"
+                className="rounded-[var(--radius-sm)] bg-danger text-white px-3.5 py-2 text-sm font-medium disabled:opacity-50"
               >
                 {pending ? "Submitting…" : "Confirm deletion request"}
               </button>
@@ -197,7 +197,7 @@ export function PrivacyDataSection({
                   setConfirmName("");
                   setError(null);
                 }}
-                className="rounded-lg border border-line px-3.5 py-2 text-sm disabled:opacity-50"
+                className="rounded-[var(--radius-sm)] border border-line px-3.5 py-2 text-sm disabled:opacity-50"
               >
                 Cancel
               </button>

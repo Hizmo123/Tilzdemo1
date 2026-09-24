@@ -84,7 +84,7 @@ export function MenuImportForm({
         </p>
         <a
           href="/dashboard/menu/import/template"
-          className="inline-block text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+          className="inline-block text-sm rounded-[var(--radius-sm)] border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
         >
           Download CSV template
         </a>
@@ -110,7 +110,7 @@ export function MenuImportForm({
       {pending && !preview && <p className="text-sm text-muted">Checking your file…</p>}
 
       {preview && "error" in preview && (
-        <p className="rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
+        <p className="rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
           {preview.error}
         </p>
       )}
@@ -122,7 +122,7 @@ export function MenuImportForm({
           </h2>
 
           {preview.errors.length > 0 && (
-            <div className="rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm space-y-1">
+            <div className="rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm space-y-1">
               <p className="font-medium">
                 {preview.errors.length} row{preview.errors.length === 1 ? "" : "s"} need fixing
                 before you can import:
@@ -141,7 +141,7 @@ export function MenuImportForm({
           )}
 
           {preview.warnings.length > 0 && (
-            <div className="rounded-lg bg-amber-50 text-amber-800 px-3.5 py-2.5 text-sm space-y-1">
+            <div className="rounded-[var(--radius-sm)] bg-warn-soft text-warn px-3.5 py-2.5 text-sm space-y-1">
               <p className="font-medium">
                 {preview.warnings.length} note{preview.warnings.length === 1 ? "" : "s"} —
                 these won't stop the import:
@@ -181,7 +181,7 @@ export function MenuImportForm({
                           </span>
                         )}
                         {it.alreadyExists && (
-                          <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted bg-paper rounded px-1.5 py-0.5">
+                          <span className="ml-1.5 text-[10px] uppercase tracking-wide text-muted bg-paper rounded-[var(--radius-xs)] px-1.5 py-0.5">
                             already exists — will be skipped
                           </span>
                         )}
@@ -200,7 +200,7 @@ export function MenuImportForm({
             <p className="text-sm font-medium">What should this do to your current menu?</p>
             <div className="space-y-2">
               <label
-                className={`flex items-start gap-2.5 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${
+                className={`flex items-start gap-2.5 rounded-[var(--radius-sm)] border p-3 text-sm cursor-pointer transition-colors ${
                   mode === "add" ? "border-pine bg-pine-soft" : "border-line hover:border-ink/20"
                 }`}
               >
@@ -224,7 +224,7 @@ export function MenuImportForm({
                 </span>
               </label>
               <label
-                className={`flex items-start gap-2.5 rounded-lg border p-3 text-sm cursor-pointer transition-colors ${
+                className={`flex items-start gap-2.5 rounded-[var(--radius-sm)] border p-3 text-sm cursor-pointer transition-colors ${
                   mode === "replace" ? "border-danger bg-danger-soft" : "border-line hover:border-ink/20"
                 }`}
               >
@@ -261,7 +261,7 @@ export function MenuImportForm({
             <button
               disabled={pending || !!blocked}
               onClick={() => (mode === "replace" ? setConfirmingReplace(true) : confirmImport())}
-              className={`rounded-xl px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 ${
+              className={`rounded-[var(--radius-md)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 ${
                 mode === "replace" ? "bg-danger hover:brightness-95" : "bg-pine hover:bg-pine-deep"
               }`}
             >
@@ -274,7 +274,7 @@ export function MenuImportForm({
             <button
               disabled={pending}
               onClick={reset}
-              className="rounded-xl border border-line px-4 py-2.5 text-sm disabled:opacity-50"
+              className="rounded-[var(--radius-md)] border border-line px-4 py-2.5 text-sm disabled:opacity-50"
             >
               Start over
             </button>
@@ -284,7 +284,7 @@ export function MenuImportForm({
       )}
 
       {result && "error" in result && (
-        <p className="rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
+        <p className="rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
           {result.error}
         </p>
       )}
@@ -312,13 +312,13 @@ export function MenuImportForm({
           <div className="flex gap-2 mt-4">
             <a
               href="/dashboard/menu"
-              className="rounded-xl bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
+              className="rounded-[var(--radius-md)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
             >
               Go to menu
             </a>
             <button
               onClick={reset}
-              className="rounded-xl border border-line px-4 py-2.5 text-sm"
+              className="rounded-[var(--radius-md)] border border-line px-4 py-2.5 text-sm"
             >
               Import another file
             </button>

@@ -15,7 +15,7 @@ export function TaxInvoice({ data }: { data: ReceiptData }) {
   const issued = new Date(data.issuedAt);
 
   return (
-    <div className="mx-auto max-w-md bg-white text-[#15181b] rounded-2xl border border-[#e6e3dc] p-7 print:border-0 print:rounded-none print:max-w-none">
+    <div className="mx-auto max-w-md bg-white text-[#15181b] rounded-[var(--radius-card)] border border-[#e6e3dc] p-7 print:border-0 print:rounded-none print:max-w-none">
       <div className="text-center border-b border-dashed border-[#d8d4ca] pb-4">
         <p className="text-[11px] uppercase tracking-[0.2em] text-[#6b7169]">
           Tax Invoice
@@ -142,7 +142,7 @@ export function TaxInvoice({ data }: { data: ReceiptData }) {
       </div>
 
       {data.anyTest && (
-        <p className="mt-5 text-center text-[10px] uppercase tracking-wide text-amber-700 bg-amber-50 rounded-md py-2 print:bg-transparent">
+        <p className="mt-5 text-center text-[10px] uppercase tracking-wide text-warn bg-warn-soft rounded-[var(--radius-xs)] py-2 print:bg-transparent">
           Test payment — no real money moved
         </p>
       )}

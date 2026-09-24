@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
 import { appBaseUrl } from "@/lib/urls";
 import { qrDataUrlForUrl } from "@/lib/qr";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 const CHECKLIST = [
   "Any tablet 10\" or larger — a phone works for testing, but is too small for a busy pass.",
@@ -59,7 +60,7 @@ export default async function KitchenSetupPage() {
         </p>
       </div>
 
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
+      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
         <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
           Open the kitchen screen
         </h2>
@@ -72,12 +73,12 @@ export default async function KitchenSetupPage() {
           <img
             src={qrPreview}
             alt="QR code for the kitchen screen"
-            className="w-32 h-32 rounded-lg border border-line shrink-0"
+            className="w-32 h-32 rounded-[var(--radius-sm)] border border-line shrink-0"
             width={128}
             height={128}
           />
           <div className="space-y-3 min-w-0">
-            <code className="block text-xs break-all bg-paper rounded px-2 py-1.5">
+            <code className="block text-xs break-all bg-paper rounded-[var(--radius-xs)] px-2 py-1.5">
               {kitchenUrl}
             </code>
             <div className="flex flex-wrap gap-2">
@@ -85,19 +86,19 @@ export default async function KitchenSetupPage() {
                 href={kitchenUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+                className={buttonClasses("secondary", "sm")}
               >
                 Open kitchen screen →
               </a>
               <a
                 href="/dashboard/kitchen/qr?format=svg"
-                className="text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+                className={buttonClasses("secondary", "sm")}
               >
                 Download card (SVG)
               </a>
               <a
                 href="/dashboard/kitchen/qr?format=png"
-                className="text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+                className={buttonClasses("secondary", "sm")}
               >
                 Download PNG
               </a>
@@ -106,7 +107,7 @@ export default async function KitchenSetupPage() {
         </div>
       </section>
 
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
+      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
         <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
           Staff PINs
         </h2>
@@ -121,14 +122,14 @@ export default async function KitchenSetupPage() {
         </p>
       </section>
 
-      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
+      <section className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
         <h2 className="font-display text-lg font-semibold tracking-tight mb-3">
           Before service — a quick checklist
         </h2>
         <ul className="space-y-2.5">
           {CHECKLIST.map((item, i) => (
             <li key={i} className="flex items-start gap-2.5 text-sm">
-              <span className="shrink-0 w-5 h-5 rounded border border-line mt-0.5" aria-hidden />
+              <span className="shrink-0 w-5 h-5 rounded-[var(--radius-xs)] border border-line mt-0.5" aria-hidden />
               <span className="text-ink-soft">{item}</span>
             </li>
           ))}

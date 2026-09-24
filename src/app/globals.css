@@ -47,6 +47,11 @@
   --color-warn-soft: #fbf1dc;
   --color-success: #1f7a4d;
   --color-success-soft: #e0f2e8;
+  /* Neutral "in progress" status (a PREPARING ticket) — the one status
+     colour the dashboard/staff boards needed that had no token, so they
+     were reaching for Tailwind's blue-50/700 directly. */
+  --color-info: #2f6fb3;
+  --color-info-soft: #e4edf8;
 
   /* type */
   --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;

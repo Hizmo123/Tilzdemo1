@@ -96,7 +96,7 @@ export default async function CounterPage({
                     <p className="font-medium tabular-nums">
                       {formatCents(s.totalCents - s.amountPaidCents, restaurant.currency)}
                     </p>
-                    <p className="text-[10px] uppercase tracking-wide text-amber-700">
+                    <p className="text-[10px] uppercase tracking-wide text-warn">
                       {s.status === "PARTIALLY_PAID" ? "Part-paid" : "Open"}
                     </p>
                   </div>

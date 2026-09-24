@@ -18,7 +18,7 @@ export default function TermsPage() {
         </h1>
         <p className="text-sm text-muted mb-8">Last updated: not yet published.</p>
 
-        <div className="rounded-[var(--radius-card)] border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm mb-8">
+        <div className="rounded-[var(--radius-card)] border border-warn/40 bg-warn-soft text-warn p-4 text-sm mb-8">
           <strong>TODO: review by a lawyer.</strong> Everything below is a
           structural placeholder describing what a Terms of Service for Tillz
           needs to cover, written from the product as it actually works today.

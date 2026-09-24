@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 function labelKey(slug: string) {
   return `tillz.kitchen.${slug}.deviceLabel`;
@@ -88,12 +89,12 @@ export function KitchenHeader({
             onKeyDown={(e) => e.key === "Enter" && setEditing(false)}
             placeholder="e.g. Pass"
             maxLength={20}
-            className="w-24 rounded-md border border-line bg-paper px-2 py-1 text-xs focus:border-pine focus:outline-none"
+            className="w-24 rounded-[var(--radius-xs)] border border-line bg-paper px-2 py-1 text-xs focus:border-pine focus:outline-none"
           />
         ) : (
           <button
             onClick={() => setEditing(true)}
-            className="text-xs text-muted hover:text-ink border border-dashed border-line rounded-md px-2 py-1 truncate max-w-[100px]"
+            className="text-xs text-muted hover:text-ink border border-dashed border-line rounded-[var(--radius-xs)] px-2 py-1 truncate max-w-[100px]"
             title="Name this screen"
           >
             {label || "Name screen"}
@@ -104,14 +105,14 @@ export function KitchenHeader({
         {fsSupported && (
           <button
             onClick={toggleFullscreen}
-            className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+            className={buttonClasses("secondary", "sm")}
           >
             {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           </button>
         )}
         <button
           onClick={() => guardedNav(`/staff/${slug}/history`)}
-          className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+          className={buttonClasses("secondary", "sm")}
         >
           History
         </button>

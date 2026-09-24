@@ -17,7 +17,7 @@ export function ZReportView({
   currency: string;
 }) {
   return (
-    <div className="mx-auto max-w-md bg-white text-[#15181b] rounded-2xl border border-[#e6e3dc] p-7 print:border-0 print:rounded-none print:max-w-none">
+    <div className="mx-auto max-w-md bg-white text-[#15181b] rounded-[var(--radius-card)] border border-[#e6e3dc] p-7 print:border-0 print:rounded-none print:max-w-none">
       <div className="text-center border-b border-dashed border-[#d8d4ca] pb-4">
         <p className="text-[11px] uppercase tracking-[0.2em] text-[#6b7169]">
           Z-Report

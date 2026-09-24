@@ -47,19 +47,19 @@ export default async function FulfilmentPage() {
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span
-                    className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                    className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] ${
                       order.status === "SHIPPED"
                         ? "bg-pine-soft text-pine-deep"
                         : order.status === "PRINTED"
-                          ? "bg-blue-50 text-blue-700"
-                          : "bg-amber-50 text-amber-700"
+                          ? "bg-info-soft text-info"
+                          : "bg-warn-soft text-warn"
                     }`}
                   >
                     {order.status}
                   </span>
                   <a
                     href={`/admin/fulfilment/${order.id}/qr-pack`}
-                    className="text-xs rounded-md border border-line px-2.5 py-1.5 hover:border-ink/30"
+                    className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"
                   >
                     Download QR pack
                   </a>

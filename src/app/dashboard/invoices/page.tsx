@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buttonClasses } from "@/components/ui/button-classes";
 import { getActiveLocation } from "@/lib/auth";
 import { getInvoices, recentInvoicesRange, RECENT_INVOICES_DAYS } from "@/lib/invoices";
 import { parseRangeParams } from "@/lib/date-range";
@@ -74,7 +75,7 @@ export default async function InvoicesPage({
           <h2 className="font-display text-lg font-semibold tracking-tight">Full history</h2>
           <a
             href={exportHref}
-            className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+            className={buttonClasses("secondary", "sm")}
           >
             Export CSV
           </a>
@@ -91,11 +92,11 @@ export default async function InvoicesPage({
               name="q"
               defaultValue={sp.q}
               placeholder="Search table, name or email"
-              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm focus:border-pine focus:outline-none w-56"
+              className="h-9 w-56 rounded-[var(--radius-sm)] border border-line bg-surface px-3 text-sm shadow-rest focus:outline-none focus:border-pine focus:ring-[3px] focus:ring-pine/20"
             />
             <button
               type="submit"
-              className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+              className={buttonClasses("secondary", "sm")}
             >
               Search
             </button>

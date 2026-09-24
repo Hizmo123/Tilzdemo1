@@ -42,19 +42,19 @@ export default async function AdminOrgDetailPage({
         </h2>
 
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper text-muted">
+          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-paper text-muted">
             {planByTier(org.plan).name}
           </span>
-          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper text-muted">
+          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-paper text-muted">
             {org.planStatus}
           </span>
           {org.subscriptionLapsedAt && (
-            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
+            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-warn-soft text-warn">
               Lapsed {new Date(org.subscriptionLapsedAt).toLocaleDateString("en-AU")}
             </span>
           )}
           {org.deactivatedAt && (
-            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-danger-soft text-danger">
+            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-danger-soft text-danger">
               Suspended by {org.deactivatedByEmail ?? "unknown"} on{" "}
               {new Date(org.deactivatedAt).toLocaleDateString("en-AU")}
             </span>
@@ -62,7 +62,7 @@ export default async function AdminOrgDetailPage({
         </div>
 
         {org.deletionRequestedAt && (
-          <div className="rounded-lg border border-danger/30 bg-danger-soft/40 p-3 flex items-center justify-between gap-4 flex-wrap">
+          <div className="rounded-[var(--radius-sm)] border border-danger/30 bg-danger-soft/40 p-3 flex items-center justify-between gap-4 flex-wrap">
             <p className="text-sm text-ink">
               Deletion requested by {org.deletionRequestedByEmail ?? "unknown"} on{" "}
               {new Date(org.deletionRequestedAt).toLocaleDateString("en-AU")}.

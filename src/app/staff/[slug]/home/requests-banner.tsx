@@ -15,7 +15,7 @@ export function RequestsBanner({ slug, requests }: { slug: string; requests: Req
   if (requests.length === 0) return null;
   return (
     <div className="mb-6">
-      <h2 className="text-sm font-semibold text-amber-700 mb-2">
+      <h2 className="text-sm font-semibold text-warn mb-2">
         Tables needing assistance ({requests.length})
       </h2>
       <div className="grid sm:grid-cols-2 gap-2">
@@ -46,10 +46,10 @@ function RequestRow({ slug, req }: { slug: string; req: Req }) {
         : `${Math.floor(req.minutesAgo / 60)}h ago`;
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-amber-300 bg-amber-50 p-3 flex items-center justify-between gap-3">
+    <div className="rounded-[var(--radius-card)] border border-warn/40 bg-warn-soft p-3 flex items-center justify-between gap-3">
       <div className="min-w-0">
         <p className="text-sm font-medium">Table {req.tableLabel} needs assistance</p>
-        <p className="text-xs text-amber-700">
+        <p className="text-xs text-warn">
           {waited}
           {req.status === "ACKNOWLEDGED" ? " · on it" : ""}
         </p>
@@ -59,7 +59,7 @@ function RequestRow({ slug, req }: { slug: string; req: Req }) {
           <button
             disabled={pending}
             onClick={() => move("ACKNOWLEDGED")}
-            className="text-xs rounded-md border border-amber-300 bg-surface px-2.5 py-1.5 disabled:opacity-50"
+            className="text-xs rounded-[var(--radius-xs)] border border-warn/40 bg-surface px-2.5 py-1.5 disabled:opacity-50"
           >
             On it
           </button>
@@ -67,7 +67,7 @@ function RequestRow({ slug, req }: { slug: string; req: Req }) {
         <button
           disabled={pending}
           onClick={() => move("COMPLETED")}
-          className="text-xs rounded-md bg-pine text-white px-3 py-1.5 hover:bg-pine-deep disabled:opacity-50"
+          className="text-xs rounded-[var(--radius-xs)] bg-pine text-white px-3 py-1.5 hover:bg-pine-deep disabled:opacity-50"
         >
           Done
         </button>

@@ -99,7 +99,7 @@ export function RefundPanel({
     <div className="mt-3 space-y-2">
       <p className="text-xs font-medium text-ink-soft">Payments</p>
       {refundable.map((p) => (
-        <div key={p.id} className="rounded-lg border border-line p-3 text-sm">
+        <div key={p.id} className="rounded-[var(--radius-sm)] border border-line p-3 text-sm">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p>
@@ -134,7 +134,7 @@ export function RefundPanel({
                   inputMode="decimal"
                   value={amountStr}
                   onChange={(e) => setAmountStr(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
+                  className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
                 />
               </div>
               <div>
@@ -143,21 +143,21 @@ export function RefundPanel({
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="e.g. Order was wrong, guest left early"
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
+                  className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
                 />
               </div>
               <div className="flex gap-2">
                 <button
                   disabled={pending}
                   onClick={() => confirm(p)}
-                  className="rounded-lg bg-danger text-white px-3 py-2 text-sm font-medium disabled:opacity-50"
+                  className="rounded-[var(--radius-sm)] bg-danger text-white px-3 py-2 text-sm font-medium disabled:opacity-50"
                 >
                   {pending ? "Refunding…" : "Confirm refund"}
                 </button>
                 <button
                   disabled={pending}
                   onClick={close}
-                  className="rounded-lg border border-line px-3 py-2 text-sm disabled:opacity-50"
+                  className="rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm disabled:opacity-50"
                 >
                   Cancel
                 </button>

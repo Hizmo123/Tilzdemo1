@@ -58,12 +58,12 @@ export function NfcSection({ url }: { url: string }) {
       </p>
 
       <div className="flex items-center gap-2 mb-4">
-        <code className="flex-1 text-xs break-all bg-paper rounded px-2 py-1.5">
+        <code className="flex-1 text-xs break-all bg-paper rounded-[var(--radius-xs)] px-2 py-1.5">
           {url}
         </code>
         <button
           onClick={copy}
-          className="text-xs rounded-md border border-line px-2.5 py-1.5 hover:border-ink/30 shrink-0"
+          className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30 shrink-0"
         >
           {copied ? "Copied" : "Copy"}
         </button>
@@ -73,12 +73,12 @@ export function NfcSection({ url }: { url: string }) {
         <button
           onClick={writeTag}
           disabled={writing}
-          className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+          className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
         >
           {writing ? "Hold tag to phone…" : "Write to tag"}
         </button>
       ) : (
-        <div className="rounded-lg bg-paper p-3 text-sm text-muted">
+        <div className="rounded-[var(--radius-sm)] bg-paper p-3 text-sm text-muted">
           <p className="font-medium text-ink mb-1">To write a tag:</p>
           <ol className="list-decimal list-inside space-y-0.5">
             <li>Install the free “NFC Tools” app on your phone.</li>

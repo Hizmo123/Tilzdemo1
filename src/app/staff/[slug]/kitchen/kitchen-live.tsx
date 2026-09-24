@@ -178,7 +178,7 @@ export function KitchenLive({
             </p>
             <button
               onClick={enableSound}
-              className="mt-4 w-full rounded-xl bg-pine text-white py-3 font-medium hover:bg-pine-deep"
+              className="mt-4 w-full rounded-[var(--radius-md)] bg-pine text-white py-3 font-medium hover:bg-pine-deep"
             >
               Enable sound
             </button>
@@ -201,7 +201,7 @@ function WakeLockFallbackNotice() {
   );
   if (dismissed) return null;
   return (
-    <div className="fixed top-2 inset-x-2 z-40 rounded-lg bg-amber-500 text-white text-sm px-4 py-2.5 flex items-center justify-between gap-3">
+    <div className="fixed top-2 inset-x-2 z-40 rounded-[var(--radius-sm)] bg-warn text-white text-sm px-4 py-2.5 flex items-center justify-between gap-3">
       <span>
         This device can&apos;t auto-keep the screen awake — turn off screen sleep
         in its display settings for this shift.
@@ -248,7 +248,7 @@ function ConnectionBanner({
     // All good — a small, quiet corner indicator rather than nothing at all,
     // so "no news" still reads as "confirmed fine" not "untested".
     return (
-      <div className="fixed bottom-2 right-2 z-40 text-[10px] text-muted bg-surface/80 backdrop-blur rounded-full px-2.5 py-1 border border-line">
+      <div className="fixed bottom-2 right-2 z-40 text-[10px] text-muted bg-surface/80 backdrop-blur rounded-pill px-2.5 py-1 border border-line">
         Live · updated {secondsAgo <= 1 ? "just now" : `${secondsAgo}s ago`}
       </div>
     );
@@ -257,7 +257,7 @@ function ConnectionBanner({
   return (
     <div
       className={`fixed top-0 inset-x-0 z-40 text-center text-sm font-medium py-2 ${
-        offline ? "bg-danger text-white" : "bg-amber-500 text-white"
+        offline ? "bg-danger text-white" : "bg-warn text-white"
       }`}
     >
       {offline

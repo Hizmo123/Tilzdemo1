@@ -74,13 +74,13 @@ export function CloseDrawerFlow({
         <div className="flex justify-center gap-3 print:hidden">
           <button
             onClick={() => window.print()}
-            className="rounded-xl bg-ink text-surface px-5 py-2.5 text-sm font-medium hover:opacity-90"
+            className="rounded-[var(--radius-md)] bg-ink text-surface px-5 py-2.5 text-sm font-medium hover:opacity-90"
           >
             Print / Save PDF
           </button>
           <button
             onClick={() => router.refresh()}
-            className="rounded-xl border border-line px-5 py-2.5 text-sm font-medium hover:border-ink/30"
+            className="rounded-[var(--radius-md)] border border-line px-5 py-2.5 text-sm font-medium hover:border-ink/30"
           >
             Done
           </button>
@@ -115,7 +115,7 @@ export function CloseDrawerFlow({
             type="button"
             disabled={pending}
             onClick={confirmClose}
-            className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+            className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
           >
             {pending ? "Closing…" : "Confirm — close drawer"}
           </button>
@@ -123,7 +123,7 @@ export function CloseDrawerFlow({
             type="button"
             disabled={pending}
             onClick={() => setStep("counting")}
-            className="rounded-lg border border-line px-4 py-2.5 text-sm hover:border-ink/30"
+            className="rounded-[var(--radius-sm)] border border-line px-4 py-2.5 text-sm hover:border-ink/30"
           >
             Back
           </button>
@@ -145,7 +145,7 @@ export function CloseDrawerFlow({
             value={countedDollars}
             onChange={(e) => setCountedDollars(e.target.value)}
             placeholder="0.00"
-            className="w-full rounded-lg border border-line bg-surface pl-7 pr-3.5 py-2.5 text-sm focus:border-pine focus:outline-none"
+            className="w-full rounded-[var(--radius-md)] border border-line bg-surface pl-7 pr-3.5 py-2.5 text-sm focus:border-pine focus:outline-none"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -153,7 +153,7 @@ export function CloseDrawerFlow({
             type="button"
             disabled={pending}
             onClick={goReview}
-            className="rounded-lg bg-ink text-surface px-4 py-2.5 text-sm font-medium disabled:opacity-60"
+            className="rounded-[var(--radius-sm)] bg-ink text-surface px-4 py-2.5 text-sm font-medium disabled:opacity-60"
           >
             {pending ? "…" : "Review"}
           </button>
@@ -161,7 +161,7 @@ export function CloseDrawerFlow({
             type="button"
             disabled={pending}
             onClick={() => setStep("closed")}
-            className="rounded-lg border border-line px-4 py-2.5 text-sm hover:border-ink/30"
+            className="rounded-[var(--radius-sm)] border border-line px-4 py-2.5 text-sm hover:border-ink/30"
           >
             Cancel
           </button>
@@ -175,7 +175,7 @@ export function CloseDrawerFlow({
     <button
       type="button"
       onClick={() => setStep("counting")}
-      className="rounded-lg border border-danger/40 text-danger px-4 py-2.5 text-sm font-medium hover:bg-danger-soft"
+      className="rounded-[var(--radius-sm)] border border-danger/40 text-danger px-4 py-2.5 text-sm font-medium hover:bg-danger-soft"
     >
       Close drawer
     </button>

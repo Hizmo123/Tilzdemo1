@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 function BoardSkeleton() {
   return (
     <div className="max-w-3xl mx-auto px-5 py-6 space-y-3 animate-pulse">
-      <div className="h-8 w-40 rounded-lg bg-line/60" />
+      <div className="h-8 w-40 rounded-[var(--radius-sm)] bg-line/60" />
       <div className="grid sm:grid-cols-2 gap-3">
         <div className="h-32 rounded-[var(--radius-card)] bg-line/40" />
         <div className="h-32 rounded-[var(--radius-card)] bg-line/40" />

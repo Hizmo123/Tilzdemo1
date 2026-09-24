@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { buttonClasses } from "@/components/ui/button-classes";
 import { getActiveLocation } from "@/lib/auth";
 import { MenuListData } from "./menu-list-data";
 import { MenuTabs } from "./menu-tabs";
@@ -52,7 +53,7 @@ export default async function MenuPage({
         </div>
         <Link
           href="/dashboard/menu/import"
-          className="shrink-0 text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+          className={buttonClasses("secondary", "sm", false, "shrink-0")}
         >
           Import from CSV
         </Link>

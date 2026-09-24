@@ -50,7 +50,7 @@ export function TakePaymentButton({
           <button
             disabled={pending}
             onClick={() => pay(tender)}
-            className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+            className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
           >
             {pending
               ? "Recording…"
@@ -59,7 +59,7 @@ export function TakePaymentButton({
           <button
             disabled={pending}
             onClick={() => setTender(null)}
-            className="rounded-lg border border-line px-4 py-2.5 text-sm hover:border-ink/30"
+            className="rounded-[var(--radius-sm)] border border-line px-4 py-2.5 text-sm hover:border-ink/30"
           >
             Cancel
           </button>
@@ -77,7 +77,7 @@ export function TakePaymentButton({
                   disabled={disabled}
                   title={disabled ? "Open the drawer to take cash" : undefined}
                   onClick={() => setTender(t.value)}
-                  className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-pine/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line"
+                  className="rounded-[var(--radius-sm)] border border-line px-4 py-2.5 text-sm font-medium hover:border-pine/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line"
                 >
                   {t.label}
                 </button>

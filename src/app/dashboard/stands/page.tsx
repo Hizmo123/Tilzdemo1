@@ -101,7 +101,7 @@ export default async function StandsPage() {
                     {o.createdAt.toLocaleDateString("en-AU")}
                   </p>
                 </div>
-                <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded bg-paper text-muted">
+                <span className="text-[11px] uppercase tracking-wide px-2 py-0.5 rounded-[var(--radius-xs)] bg-paper text-muted">
                   {o.status.replace("_", " ")}
                 </span>
               </div>

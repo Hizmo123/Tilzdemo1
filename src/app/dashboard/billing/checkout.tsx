@@ -45,7 +45,7 @@ export function Billing({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg bg-amber-50 text-amber-800 text-xs px-3 py-2">
+      <div className="rounded-[var(--radius-sm)] bg-warn-soft text-warn text-xs px-3 py-2">
         Test mode — no card required and no real charge is made.
       </div>
 
@@ -58,7 +58,7 @@ export function Billing({
           )}
         </p>
         {trialStatus.inTrial && (
-          <span className="mt-2 inline-flex items-center rounded-full bg-pine/10 px-2.5 py-1 text-xs font-medium text-pine">
+          <span className="mt-2 inline-flex items-center rounded-pill bg-pine/10 px-2.5 py-1 text-xs font-medium text-pine">
             Trial — {trialStatus.daysRemaining} day{trialStatus.daysRemaining === 1 ? "" : "s"} left
           </span>
         )}

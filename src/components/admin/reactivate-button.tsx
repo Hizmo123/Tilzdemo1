@@ -27,7 +27,7 @@ export function ReactivateButton({ orgId, orgName }: { orgId: string; orgName: s
         type="button"
         disabled={pending}
         onClick={run}
-        className="text-xs rounded-md bg-pine text-white px-2.5 py-1.5 hover:bg-pine-deep disabled:opacity-50"
+        className="text-xs rounded-[var(--radius-xs)] bg-pine text-white px-2.5 py-1.5 hover:bg-pine-deep disabled:opacity-50"
       >
         {pending ? "…" : "Reactivate"}
       </button>

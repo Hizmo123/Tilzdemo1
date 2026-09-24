@@ -26,7 +26,7 @@ export function ReactivateButton({
   if (done) {
     return (
       <>
-        <div className="w-14 h-14 rounded-full bg-pine-soft text-pine-deep flex items-center justify-center mx-auto mb-4 text-2xl">
+        <div className="w-14 h-14 rounded-pill bg-pine-soft text-pine-deep flex items-center justify-center mx-auto mb-4 text-2xl">
           ✓
         </div>
         <h1 className="font-display text-2xl font-semibold tracking-tight">
@@ -50,7 +50,7 @@ export function ReactivateButton({
       <button
         disabled={pending}
         onClick={submit}
-        className="mt-5 w-full rounded-xl bg-pine text-white py-3 font-medium hover:bg-pine-deep disabled:opacity-50"
+        className="mt-5 w-full rounded-[var(--radius-md)] bg-pine text-white py-3 font-medium hover:bg-pine-deep disabled:opacity-50"
       >
         {pending ? "Reactivating…" : "Reactivate account"}
       </button>

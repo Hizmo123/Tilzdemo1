@@ -33,7 +33,7 @@ export default async function AddVenuePage({
           <p className="text-sm text-muted mt-2">{check.reason}</p>
           <Link
             href="/dashboard/billing"
-            className="mt-5 inline-block rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
+            className="mt-5 inline-block rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
           >
             See plans
           </Link>

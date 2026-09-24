@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { advanceOrderFromDashboard } from "./actions";
+import { Button } from "@/components/ui/button";
 import type { OrderStatusName } from "@/lib/bills";
 
 type Ticket = {
@@ -21,8 +22,8 @@ const NEXT_LABEL: Partial<Record<OrderStatusName, { to: OrderStatusName; label: 
 };
 
 const STATUS_STYLE: Record<string, string> = {
-  SUBMITTED: "bg-amber-50 text-amber-700",
-  PREPARING: "bg-blue-50 text-blue-700",
+  SUBMITTED: "bg-warn-soft text-warn",
+  PREPARING: "bg-info-soft text-info",
   READY: "bg-pine-soft text-pine-deep",
 };
 
@@ -60,7 +61,7 @@ export function DashboardTicket({
           Table {ticket.tableLabel}
         </span>
         <span
-          className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+          className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] ${
             STATUS_STYLE[ticket.status] ?? "bg-paper text-muted"
           }`}
         >
@@ -76,7 +77,7 @@ export function DashboardTicket({
           <li key={it.id} className="text-sm">
             <span className="font-medium tabular-nums">{it.quantity}×</span>{" "}
             {it.name}
-            {it.note && <span className="block text-xs text-amber-800">Note: {it.note}</span>}
+            {it.note && <span className="block text-xs text-warn">Note: {it.note}</span>}
           </li>
         ))}
       </ul>
@@ -87,13 +88,9 @@ export function DashboardTicket({
         </p>
       ) : (
         next && (
-          <button
-            disabled={pending}
-            onClick={() => move(next.to)}
-            className="w-full rounded-lg bg-pine text-white py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-50"
-          >
-            {pending ? "…" : next.label}
-          </button>
+          <Button size="sm" full loading={pending} onClick={() => move(next.to)}>
+            {next.label}
+          </Button>
         )
       )}
     </div>

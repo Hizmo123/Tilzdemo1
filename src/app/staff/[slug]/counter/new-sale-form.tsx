@@ -31,7 +31,7 @@ export function NewSaleForm({ slug, locations }: { slug: string; locations: Loca
         <select
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
+          className="rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
         >
           {locations.map((l) => (
             <option key={l.id} value={l.id}>
@@ -44,7 +44,7 @@ export function NewSaleForm({ slug, locations }: { slug: string; locations: Loca
         type="button"
         disabled={pending}
         onClick={newSale}
-        className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+        className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
       >
         {pending ? "Starting…" : "New sale"}
       </button>

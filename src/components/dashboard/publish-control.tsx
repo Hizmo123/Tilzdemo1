@@ -41,7 +41,7 @@ export function PublishControl({
       <div data-tour="publish" className="rounded-[var(--radius-card)] border border-line bg-surface p-5 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${squareDisconnected ? "bg-danger" : "bg-pine"}`} />
+            <span className={`w-2 h-2 rounded-pill ${squareDisconnected ? "bg-danger" : "bg-pine"}`} />
             <p className="font-medium">You&apos;re live</p>
           </div>
           <button
@@ -82,14 +82,14 @@ export function PublishControl({
           <button
             disabled={pending}
             onClick={toggle}
-            className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-60 shrink-0"
+            className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-60 shrink-0"
           >
             {pending ? "Publishing…" : "Publish / Go live"}
           </button>
         ) : (
           <Link
             href={squareDisconnected ? "/dashboard/settings/integrations" : "/dashboard/billing"}
-            className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep shrink-0"
+            className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep shrink-0"
           >
             {squareDisconnected ? "Connect Square" : "Go to Billing"}
           </Link>

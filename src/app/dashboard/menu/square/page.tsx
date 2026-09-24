@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { SquareMappingClient } from "./square-mapping-client";
+import { buttonClasses } from "@/components/ui/button-classes";
 
 // A map row created in the same transaction as its MenuItem (a fresh item
 // Square produced) will have createdAt timestamps effectively identical to
@@ -47,7 +48,7 @@ export default async function SquareMenuPage() {
           </p>
           <Link
             href="/dashboard/settings/integrations"
-            className="mt-4 inline-block rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
+            className={buttonClasses("primary", "sm", false, "mt-4")}
           >
             Go to Integrations
           </Link>

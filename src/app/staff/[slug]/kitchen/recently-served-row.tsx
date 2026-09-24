@@ -38,7 +38,7 @@ export function RecentlyServedRow({ slug, order }: { slug: string; order: Served
   }
 
   return (
-    <div className="rounded-lg border border-line bg-surface px-3 py-2">
+    <div className="rounded-[var(--radius-sm)] border border-line bg-surface px-3 py-2">
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm text-muted truncate">
           {order.orderNumber != null && (
@@ -57,7 +57,7 @@ export function RecentlyServedRow({ slug, order }: { slug: string; order: Served
               disabled={pending || done}
               onClick={() => refire(it.id, it.name)}
               title="Re-fire — needs re-cooking (dropped, sent back)"
-              className={`text-[11px] rounded-md border px-2 py-1 transition-colors disabled:opacity-50 ${
+              className={`text-[11px] rounded-[var(--radius-xs)] border px-2 py-1 transition-colors disabled:opacity-50 ${
                 done
                   ? "border-pine bg-pine-soft text-pine-deep"
                   : "border-line text-muted hover:border-danger/40 hover:text-danger"

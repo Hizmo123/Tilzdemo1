@@ -135,7 +135,7 @@ export function ReadyBanner({ slug, orders }: { slug: string; orders: ReadyOrder
             <button
               disabled={pending}
               onClick={() => markServed(o.id)}
-              className="shrink-0 text-xs rounded-md bg-pine text-white px-3 py-1.5 hover:bg-pine-deep disabled:opacity-50"
+              className="shrink-0 text-xs rounded-[var(--radius-xs)] bg-pine text-white px-3 py-1.5 hover:bg-pine-deep disabled:opacity-50"
             >
               Mark served
             </button>

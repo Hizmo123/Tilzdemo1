@@ -40,7 +40,7 @@ export function OpenDrawerForm({ slug, locations }: { slug: string; locations: L
           <select
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
+            className="rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
           >
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
@@ -59,7 +59,7 @@ export function OpenDrawerForm({ slug, locations }: { slug: string; locations: L
             value={floatDollars}
             onChange={(e) => setFloatDollars(e.target.value)}
             placeholder="200.00"
-            className="w-full rounded-lg border border-line bg-surface pl-7 pr-3.5 py-2.5 text-sm focus:border-pine focus:outline-none"
+            className="w-full rounded-[var(--radius-md)] border border-line bg-surface pl-7 pr-3.5 py-2.5 text-sm focus:border-pine focus:outline-none"
           />
         </div>
       </div>
@@ -67,7 +67,7 @@ export function OpenDrawerForm({ slug, locations }: { slug: string; locations: L
         type="button"
         disabled={pending}
         onClick={open}
-        className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+        className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
       >
         {pending ? "Opening…" : "Open drawer"}
       </button>

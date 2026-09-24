@@ -24,7 +24,7 @@ export function LapsedToggle({ orgId, lapsed }: { orgId: string; lapsed: boolean
         type="button"
         disabled={pending}
         onClick={toggle}
-        className="text-xs rounded-md border border-line px-2.5 py-1.5 hover:border-ink/30 disabled:opacity-50"
+        className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30 disabled:opacity-50"
       >
         {pending ? "…" : lapsed ? "Clear lapse" : "Mark lapsed"}
       </button>

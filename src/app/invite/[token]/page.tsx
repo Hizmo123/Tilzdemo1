@@ -92,7 +92,7 @@ export default async function InvitePage({
             </p>
             <Link
               href="/login"
-              className="inline-block rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink/30"
+              className="inline-block rounded-[var(--radius-sm)] border border-line px-4 py-2 text-sm font-medium hover:border-ink/30"
             >
               Go to login
             </Link>
@@ -108,13 +108,13 @@ export default async function InvitePage({
           <div className="flex gap-2 justify-center">
             <Link
               href="/login"
-              className="rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink/30"
+              className="rounded-[var(--radius-sm)] border border-line px-4 py-2 text-sm font-medium hover:border-ink/30"
             >
               Log in
             </Link>
             <Link
               href="/signup"
-              className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep"
+              className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep"
             >
               Sign up
             </Link>

@@ -63,7 +63,7 @@ export function AbnVerify({
         type="button"
         disabled={pending || digits.length < 11}
         onClick={doLookup}
-        className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-ink/30 disabled:opacity-50"
+        className="rounded-[var(--radius-sm)] border border-line px-4 py-2.5 text-sm font-medium hover:border-ink/30 disabled:opacity-50"
       >
         {pending && !preview ? "Looking up…" : "Look up & verify this ABN"}
       </button>
@@ -73,7 +73,7 @@ export function AbnVerify({
       )}
 
       {preview && "ok" in preview && (
-        <div className="rounded-lg border border-line bg-paper p-3.5 space-y-2">
+        <div className="rounded-[var(--radius-sm)] border border-line bg-paper p-3.5 space-y-2">
           <p className="text-sm">
             <span className="font-medium">{preview.entityName}</span>
             <span className="text-muted">
@@ -83,7 +83,7 @@ export function AbnVerify({
             </span>
           </p>
           {preview.test && (
-            <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1.5">
+            <p className="text-xs text-warn bg-warn-soft rounded-[var(--radius-xs)] px-2 py-1.5">
               Dev mode (no ABR_GUID configured) — this is a placeholder
               result, not a real lookup. Add an Australian Business Register
               GUID to verify real ABNs.
@@ -93,7 +93,7 @@ export function AbnVerify({
           <button
             disabled={pending}
             onClick={confirm}
-            className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-50"
+            className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-50"
           >
             {pending ? "Confirming…" : "Yes, this is us"}
           </button>

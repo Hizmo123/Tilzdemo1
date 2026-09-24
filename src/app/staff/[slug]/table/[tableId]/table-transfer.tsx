@@ -60,7 +60,7 @@ export function TableTransfer({
   if (mode) {
     const options = mode === "move" ? moveTargets : mergeTargets;
     return (
-      <div className="mt-3 rounded-lg border border-line bg-paper p-3 space-y-2">
+      <div className="mt-3 rounded-[var(--radius-sm)] border border-line bg-paper p-3 space-y-2">
         <p className="text-xs font-medium text-ink-soft">
           {mode === "move" ? "Move this bill to…" : "Merge this bill into…"}
         </p>
@@ -74,7 +74,7 @@ export function TableTransfer({
           <select
             value={choice}
             onChange={(e) => setChoice(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
+            className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
           >
             <option value="">Select a table…</option>
             {options.map((t) => (
@@ -89,14 +89,14 @@ export function TableTransfer({
           <button
             disabled={pending || !choice}
             onClick={confirm}
-            className="rounded-lg bg-ink text-paper px-3 py-2 text-sm font-medium disabled:opacity-50"
+            className="rounded-[var(--radius-sm)] bg-ink text-paper px-3 py-2 text-sm font-medium disabled:opacity-50"
           >
             {pending ? "Working…" : mode === "move" ? "Move" : "Merge"}
           </button>
           <button
             disabled={pending}
             onClick={close}
-            className="rounded-lg border border-line px-3 py-2 text-sm disabled:opacity-50"
+            className="rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm disabled:opacity-50"
           >
             Cancel
           </button>

@@ -24,7 +24,7 @@ export function ActiveToggle({ productId, active }: { productId: string; active:
         type="button"
         disabled={pending}
         onClick={toggle}
-        className={`text-xs rounded-md border px-2.5 py-1.5 disabled:opacity-50 ${
+        className={`text-xs rounded-[var(--radius-xs)] border px-2.5 py-1.5 disabled:opacity-50 ${
           active
             ? "border-line hover:border-danger/40 hover:text-danger"
             : "border-line hover:border-pine/40 hover:text-pine-deep"

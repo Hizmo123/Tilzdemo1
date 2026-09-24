@@ -47,10 +47,10 @@ export default function SupportPage() {
             )}
           </div>
         ) : (
-          <div className="rounded-[var(--radius-card)] border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm mb-8">
+          <div className="rounded-[var(--radius-card)] border border-warn/40 bg-warn-soft text-warn p-4 text-sm mb-8">
             Support contact details aren't configured yet — set{" "}
-            <code className="bg-white/60 rounded px-1">SUPPORT_EMAIL</code> and/or{" "}
-            <code className="bg-white/60 rounded px-1">SUPPORT_PHONE</code> in the
+            <code className="bg-white/60 rounded-[var(--radius-xs)] px-1">SUPPORT_EMAIL</code> and/or{" "}
+            <code className="bg-white/60 rounded-[var(--radius-xs)] px-1">SUPPORT_PHONE</code> in the
             environment.
           </div>
         )}

@@ -29,11 +29,11 @@ export default async function AdminOrgsPage({
           name="q"
           defaultValue={q}
           placeholder="Search by name"
-          className="flex-1 rounded-lg border border-line bg-surface px-3.5 py-2 text-sm focus:border-pine focus:outline-none"
+          className="flex-1 rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2 text-sm focus:border-pine focus:outline-none"
         />
         <button
           type="submit"
-          className="text-sm rounded-lg border border-line px-3.5 py-2 hover:border-ink/30"
+          className="text-sm rounded-[var(--radius-sm)] border border-line px-3.5 py-2 hover:border-ink/30"
         >
           Search
         </button>

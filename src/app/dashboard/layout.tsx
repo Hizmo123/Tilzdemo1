@@ -273,7 +273,7 @@ export default async function DashboardLayout({
             {restaurant?.name ?? "No restaurant yet"}
           </p>
           {trialStatus.inTrial && (
-            <span className="mt-1 inline-flex items-center rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
+            <span className="mt-1 inline-flex items-center rounded-pill bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
               Trial — {trialStatus.daysRemaining} day{trialStatus.daysRemaining === 1 ? "" : "s"} left
             </span>
           )}
@@ -340,7 +340,7 @@ export default async function DashboardLayout({
             className={`px-4 py-2.5 sm:px-8 text-sm text-center ${
               entitlements.orderingBlocked
                 ? "bg-danger text-white"
-                : "bg-amber-500 text-white"
+                : "bg-warn text-white"
             }`}
           >
             {entitlements.orderingBlocked

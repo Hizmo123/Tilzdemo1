@@ -30,7 +30,7 @@ export function TypedDangerConfirm({
   const matches = typed.trim() === confirmText;
 
   return (
-    <div className="rounded-lg border border-danger/30 bg-danger-soft/40 p-4 space-y-3">
+    <div className="rounded-[var(--radius-sm)] border border-danger/30 bg-danger-soft/40 p-4 space-y-3">
       <div className="text-sm text-ink">
         {description} Type <span className="font-semibold">{confirmText}</span> to confirm.
       </div>
@@ -39,14 +39,14 @@ export function TypedDangerConfirm({
         onChange={(e) => setTyped(e.target.value)}
         placeholder={confirmText}
         disabled={pending}
-        className="w-full rounded-md border border-line bg-surface px-3 py-2 text-sm focus:border-danger focus:outline-none disabled:opacity-60"
+        className="w-full rounded-[var(--radius-xs)] border border-line bg-surface px-3 py-2 text-sm focus:border-danger focus:outline-none disabled:opacity-60"
       />
       <div className="flex items-center gap-2">
         <button
           type="button"
           disabled={!matches || pending}
           onClick={onConfirm}
-          className="text-sm rounded-lg bg-danger text-white px-3.5 py-2 font-medium disabled:opacity-40"
+          className="text-sm rounded-[var(--radius-sm)] bg-danger text-white px-3.5 py-2 font-medium disabled:opacity-40"
         >
           {pending ? pendingLabel : confirmLabel}
         </button>

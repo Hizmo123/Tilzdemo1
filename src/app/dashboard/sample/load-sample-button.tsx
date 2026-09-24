@@ -34,7 +34,7 @@ export function LoadSampleButton({
     <button
       onClick={run}
       disabled={pending}
-      className="rounded-lg bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+      className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
     >
       {pending ? "Loading…" : "Load a sample café"}
     </button>

@@ -50,17 +50,17 @@ export default async function IntegrationsPage({
       </div>
 
       {connectingForPlan && !connection && (
-        <p className="text-sm rounded-lg bg-pine/10 text-pine-deep px-3.5 py-2.5">
+        <p className="text-sm rounded-[var(--radius-sm)] bg-pine/10 text-pine-deep px-3.5 py-2.5">
           Connect Square to finish switching to the Connect plan.
         </p>
       )}
       {sp.square === "success" && (
-        <p className="text-sm rounded-lg bg-pine/10 text-pine-deep px-3.5 py-2.5">
+        <p className="text-sm rounded-[var(--radius-sm)] bg-pine/10 text-pine-deep px-3.5 py-2.5">
           Square connected.
         </p>
       )}
       {sp.square === "error" && (
-        <p className="text-sm rounded-lg bg-red-50 text-danger px-3.5 py-2.5">
+        <p className="text-sm rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-2.5">
           {ERROR_COPY[sp.reason ?? ""] ?? "Couldn't connect Square — please try again."}
         </p>
       )}

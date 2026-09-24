@@ -52,7 +52,7 @@ export function ProductForm({
             id="type"
             name="type"
             defaultValue={defaults.type}
-            className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-ink focus:border-pine focus:outline-none transition-colors"
+            className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 text-ink focus:border-pine focus:outline-none transition-colors"
           >
             <option value="QR">QR</option>
             <option value="NFC">NFC</option>
@@ -69,7 +69,7 @@ export function ProductForm({
           rows={2}
           placeholder="What the venue is buying"
           required
-          className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-ink placeholder:text-muted/70 focus:border-pine focus:outline-none transition-colors resize-none"
+          className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 text-ink placeholder:text-muted/70 focus:border-pine focus:outline-none transition-colors resize-none"
         />
       </div>
 

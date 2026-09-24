@@ -40,7 +40,7 @@ export function MarkPaidButton({
           <button
             disabled={pending}
             onClick={pay}
-            className="rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
+            className="rounded-[var(--radius-sm)] bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep disabled:opacity-60"
           >
             {pending
               ? "Recording…"
@@ -49,7 +49,7 @@ export function MarkPaidButton({
           <button
             disabled={pending}
             onClick={() => setConfirm(false)}
-            className="rounded-lg border border-line px-4 py-2.5 text-sm hover:border-ink/30"
+            className="rounded-[var(--radius-sm)] border border-line px-4 py-2.5 text-sm hover:border-ink/30"
           >
             Cancel
           </button>
@@ -57,7 +57,7 @@ export function MarkPaidButton({
       ) : (
         <button
           onClick={() => setConfirm(true)}
-          className="rounded-lg border border-line px-4 py-2.5 text-sm font-medium hover:border-pine/50"
+          className="rounded-[var(--radius-sm)] border border-line px-4 py-2.5 text-sm font-medium hover:border-pine/50"
         >
           Mark as paid (counter / cash)
         </button>

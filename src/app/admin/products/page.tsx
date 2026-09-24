@@ -51,12 +51,12 @@ export default async function ProductsPage() {
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-3">
                   <span className="font-medium">{p.title}</span>
-                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-paper text-muted">
+                  <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-paper text-muted">
                     {p.type}
                   </span>
                   <span className="text-xs text-muted">{formatCents(p.priceCents)}</span>
                   {!p.active && (
-                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-danger-soft text-danger">
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-danger-soft text-danger">
                       Retired
                     </span>
                   )}

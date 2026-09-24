@@ -77,7 +77,7 @@ export function BillEditor({
                 )}
                 {it.nameSnapshot}
                 {it.comped && !it.voided && (
-                  <span className="ml-1 text-[10px] uppercase tracking-wide text-pine-deep bg-pine-soft rounded px-1 py-0.5">
+                  <span className="ml-1 text-[10px] uppercase tracking-wide text-pine-deep bg-pine-soft rounded-[var(--radius-xs)] px-1 py-0.5">
                     Comp
                   </span>
                 )}
@@ -154,13 +154,13 @@ export function BillEditor({
             value={discountStr}
             onChange={(e) => setDiscountStr(e.target.value)}
             placeholder="0.00"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
+            className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
           />
         </div>
         <button
           disabled={pending}
           onClick={applyDiscount}
-          className="rounded-lg border border-line px-3 py-2 text-sm hover:border-ink/30 disabled:opacity-50"
+          className="rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm hover:border-ink/30 disabled:opacity-50"
         >
           Apply
         </button>

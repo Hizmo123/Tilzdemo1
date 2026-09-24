@@ -17,7 +17,7 @@ export function MenuTabs({ active }: { active: MenuView }) {
         <Link
           key={t.view}
           href={t.href}
-          className={`shrink-0 rounded-lg px-3 py-1.5 transition-colors ${
+          className={`shrink-0 rounded-[var(--radius-sm)] px-3 py-1.5 transition-colors ${
             active === t.view ? "bg-ink text-surface" : "border border-line hover:border-ink/30"
           }`}
         >

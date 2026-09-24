@@ -37,7 +37,7 @@ export function QrActions({
       </div>
 
       {error && (
-        <p className="rounded-lg bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
+        <p className="rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
           {error}
         </p>
       )}
@@ -51,14 +51,14 @@ export function QrActions({
                 setConfirmRegen(false);
                 run(() => regenerateQr(tableId));
               }}
-              className="rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 transition-opacity"
+              className="rounded-[var(--radius-sm)] bg-danger px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60 transition-opacity"
             >
               {pending ? "Regenerating…" : "Confirm regenerate"}
             </button>
             <button
               disabled={pending}
               onClick={() => setConfirmRegen(false)}
-              className="rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink/30 transition-colors"
+              className="rounded-[var(--radius-sm)] border border-line px-4 py-2 text-sm font-medium hover:border-ink/30 transition-colors"
             >
               Cancel
             </button>
@@ -67,7 +67,7 @@ export function QrActions({
           <button
             disabled={pending}
             onClick={() => setConfirmRegen(true)}
-            className="rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink/30 disabled:opacity-60 transition-colors"
+            className="rounded-[var(--radius-sm)] border border-line px-4 py-2 text-sm font-medium hover:border-ink/30 disabled:opacity-60 transition-colors"
           >
             Regenerate QR
           </button>
@@ -76,7 +76,7 @@ export function QrActions({
         <button
           disabled={pending}
           onClick={() => run(() => setTableActive(tableId, !active))}
-          className="rounded-lg border border-line px-4 py-2 text-sm font-medium hover:border-ink/30 disabled:opacity-60 transition-colors"
+          className="rounded-[var(--radius-sm)] border border-line px-4 py-2 text-sm font-medium hover:border-ink/30 disabled:opacity-60 transition-colors"
         >
           {active ? "Deactivate table" : "Reactivate table"}
         </button>

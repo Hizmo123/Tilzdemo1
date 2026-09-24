@@ -33,7 +33,7 @@ export function EmailReceiptForm({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="print:hidden text-sm rounded-lg border border-line px-3.5 py-2 hover:border-ink/30 transition-colors"
+        className="print:hidden text-sm rounded-[var(--radius-sm)] border border-line px-3.5 py-2 hover:border-ink/30 transition-colors"
       >
         Email me a copy
       </button>
@@ -59,12 +59,12 @@ export function EmailReceiptForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
+          className="flex-1 rounded-[var(--radius-md)] border border-line bg-surface px-3 py-2 text-sm focus:border-pine focus:outline-none"
         />
         <button
           onClick={send}
           disabled={pending || !email.trim()}
-          className="rounded-lg bg-ink text-surface px-3.5 py-2 text-sm font-medium disabled:opacity-50"
+          className="rounded-[var(--radius-sm)] bg-ink text-surface px-3.5 py-2 text-sm font-medium disabled:opacity-50"
         >
           {pending ? "Sending…" : "Send"}
         </button>

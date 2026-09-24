@@ -50,7 +50,7 @@ export function MobileNav({
           aria-label="Open menu"
           aria-expanded={open}
           onClick={() => setOpen(true)}
-          className="flex items-center gap-2 rounded-lg px-2 py-1.5 -ml-2 text-ink hover:bg-paper transition-colors"
+          className="flex items-center gap-2 rounded-[var(--radius-sm)] px-2 py-1.5 -ml-2 text-ink hover:bg-paper transition-colors"
         >
           <svg
             width="22"
@@ -83,7 +83,7 @@ export function MobileNav({
             className="absolute inset-0 bg-ink/40"
           />
           {/* Drawer */}
-          <div className="absolute inset-y-0 left-0 w-72 max-w-[82%] bg-surface flex flex-col shadow-xl">
+          <div className="absolute inset-y-0 left-0 w-72 max-w-[82%] bg-surface flex flex-col shadow-float">
             <div className="px-5 py-5 border-b border-line flex items-center justify-between">
               <div className="min-w-0">
                 <span className="font-display text-lg font-semibold tracking-tight">
@@ -93,7 +93,7 @@ export function MobileNav({
                   {restaurantName}
                 </p>
                 {trialStatus?.inTrial && (
-                  <span className="mt-1 inline-flex items-center rounded-full bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
+                  <span className="mt-1 inline-flex items-center rounded-pill bg-pine/10 px-2 py-0.5 text-[11px] font-medium text-pine">
                     Trial — {trialStatus.daysRemaining} day{trialStatus.daysRemaining === 1 ? "" : "s"} left
                   </span>
                 )}
@@ -112,7 +112,7 @@ export function MobileNav({
                 type="button"
                 aria-label="Close menu"
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink transition-colors"
+                className="rounded-[var(--radius-sm)] p-1.5 text-muted hover:bg-paper hover:text-ink transition-colors"
               >
                 <svg
                   width="22"

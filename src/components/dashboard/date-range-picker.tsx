@@ -52,7 +52,7 @@ export function DateRangePicker({
             disabled={disabled}
             title={disabled ? "Your plan limits history — upgrade for this range." : undefined}
             onClick={() => !disabled && setPreset(p)}
-            className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-[var(--radius-sm)] border px-3 py-1.5 text-sm font-medium transition-colors ${
               disabled
                 ? "border-line text-muted/50 opacity-50 cursor-not-allowed"
                 : value === p
@@ -65,7 +65,7 @@ export function DateRangePicker({
         );
       })}
       <div
-        className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 ${
+        className={`flex items-center gap-1.5 rounded-[var(--radius-sm)] border px-2 py-1 ${
           value === "custom" ? "border-pine bg-pine-soft" : "border-line"
         }`}
         title={minCustomDate ? "Your plan limits history — upgrade for a wider custom range." : undefined}

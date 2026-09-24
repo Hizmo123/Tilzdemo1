@@ -19,7 +19,7 @@ export default function PrivacyPage() {
         </h1>
         <p className="text-sm text-muted mb-8">Last updated: not yet published.</p>
 
-        <div className="rounded-[var(--radius-card)] border border-amber-200 bg-amber-50 text-amber-800 p-4 text-sm mb-8">
+        <div className="rounded-[var(--radius-card)] border border-warn/40 bg-warn-soft text-warn p-4 text-sm mb-8">
           <strong>TODO: review by a lawyer.</strong> The data inventory below
           reflects what Tillz actually stores today. The surrounding legal
           framing (your rights, our obligations, how disputes are handled) is

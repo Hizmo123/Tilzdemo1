@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { buttonClasses } from "@/components/ui/button-classes";
 import { prisma } from "@/lib/prisma";
 import { getStaffSession } from "@/lib/staff-auth";
 import { roleCan, ROLE_META } from "@/lib/rbac";
@@ -129,7 +130,7 @@ export default async function StaffHomePage({
           {roleCan(staff.role, "orders:manage") && !ent.requiresSquare && (
             <Link
               href={`/staff/${slug}/counter`}
-              className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+              className={buttonClasses("secondary", "sm")}
             >
               Counter
             </Link>
@@ -137,7 +138,7 @@ export default async function StaffHomePage({
           {roleCan(staff.role, "orders:manage") && !ent.requiresSquare && (
             <Link
               href={`/staff/${slug}/register`}
-              className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+              className={buttonClasses("secondary", "sm")}
             >
               Register
             </Link>
@@ -145,7 +146,7 @@ export default async function StaffHomePage({
           {roleCan(staff.role, "kitchen:manage") && (
             <Link
               href={`/staff/${slug}/kitchen`}
-              className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+              className={buttonClasses("secondary", "sm")}
             >
               Kitchen
             </Link>
@@ -153,7 +154,7 @@ export default async function StaffHomePage({
           {roleCan(staff.role, "menu:availability") && (
             <Link
               href={`/staff/${slug}/menu`}
-              className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+              className={buttonClasses("secondary", "sm")}
             >
               Menu
             </Link>
@@ -161,7 +162,7 @@ export default async function StaffHomePage({
           {roleCan(staff.role, "bills:view") && (
             <Link
               href={`/staff/${slug}/history`}
-              className="text-sm rounded-lg border border-line px-3 py-1.5 hover:border-ink/30"
+              className={buttonClasses("secondary", "sm")}
             >
               History
             </Link>
@@ -219,7 +220,7 @@ export default async function StaffHomePage({
 
                     // Priority: assistance > unpaid-too-long > open > empty.
                     const cls = needsHelp
-                      ? "border-amber-300 bg-amber-50 hover:border-amber-400"
+                      ? "border-warn/40 bg-warn-soft hover:border-warn/60"
                       : unpaidTooLong
                         ? "border-danger/40 bg-danger-soft hover:border-danger/60"
                         : bill
@@ -237,7 +238,7 @@ export default async function StaffHomePage({
                             {t.label}
                           </span>
                           {needsHelp ? (
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-warn">
                               Help
                             </span>
                           ) : unpaidTooLong ? (
@@ -257,7 +258,7 @@ export default async function StaffHomePage({
 
                         <div className="mt-3">
                           {needsHelp && (
-                            <p className="text-xs font-medium text-amber-700 mb-1">
+                            <p className="text-xs font-medium text-warn mb-1">
                               ● Needs assistance
                             </p>
                           )}

@@ -34,7 +34,7 @@ export function SuspendButton({ orgId, orgName }: { orgId: string; orgName: stri
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs rounded-md border border-danger/40 text-danger px-2.5 py-1.5 hover:bg-danger-soft"
+        className="text-xs rounded-[var(--radius-xs)] border border-danger/40 text-danger px-2.5 py-1.5 hover:bg-danger-soft"
       >
         Suspend now
       </button>
@@ -44,7 +44,7 @@ export function SuspendButton({ orgId, orgName }: { orgId: string; orgName: stri
   const matches = typed.trim() === orgName;
 
   return (
-    <div className="rounded-lg border border-danger/30 bg-danger-soft/40 p-3 space-y-2 max-w-xs">
+    <div className="rounded-[var(--radius-sm)] border border-danger/30 bg-danger-soft/40 p-3 space-y-2 max-w-xs">
       <p className="text-xs text-ink">
         This blocks dashboard and staff PIN logins for the whole org. Type{" "}
         <span className="font-semibold">{orgName}</span> to confirm.
@@ -53,14 +53,14 @@ export function SuspendButton({ orgId, orgName }: { orgId: string; orgName: stri
         value={typed}
         onChange={(e) => setTyped(e.target.value)}
         placeholder={orgName}
-        className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm focus:border-danger focus:outline-none"
+        className="w-full rounded-[var(--radius-xs)] border border-line bg-surface px-2.5 py-1.5 text-sm focus:border-danger focus:outline-none"
       />
       <div className="flex items-center gap-2">
         <button
           type="button"
           disabled={!matches || pending}
           onClick={run}
-          className="text-xs rounded-md bg-danger text-white px-2.5 py-1.5 disabled:opacity-40"
+          className="text-xs rounded-[var(--radius-xs)] bg-danger text-white px-2.5 py-1.5 disabled:opacity-40"
         >
           {pending ? "…" : "Suspend"}
         </button>

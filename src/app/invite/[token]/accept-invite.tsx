@@ -16,7 +16,7 @@ export function AcceptInvite({ token }: { token: string }) {
         <p className="text-pine-deep font-medium">You&apos;re in! 🎉</p>
         <button
           onClick={() => router.push("/dashboard")}
-          className="mt-3 w-full rounded-lg bg-ink text-surface py-2.5 font-medium hover:opacity-90"
+          className="mt-3 w-full rounded-[var(--radius-sm)] bg-ink text-surface py-2.5 font-medium hover:opacity-90"
         >
           Go to dashboard
         </button>
@@ -36,7 +36,7 @@ export function AcceptInvite({ token }: { token: string }) {
             else setDone(true);
           });
         }}
-        className="w-full rounded-lg bg-pine text-white py-2.5 font-medium hover:bg-pine-deep disabled:opacity-60"
+        className="w-full rounded-[var(--radius-sm)] bg-pine text-white py-2.5 font-medium hover:bg-pine-deep disabled:opacity-60"
       >
         {pending ? "Joining…" : "Accept invite"}
       </button>

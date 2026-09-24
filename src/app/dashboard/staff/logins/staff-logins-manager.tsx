@@ -12,6 +12,7 @@ import {
   deleteStaffLogin,
   type StaffLoginActionState,
 } from "./actions";
+import { buttonClasses } from "@/components/ui/button-classes";
 import { Label, Input, FormMessage } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ROLE_META, STAFF_PIN_ROLES } from "@/lib/rbac";
@@ -70,13 +71,13 @@ function LoginLink({ loginUrl, qrPreview }: { loginUrl: string; qrPreview: strin
         <img
           src={qrPreview}
           alt="QR code for the staff sign-in page"
-          className="w-32 h-32 rounded-lg border border-line shrink-0"
+          className="w-32 h-32 rounded-[var(--radius-sm)] border border-line shrink-0"
           width={128}
           height={128}
         />
         <div className="space-y-3 min-w-0">
           <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs break-all bg-paper rounded px-2 py-1.5">
+            <code className="flex-1 text-xs break-all bg-paper rounded-[var(--radius-xs)] px-2 py-1.5">
               {loginUrl}
             </code>
             <button
@@ -85,7 +86,7 @@ function LoginLink({ loginUrl, qrPreview }: { loginUrl: string; qrPreview: strin
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1500);
               }}
-              className="text-xs shrink-0 rounded-md border border-line bg-surface px-2.5 py-1.5 hover:border-ink/30"
+              className="text-xs shrink-0 rounded-[var(--radius-xs)] border border-line bg-surface px-2.5 py-1.5 hover:border-ink/30"
             >
               {copied ? "Copied ✓" : "Copy link"}
             </button>
@@ -95,19 +96,19 @@ function LoginLink({ loginUrl, qrPreview }: { loginUrl: string; qrPreview: strin
               href={loginUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+              className={buttonClasses("secondary", "sm")}
             >
               Open sign-in page →
             </a>
             <a
               href="/dashboard/staff-logins/qr?format=svg"
-              className="text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+              className={buttonClasses("secondary", "sm")}
             >
               Download card (SVG)
             </a>
             <a
               href="/dashboard/staff-logins/qr?format=png"
-              className="text-sm rounded-lg border border-line bg-surface px-3.5 py-2 font-medium hover:border-ink/30 transition-colors"
+              className={buttonClasses("secondary", "sm")}
             >
               Download PNG
             </a>
@@ -165,7 +166,7 @@ function AddStaff() {
               id="role"
               name="role"
               defaultValue="STAFF"
-              className="w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-ink focus:border-pine focus:outline-none"
+              className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 text-ink focus:border-pine focus:outline-none"
             >
               {STAFF_PIN_ROLES.map((r) => (
                 <option key={r} value={r}>
@@ -248,7 +249,7 @@ function StaffRow({ staff, kitchenStations }: { staff: Staff; kitchenStations: s
               disabled={pending}
               value={staff.assignedStation ?? ""}
               onChange={(e) => run(() => changeStaffStation(staff.id, e.target.value || null))}
-              className="rounded-md border border-line bg-surface px-2 py-1.5 text-sm focus:border-pine focus:outline-none"
+              className="rounded-[var(--radius-xs)] border border-line bg-surface px-2 py-1.5 text-sm focus:border-pine focus:outline-none"
               aria-label="Assigned station"
             >
               <option value="">All stations</option>
@@ -263,7 +264,7 @@ function StaffRow({ staff, kitchenStations }: { staff: Staff; kitchenStations: s
             disabled={pending}
             value={staff.role}
             onChange={(e) => run(() => changeStaffRole(staff.id, e.target.value as Role))}
-            className="rounded-md border border-line bg-surface px-2 py-1.5 text-sm focus:border-pine focus:outline-none"
+            className="rounded-[var(--radius-xs)] border border-line bg-surface px-2 py-1.5 text-sm focus:border-pine focus:outline-none"
           >
             {STAFF_PIN_ROLES.map((r) => (
               <option key={r} value={r}>
@@ -274,14 +275,14 @@ function StaffRow({ staff, kitchenStations }: { staff: Staff; kitchenStations: s
           <button
             disabled={pending}
             onClick={() => run(() => resetPin(staff.id))}
-            className="text-xs rounded-md border border-line px-2.5 py-1.5 hover:border-ink/30 disabled:opacity-50"
+            className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30 disabled:opacity-50"
           >
             Reset PIN
           </button>
           <button
             disabled={pending}
             onClick={() => run(() => setStaffActive(staff.id, !staff.active))}
-            className="text-xs rounded-md border border-line px-2.5 py-1.5 hover:border-ink/30 disabled:opacity-50"
+            className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30 disabled:opacity-50"
           >
             {staff.active ? "Disable" : "Enable"}
           </button>

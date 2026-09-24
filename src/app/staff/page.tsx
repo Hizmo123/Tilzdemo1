@@ -50,12 +50,12 @@ export default function StaffEntryPage() {
               if (e.key === "Enter") go();
             }}
             placeholder="e.g. harbour-kitchen"
-            className="w-full rounded-lg border border-line bg-paper px-3.5 py-2.5 focus:border-pine focus:outline-none"
+            className="w-full rounded-[var(--radius-md)] border border-line bg-paper px-3.5 py-2.5 focus:border-pine focus:outline-none"
           />
           <button
             onClick={go}
             disabled={!slug.trim()}
-            className="mt-4 w-full rounded-xl bg-pine text-white py-3 font-medium hover:bg-pine-deep disabled:opacity-50 transition-colors"
+            className="mt-4 w-full rounded-[var(--radius-md)] bg-pine text-white py-3 font-medium hover:bg-pine-deep disabled:opacity-50 transition-colors"
           >
             Continue
           </button>
