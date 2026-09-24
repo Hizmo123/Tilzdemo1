@@ -117,11 +117,20 @@ const TIER_LIMITS: Record<
   // Unlimited tables (kdsStationLimit: 0, tableLimit: null) — no Tillz KDS
   // burden either way, since Square owns the kitchen for this tier (see
   // the PlanTier.CONNECT schema comment); no reason to also cap tables.
+  // venueLimit: null (unlimited), unlike every subscription tier, which
+  // caps venues because each one costs the org another subscription seat —
+  // Connect has no subscription at all; each venue connects its own Square
+  // account independently and Tillz's revenue scales with the per-order fee
+  // regardless of venue count, so there's nothing to gate here. This also
+  // activates entitlements.crossVenueList (venueLimit !== 1) for CONNECT —
+  // canCreateVenue's generic `venueLimit === null` branch already returns
+  // allowed with no payment required, same as it always has for any
+  // unlimited tier; only PRO has the paid-addon-past-3 special case.
   CONNECT: {
     ordering: true,
     tableLimit: null,
     kdsStationLimit: 0,
-    venueLimit: 1,
+    venueLimit: null,
     analyticsWindowDays: 14,
     showTillzBranding: true,
     prioritySupport: false,

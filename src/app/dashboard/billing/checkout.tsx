@@ -60,7 +60,7 @@ export function Billing({
             Cancel and return to Lite
           </button>
         )}
-        {active && currentPlan === "PRO" && (
+        {active && (currentPlan === "PRO" || currentPlan === "CONNECT") && (
           <Link
             href="/venues/new"
             className="text-sm text-pine hover:underline mt-3 inline-block"
