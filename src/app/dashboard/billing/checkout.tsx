@@ -11,9 +11,16 @@ import { formatCents } from "@/lib/money";
 export function Billing({
   currentPlan,
   planStatus,
+  squareConnected,
 }: {
   currentPlan: PlanTier;
   planStatus: string;
+  // Active (non-revoked) SquareConnection for this venue — same bar the
+  // marketing/onboarding "Connect Square" flow uses. Determines whether
+  // CONNECT's button can subscribe immediately or has to detour through
+  // Settings → Integrations first (see api/square/callback/route.ts's
+  // connectPlanIntent, which completes the switch once that succeeds).
+  squareConnected: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -57,16 +64,43 @@ export function Billing({
         )}
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Rendered straight from PLANS, same responsive breakpoints as the
+          marketing pricing grid (src/app/page.tsx) so both handle the 5
+          tiers (Connect added) identically — 3-then-2 from lg up, all 5 in
+          one row only once there's genuinely room for it. */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-4">
         {PLANS.map((p) => {
           const isCurrent = p.tier === currentPlan && active;
+          const connect = p.tier === "CONNECT";
+          // Connect's button can't be the same instant subscribe() every
+          // other tier uses: subscribing without a working Square
+          // connection would label the org CONNECT with no way to actually
+          // process an order. See handleConnectClick below.
+          const needsSquareFirst = connect && !squareConnected && !isCurrent;
+
+          function handleSubscribeClick() {
+            start(async () => {
+              await subscribe(p.tier);
+              router.refresh();
+            });
+          }
+
           return (
             <div
               key={p.tier}
-              className={`rounded-2xl border bg-surface p-6 flex flex-col ${
-                p.tier === "GROWTH" ? "border-2 border-pine" : "border-line"
+              className={`relative rounded-2xl border bg-surface p-6 flex flex-col ${
+                p.tier === "GROWTH"
+                  ? "border-2 border-pine"
+                  : connect
+                    ? "border-pine/40 bg-pine-tint"
+                    : "border-line"
               }`}
             >
+              {connect && (
+                <span className="absolute -top-3 left-6 text-[11px] font-semibold uppercase tracking-wide bg-surface text-pine-deep border border-pine/30 px-2.5 py-1 rounded-pill shadow-rest">
+                  No subscription
+                </span>
+              )}
               <h3 className="font-display text-xl font-semibold tracking-tight">
                 {p.name}
               </h3>
@@ -80,29 +114,39 @@ export function Billing({
                   </span>
                 )}
               </p>
+              {connect && (
+                <p className="text-xs text-pine-deep font-medium mt-1">
+                  + ~2% per order — cancel any time
+                </p>
+              )}
               <ul className="mt-5 space-y-2 text-sm text-ink-soft flex-1">
                 {p.features.map((f) => (
                   <li key={f}>{f}</li>
                 ))}
               </ul>
-              <button
-                disabled={isCurrent || pending}
-                onClick={() =>
-                  start(async () => {
-                    await subscribe(p.tier);
-                    router.refresh();
-                  })
-                }
-                className={`mt-6 rounded-xl py-3 font-medium ${
-                  isCurrent
-                    ? "bg-paper text-muted cursor-default"
-                    : p.tier === "GROWTH"
-                      ? "bg-pine text-white hover:bg-pine-deep"
-                      : "border border-line hover:border-ink/30"
-                }`}
-              >
-                {isCurrent ? "Current plan" : "Switch to this plan"}
-              </button>
+
+              {needsSquareFirst ? (
+                <Link
+                  href="/dashboard/settings/integrations?intendedPlan=CONNECT"
+                  className="mt-6 rounded-xl py-3 font-medium text-center border border-pine/40 text-pine-deep hover:bg-pine-tint"
+                >
+                  Connect Square to switch
+                </Link>
+              ) : (
+                <button
+                  disabled={isCurrent || pending}
+                  onClick={handleSubscribeClick}
+                  className={`mt-6 rounded-xl py-3 font-medium ${
+                    isCurrent
+                      ? "bg-paper text-muted cursor-default"
+                      : p.tier === "GROWTH"
+                        ? "bg-pine text-white hover:bg-pine-deep"
+                        : "border border-line hover:border-ink/30"
+                  }`}
+                >
+                  {isCurrent ? "Current plan" : "Switch to this plan"}
+                </button>
+              )}
             </div>
           );
         })}

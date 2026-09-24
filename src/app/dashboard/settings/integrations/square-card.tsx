@@ -9,7 +9,16 @@ type Connection = {
   locationId: string | null;
 };
 
-export function SquareCard({ connection }: { connection: Connection | null }) {
+export function SquareCard({
+  connection,
+  connectIntent,
+}: {
+  connection: Connection | null;
+  // "connect_plan": carried through to /api/square/authorize so the OAuth
+  // callback also completes the Connect-plan switch once this succeeds —
+  // see api/square/callback/route.ts's connectPlanIntent.
+  connectIntent?: "connect_plan";
+}) {
   const [pending, start] = useTransition();
   const [locations, setLocations] = useState<{ id: string; name: string }[] | null>(null);
   const [selected, setSelected] = useState(connection?.locationId ?? "");
@@ -47,7 +56,11 @@ export function SquareCard({ connection }: { connection: Connection | null }) {
 
       {!connection ? (
         <a
-          href="/api/square/authorize"
+          href={
+            connectIntent
+              ? `/api/square/authorize?intent=${connectIntent}`
+              : "/api/square/authorize"
+          }
           className="mt-4 inline-block rounded-lg bg-pine text-white px-4 py-2.5 text-sm font-medium hover:bg-pine-deep"
         >
           Connect Square

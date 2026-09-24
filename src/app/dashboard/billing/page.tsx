@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { Billing } from "./checkout";
 
 export default async function BillingPage() {
@@ -34,6 +35,19 @@ export default async function BillingPage() {
     );
   }
 
+  const restaurant = org.restaurants[0];
+  // "Active" per the CONNECT button's own bar: a real, non-revoked
+  // connection — a location doesn't have to be picked yet (see
+  // api/square/callback/route.ts's connectPlanIntent for why the plan
+  // switch itself uses this exact same bar, not a stricter one).
+  const squareConnection = restaurant
+    ? await prisma.squareConnection.findUnique({
+        where: { restaurantId: restaurant.id },
+        select: { revokedAt: true },
+      })
+    : null;
+  const squareConnected = !!squareConnection && !squareConnection.revokedAt;
+
   return (
     <div className="space-y-8">
       <div>
@@ -46,7 +60,7 @@ export default async function BillingPage() {
         </p>
       </div>
 
-      <Billing currentPlan={org.plan} planStatus={org.planStatus} />
+      <Billing currentPlan={org.plan} planStatus={org.planStatus} squareConnected={squareConnected} />
     </div>
   );
 }

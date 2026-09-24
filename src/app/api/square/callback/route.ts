@@ -11,8 +11,10 @@ import {
   SQUARE_OAUTH_FLOW_COOKIE,
   ONBOARDING_RETURN_PATHS,
 } from "@/app/api/square/authorize/route";
+import { subscribe } from "@/app/dashboard/billing/actions";
 
 const SETTINGS_REDIRECT = "/dashboard/settings/integrations";
+const BILLING_REDIRECT = "/dashboard/billing";
 
 function fail(request: NextRequest, redirectTo: string, reason: string) {
   const url = new URL(redirectTo, request.url);
@@ -52,6 +54,9 @@ export async function GET(request: NextRequest) {
     const back = flow.slice("onboarding:".length);
     onboardingReturn = (ONBOARDING_RETURN_PATHS as readonly string[]).includes(back) ? back : "/onboarding";
   }
+  // See SQUARE_OAUTH_FLOW_COOKIE's comment in authorize/route.ts — started
+  // from Billing's CONNECT button when there was no working connection yet.
+  const connectPlanIntent = flow === "settings:connect_plan";
   const redirectTo = onboardingReturn ?? SETTINGS_REDIRECT;
 
   // Auth: the settings flow needs a manager with a restaurant; the onboarding
@@ -141,6 +146,18 @@ export async function GET(request: NextRequest) {
       resourceId: restaurant!.id,
       metadata: { merchantId: result.merchant_id, environment },
     });
+
+    // Billing's CONNECT button sent the user here specifically because there
+    // was no working connection yet — now that one just succeeded, complete
+    // the plan switch by calling the exact same subscribe() the button uses
+    // when a connection already exists, rather than duplicating that write.
+    // Never leaves the org labelled CONNECT without this having actually run.
+    if (connectPlanIntent) {
+      await subscribe("CONNECT");
+      const billingUrl = new URL(BILLING_REDIRECT, request.url);
+      billingUrl.searchParams.set("square", "success");
+      return NextResponse.redirect(billingUrl);
+    }
 
     const url = new URL(SETTINGS_REDIRECT, request.url);
     url.searchParams.set("square", "success");

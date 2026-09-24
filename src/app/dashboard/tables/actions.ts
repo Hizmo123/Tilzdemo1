@@ -10,7 +10,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { generateToken } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
-import { canCreateTable } from "@/lib/entitlements";
+import { canCreateTable, getEntitlements } from "@/lib/entitlements";
 import { activateStandBySerial } from "@/lib/stands";
 
 export type TableActionState = { error?: string };
@@ -97,6 +97,17 @@ export async function activateStandForTable(
     return { error: "You don't have permission to manage tables." };
   if (!authz.membership) return { error: "No organization found." };
 
+  // dashboard/tables/layout.tsx's requireOrdering() only protects the
+  // RENDERED page — a Server Action is invoked directly and isn't wrapped
+  // by any page layout. A Lite org has tableLimit: 0 so createTable already
+  // blocks NEW tables, but a table row can still exist from before a
+  // downgrade — this stops that leftover table's stand/QR from being
+  // reactivated on a plan that's supposed to be menu-only.
+  const ent = await getEntitlements(authz.membership.organizationId);
+  if (!ent.ordering) {
+    return { error: "This venue's current plan doesn't include live table ordering." };
+  }
+
   const table = await getOwnedTable(authz.membership!.organizationId, tableId);
   if (!table) return { error: "Table not found." };
 
@@ -129,6 +140,17 @@ export async function regenerateQr(tableId: string): Promise<TableActionState> {
   const authz = await getAuthz();
   if (!authz.can("tables:manage"))
     return { error: "You don't have permission to manage tables." };
+  if (!authz.membership) return { error: "No organization found." };
+
+  // See activateStandForTable's comment above — this Server Action is
+  // reachable directly, bypassing the page-level requireOrdering() guard.
+  // Lite already has its one shared menu QR; it must not be able to mint
+  // (or re-mint) a per-table one for a leftover table from before a
+  // downgrade.
+  const ent = await getEntitlements(authz.membership.organizationId);
+  if (!ent.ordering) {
+    return { error: "This venue's current plan doesn't include live table ordering." };
+  }
 
   const table = await getOwnedTable(authz.membership!.organizationId, tableId);
   if (!table) return { error: "Table not found." };
@@ -172,6 +194,13 @@ export async function setTableActive(
   const authz = await getAuthz();
   if (!authz.can("tables:manage"))
     return { error: "You don't have permission to manage tables." };
+  if (!authz.membership) return { error: "No organization found." };
+
+  // See activateStandForTable's comment above.
+  const ent = await getEntitlements(authz.membership.organizationId);
+  if (!ent.ordering) {
+    return { error: "This venue's current plan doesn't include live table ordering." };
+  }
 
   const table = await getOwnedTable(authz.membership!.organizationId, tableId);
   if (!table) return { error: "Table not found." };

@@ -12,6 +12,15 @@ export const SQUARE_OAUTH_STATE_COOKIE = "tillz_square_oauth_state";
 // result and where to send the user back:
 //   "settings"                — the normal Settings → Integrations connect;
 //                               writes SquareConnection for restaurants[0].
+//   "settings:connect_plan"   — same as "settings", but the round trip was
+//                               started from the Billing page's CONNECT
+//                               "Switch to this plan" button (no working
+//                               Square connection yet) — once the connection
+//                               actually succeeds, the callback also
+//                               completes the plan switch (calls the same
+//                               subscribe("CONNECT") Billing's own button
+//                               uses when already connected) and sends the
+//                               user back to Billing instead of Integrations.
 //   "onboarding:<returnPath>" — started from the setup wizard, BEFORE the
 //                               restaurant exists; writes
 //                               PendingSquareConnection for the user and
@@ -47,7 +56,7 @@ export async function GET(request: NextRequest) {
     if (!restaurant) {
       return new NextResponse("Not found", { status: 404 });
     }
-    flow = "settings";
+    flow = sp.get("intent") === "connect_plan" ? "settings:connect_plan" : "settings";
   }
 
   const state = randomBytes(24).toString("base64url");

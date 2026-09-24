@@ -13,7 +13,7 @@ const ERROR_COPY: Record<string, string> = {
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ square?: string; reason?: string }>;
+  searchParams: Promise<{ square?: string; reason?: string; intendedPlan?: string }>;
 }) {
   const authz = await getAuthz();
   const restaurant = authz.membership?.organization.restaurants[0];
@@ -30,6 +30,12 @@ export default async function IntegrationsPage({
     where: { restaurantId: restaurant.id },
     select: { merchantName: true, environment: true, locationId: true },
   });
+  // Sent here by Billing's CONNECT "Switch to this plan" button when there
+  // was no working connection yet (see api/square/callback/route.ts's
+  // connectPlanIntent) — carries the intent through so connecting here
+  // finishes the plan switch too, instead of leaving the org on its old plan
+  // with a stray Square connection.
+  const connectingForPlan = sp.intendedPlan === "CONNECT";
 
   return (
     <div className="space-y-6">
@@ -43,6 +49,11 @@ export default async function IntegrationsPage({
         <p className="text-muted mt-1">Connect this venue to point-of-sale providers.</p>
       </div>
 
+      {connectingForPlan && !connection && (
+        <p className="text-sm rounded-lg bg-pine/10 text-pine-deep px-3.5 py-2.5">
+          Connect Square to finish switching to the Connect plan.
+        </p>
+      )}
       {sp.square === "success" && (
         <p className="text-sm rounded-lg bg-pine/10 text-pine-deep px-3.5 py-2.5">
           Square connected.
@@ -55,7 +66,7 @@ export default async function IntegrationsPage({
       )}
 
       <div className="max-w-lg">
-        <SquareCard connection={connection} />
+        <SquareCard connection={connection} connectIntent={connectingForPlan ? "connect_plan" : undefined} />
       </div>
     </div>
   );
