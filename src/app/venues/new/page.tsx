@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getTenantContext } from "@/lib/auth";
 import { canCreateVenue } from "@/lib/entitlements";
 import { getOnboardingDraft } from "@/lib/onboarding-draft";
-import { getPendingSquareSummary } from "@/lib/square/pending";
+import { getPendingSquareSummary, getOrgSquareConnectionSummary } from "@/lib/square/pending";
 import { parseSquareResult } from "@/app/onboarding/square-result";
 import { AddVenueFlow } from "./add-venue-flow";
 
@@ -44,9 +44,13 @@ export default async function AddVenuePage({
 
   // Same resume machinery as first-run onboarding: the wizard saves a draft
   // before leaving for Square OAuth and picks it back up on return here.
-  const [draft, pendingSquare, sp] = await Promise.all([
+  const [draft, pendingSquare, existingOrgSquare, sp] = await Promise.all([
     getOnboardingDraft(user.id),
     getPendingSquareSummary(user.id),
+    // Task 5: any OTHER restaurant in this org with a live SquareConnection
+    // — offers "Use <merchant>" on the Payments step instead of forcing a
+    // fresh OAuth click-through for what's very likely the same business.
+    getOrgSquareConnectionSummary(membership.organizationId),
     searchParams,
   ]);
   const squareResult = parseSquareResult(sp);
@@ -59,6 +63,7 @@ export default async function AddVenuePage({
       addonPriceLabel={"addonPriceLabel" in check ? check.addonPriceLabel : undefined}
       initialDraft={draft}
       initialSquare={pendingSquare}
+      existingOrgSquare={existingOrgSquare}
       squareResult={squareResult}
       // Coming back from Square means they already confirmed the add-on
       // (if any) before they left — don't make them confirm it twice.

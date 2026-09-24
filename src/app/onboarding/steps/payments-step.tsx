@@ -3,12 +3,17 @@
 import { useEffect, useState, useTransition } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import type { OnboardingAnswers, PaymentPath } from "@/lib/onboarding-options";
-import type { PendingSquareSummary } from "@/lib/square/pending";
+import type { PendingSquareSummary, OrgSquareConnectionSummary } from "@/lib/square/pending";
 import { Button } from "@/components/ui/button";
 import { SPRING, SPRING_PRESS } from "@/components/ui/motion";
 import { CHOICE_IDLE, CHOICE_SELECTED } from "@/components/venue-setup/choice";
 import { SELECT_CLASS } from "../wizard-ui";
-import { discardPendingSquare, listPendingSquareLocations, setPendingSquareLocation } from "../actions";
+import {
+  discardPendingSquare,
+  listPendingSquareLocations,
+  setPendingSquareLocation,
+  reuseOrgSquareConnection,
+} from "../actions";
 import type { SquareResult } from "../square-result";
 
 const ERROR_COPY: Record<string, string> = {
@@ -30,6 +35,7 @@ export function PaymentsStep({
   update,
   square,
   onSquareChange,
+  existingOrgSquare = null,
   squareResult,
   returnTo,
   mandatory = false,
@@ -39,6 +45,10 @@ export function PaymentsStep({
   update: (patch: Partial<OnboardingAnswers>) => void;
   square: PendingSquareSummary | null;
   onSquareChange: (next: PendingSquareSummary | null) => void;
+  // +Add venue only (task 5): a live SquareConnection elsewhere in this org.
+  // When set and nothing's connected yet, offers "Use <merchant>" alongside
+  // "Connect a different Square account" instead of only the OAuth button.
+  existingOrgSquare?: OrgSquareConnectionSummary | null;
   squareResult: SquareResult | null;
   returnTo: "/onboarding" | "/venues/new";
   // True on the Connect plan: there's no Tillz-payments alternative, so the
@@ -101,6 +111,26 @@ export function PaymentsStep({
       // Best-effort — losing the draft is recoverable; losing the redirect isn't.
     }
     window.location.assign(`/api/square/authorize?flow=onboarding&return=${encodeURIComponent(returnTo)}`);
+  }
+
+  const [reuseError, setReuseError] = useState<string | null>(null);
+  const [reusing, startReuse] = useTransition();
+
+  // Skips the OAuth round trip entirely — copies the org's existing
+  // connection into THIS user's pending row (lib/square/pending.ts), then
+  // updates local state exactly as if the round trip had just landed, so
+  // the location picker below appears immediately.
+  function useExistingConnection() {
+    setReuseError(null);
+    update({ paymentPath: "square" });
+    startReuse(async () => {
+      const res = await reuseOrgSquareConnection();
+      if ("error" in res) {
+        setReuseError(res.error);
+        return;
+      }
+      onSquareChange(res);
+    });
   }
 
   function pickLocation(id: string) {
@@ -170,11 +200,34 @@ export function PaymentsStep({
                     {ERROR_COPY[squareResult.reason] ?? "Couldn't connect Square — please try again."}
                   </p>
                 )}
-                <div className="mt-4">
-                  <Button onClick={connect} loading={redirecting} full>
-                    {redirecting ? "Taking you to Square…" : "Connect Square"}
-                  </Button>
-                </div>
+                {reuseError && (
+                  <p role="alert" className="mt-3 rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
+                    {reuseError}
+                  </p>
+                )}
+                {existingOrgSquare ? (
+                  <div className="mt-4 space-y-2.5">
+                    <Button onClick={useExistingConnection} loading={reusing} full>
+                      {reusing
+                        ? "Setting up…"
+                        : `Use ${existingOrgSquare.merchantName ?? "your Square account"} — pick a different location`}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={connect}
+                      disabled={redirecting || reusing}
+                      className="w-full text-center text-sm text-ink-soft hover:text-ink disabled:opacity-60"
+                    >
+                      {redirecting ? "Taking you to Square…" : "Connect a different Square account"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-4">
+                    <Button onClick={connect} loading={redirecting} full>
+                      {redirecting ? "Taking you to Square…" : "Connect Square"}
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="rounded-[var(--radius-card)] border border-pine/30 bg-pine-tint shadow-rest p-4 space-y-4">

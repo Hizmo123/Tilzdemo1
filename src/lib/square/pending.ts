@@ -74,6 +74,62 @@ export async function discardPending(userId: string): Promise<void> {
   await prisma.pendingSquareConnection.delete({ where: { userId } });
 }
 
+// ---- Reusing an org's EXISTING connection for another venue ----------------
+// +Add venue (task 5): when the org already has a working SquareConnection
+// on some OTHER restaurant, the new venue is very likely the same business —
+// offer to reuse that merchant instead of forcing a second full OAuth
+// click-through. "Reuse" means copying its token/merchant data into THIS
+// user's PendingSquareConnection (locationId reset to null, since the new
+// venue probably needs a different Square location), exactly the shape a
+// fresh OAuth round trip would have produced — attachPendingToRestaurant
+// picks it up identically either way once the venue is created.
+
+export type OrgSquareConnectionSummary = { merchantName: string | null; environment: string };
+
+// What venues/new/page.tsx checks BEFORE offering the option — read-only,
+// copies nothing. Any restaurant in the org with a live connection counts,
+// not just the active one (task 5: "regardless of which venue it's on").
+export async function getOrgSquareConnectionSummary(
+  organizationId: string,
+): Promise<OrgSquareConnectionSummary | null> {
+  const existing = await prisma.squareConnection.findFirst({
+    where: { revokedAt: null, restaurant: { organizationId } },
+    orderBy: { createdAt: "desc" },
+    select: { merchantName: true, environment: true },
+  });
+  return existing;
+}
+
+// What actually runs when the user picks "Use <merchant>" instead of
+// "Connect a different account" — the reuse itself.
+export async function copyOrgConnectionToPending(
+  userId: string,
+  organizationId: string,
+): Promise<PendingSquareSummary | null> {
+  const existing = await prisma.squareConnection.findFirst({
+    where: { revokedAt: null, restaurant: { organizationId } },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!existing) return null;
+
+  const data = {
+    merchantId: existing.merchantId,
+    environment: existing.environment,
+    accessTokenEnc: existing.accessTokenEnc,
+    refreshTokenEnc: existing.refreshTokenEnc,
+    tokenExpiresAt: existing.tokenExpiresAt,
+    merchantName: existing.merchantName,
+    scopes: existing.scopes,
+    locationId: null,
+  };
+  await prisma.pendingSquareConnection.upsert({
+    where: { userId },
+    create: { userId, ...data },
+    update: data,
+  });
+  return { merchantName: existing.merchantName, environment: existing.environment, locationId: null };
+}
+
 // Inside the venue-creation transaction: turn the pending row into the new
 // restaurant's SquareConnection and delete the pending row. Returns what the
 // caller needs for its audit entry, or null when there was nothing pending.

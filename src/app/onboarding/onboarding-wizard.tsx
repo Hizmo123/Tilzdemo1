@@ -21,7 +21,7 @@ import {
   type OnboardingDraftPayload,
   type ExperienceModeKey,
 } from "@/lib/onboarding-options";
-import type { PendingSquareSummary } from "@/lib/square/pending";
+import type { PendingSquareSummary, OrgSquareConnectionSummary } from "@/lib/square/pending";
 import type { ChecklistItem } from "@/lib/setup-checklist";
 import { THEME_PRESETS, FONT_THEMES, ACCENT_SWATCHES, type ThemeKey, type FontKey, type CornerKey } from "@/lib/theme";
 import { COUNTRIES, timezonesForCountry, currencyForCountry, hasTaxRules } from "@/lib/countries";
@@ -126,6 +126,7 @@ export function OnboardingWizard({
   organizationId,
   fixedPlan,
   initialSquare,
+  existingOrgSquare,
   squareResult,
   returnTo,
 }: {
@@ -142,6 +143,11 @@ export function OnboardingWizard({
   // the page from the server; kept in state here as the Payments step
   // changes it (location pick, disconnect).
   initialSquare: PendingSquareSummary | null;
+  // +Add venue only (task 5): a live SquareConnection elsewhere in this org,
+  // if any — lets the Payments step offer "Use <merchant>" instead of a
+  // fresh OAuth click-through. Always undefined/null on first-run
+  // onboarding, which has no existing org to have one.
+  existingOrgSquare?: OrgSquareConnectionSummary | null;
   // Present only on the render right after the Square OAuth round trip
   // lands back here. Consumed once, then stripped from the URL.
   squareResult: SquareResult | null;
@@ -425,6 +431,7 @@ export function OnboardingWizard({
                   update={update}
                   square={square}
                   onSquareChange={setSquare}
+                  existingOrgSquare={existingOrgSquare ?? null}
                   squareResult={squareResult}
                   returnTo={returnTo}
                   mandatory={squareMandatory}

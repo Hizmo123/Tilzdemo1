@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { requireUser, ACTIVE_VENUE_COOKIE } from "@/lib/auth";
+import { requireUser, getTenantContext, ACTIVE_VENUE_COOKIE } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateToken } from "@/lib/tokens";
 import { audit } from "@/lib/audit";
@@ -20,6 +20,7 @@ import {
   getPendingSquareSummary,
   listPendingLocations,
   setPendingLocation,
+  copyOrgConnectionToPending,
   type PendingSquareSummary,
 } from "@/lib/square/pending";
 import { log } from "@/lib/log";
@@ -238,6 +239,20 @@ export async function discardPendingSquare(): Promise<{ ok: true }> {
   const user = await requireUser();
   await discardPending(user.id);
   return { ok: true };
+}
+
+// +Add venue only (task 5): the org already has a working SquareConnection
+// on some OTHER restaurant — reuse it instead of a fresh OAuth click-
+// through. organizationId is resolved from the CALLER's own membership via
+// getTenantContext, never trusted from the client, so this can only ever
+// reuse a connection the signed-in user's own org actually owns.
+export async function reuseOrgSquareConnection(): Promise<PendingSquareSummary | { error: string }> {
+  const { user, membership } = await getTenantContext();
+  if (!membership) return { error: "No organisation found." };
+
+  const result = await copyOrgConnectionToPending(user.id, membership.organizationId);
+  if (!result) return { error: "No existing Square connection found for this organisation." };
+  return result;
 }
 
 // Lite is menu-only: whatever the experience step said (or a stale draft
