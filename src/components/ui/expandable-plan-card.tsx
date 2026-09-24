@@ -1,34 +1,38 @@
 "use client";
 
 import { useId, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { LayoutGroup, motion, useReducedMotion, type Transition } from "motion/react";
 import type { PlanTier } from "@prisma/client";
 import { getFullPlanSpec } from "@/lib/plans";
-import { EASE_OUT, SPRING_SOFT } from "./motion";
+import { DUR, EASE_OUT } from "./motion";
 
-// One reusable "Full features" expand/squeeze interaction, shared by the
-// marketing pricing section (src/app/page.tsx) and the dashboard Billing
-// grid (src/app/dashboard/billing/checkout.tsx) — both render PLANS as a
-// row of cards, so the interaction lives here once rather than being
-// implemented twice.
+// One reusable "Full features" expand interaction, shared by the marketing
+// pricing section (components/marketing/pricing-grid.tsx) and the dashboard
+// Billing grid (app/dashboard/billing/checkout.tsx) — both render PLANS as
+// a grid of cards, so the interaction lives here once rather than twice.
 //
-// Split into two pieces a caller composes around its OWN existing card
-// markup (border, elevation, price, feature list, CTA — none of that is
-// touched):
-//   - PlanCardShell: the layout-animated flex item that grows the expanded
-//     card and squeezes its siblings narrower. Wraps the WHOLE card
-//     (border box included) so the squeeze reads as one continuous shape,
-//     not a panel bolted on the side.
-//   - PlanFeaturesReveal: the toggle button + the derived spec panel,
-//     dropped inside the caller's own padded card content, below its
-//     existing feature list / CTA — so the expanded detail stays inside
-//     the same visual card, not floating outside it.
-// usePlanExpansion holds the "which one tier is open" state; only one plan
-// can be expanded across a whole grid at a time, and opening a second one
-// closes whichever was open — both the closing card's un-squeeze and the
-// newly opened card's growth are driven by the SAME state change, so
-// motion's layout animation coordinates them in one pass rather than two
-// separate transitions.
+// Three pieces a caller composes around its OWN card chrome (border,
+// elevation, price, feature list, CTA — none of that is touched):
+//   - PlanCardGrid: the grid itself. CSS grid with equal-height rows
+//     (auto-rows-fr) so every card is the same height regardless of how
+//     long its feature list is, and a LayoutGroup so every card's reflow
+//     is measured and animated in ONE coordinated pass.
+//   - PlanCardShell: one grid cell. Carries the `layout` animation; when
+//     expanded it spans two columns and every sibling slides aside to make
+//     room (from sm up — a single column has nowhere to slide).
+//   - PlanFeaturesReveal: the toggle + the derived spec panel, placed inside
+//     the caller's own padded card content below its CTA.
+//
+// Exactly ONE transition (below) drives all of it — the shell's layout
+// move, the panel's fade, the chevron — so nothing fights: the panel never
+// animates its own height (that used to run concurrently with the shell's
+// layout animation and produced a visible double-move); it mounts at full
+// size with an opacity fade and the shell's layout animation carries the
+// size change. Collapsing removes the panel outright and the shell shrinks
+// under the same transition.
+
+const PLAN_TRANSITION: Transition = { duration: DUR.slow, ease: EASE_OUT };
+const INSTANT: Transition = { duration: 0 };
 
 export function usePlanExpansion() {
   const [expandedTier, setExpandedTier] = useState<PlanTier | null>(null);
@@ -36,6 +40,16 @@ export function usePlanExpansion() {
     setExpandedTier((cur) => (cur === tier ? null : tier));
   }
   return { expandedTier, toggle };
+}
+
+export function PlanCardGrid({ className = "", children }: { className?: string; children: React.ReactNode }) {
+  return (
+    <LayoutGroup>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 auto-rows-fr gap-4 ${className}`}>
+        {children}
+      </div>
+    </LayoutGroup>
+  );
 }
 
 export function PlanCardShell({
@@ -51,26 +65,12 @@ export function PlanCardShell({
 }) {
   const reduced = useReducedMotion();
   const isExpanded = expandedTier === tier;
-  const anyExpanded = expandedTier !== null;
-
-  // Default: the original even grid (1/2/3/5 columns), accounting for the
-  // gap-4 gutter so N columns actually sum to 100%. Expanded: this card
-  // takes most of the row; every sibling — regardless of which breakpoint's
-  // column count they'd normally hold — shrinks to a narrow strip so the
-  // "squeeze away to make room" reads the same at every width down to the
-  // point they wrap to their own row below (a smooth reflow, not a jump,
-  // since every card here carries `layout`).
-  const basis = isExpanded
-    ? "basis-full sm:basis-[58%]"
-    : anyExpanded
-      ? "basis-full sm:basis-[14%]"
-      : "basis-full sm:basis-[calc((100%-1rem)/2)] lg:basis-[calc((100%-2rem)/3)] 2xl:basis-[calc((100%-4rem)/5)]";
 
   return (
     <motion.div
       layout={!reduced}
-      transition={reduced ? { duration: 0 } : SPRING_SOFT}
-      className={`shrink-0 grow-0 ${basis} ${className}`}
+      transition={reduced ? INSTANT : PLAN_TRANSITION}
+      className={`h-full min-w-0 ${isExpanded ? "sm:col-span-2" : ""} ${className}`}
     >
       {children}
     </motion.div>
@@ -97,7 +97,7 @@ export function PlanFeaturesReveal({
         onClick={onToggle}
         aria-expanded={expanded}
         aria-controls={panelId}
-        className="w-full h-10 rounded-lg border border-line text-sm font-medium text-ink-soft hover:border-ink/30 hover:text-ink flex items-center justify-center gap-1.5 transition-colors"
+        className="w-full h-10 rounded-[var(--radius-sm)] border border-line text-sm font-medium text-ink-soft hover:border-line-strong hover:text-ink flex items-center justify-center gap-1.5 transition-colors duration-[var(--dur-fast)]"
       >
         {expanded ? "Hide full features" : "Full features"}
         <motion.svg
@@ -109,35 +109,30 @@ export function PlanFeaturesReveal({
           strokeLinecap="round"
           strokeLinejoin="round"
           animate={{ rotate: expanded ? 180 : 0 }}
-          transition={reduced ? { duration: 0 } : SPRING_SOFT}
+          transition={reduced ? INSTANT : PLAN_TRANSITION}
           aria-hidden
         >
           <path d="M5 7.5l5 5 5-5" />
         </motion.svg>
       </button>
 
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            id={panelId}
-            key="panel"
-            initial={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
-            animate={reduced ? { opacity: 1 } : { height: "auto", opacity: 1 }}
-            exit={reduced ? { opacity: 0 } : { height: 0, opacity: 0 }}
-            transition={reduced ? { duration: 0.12 } : { duration: 0.32, ease: EASE_OUT }}
-            className="overflow-hidden"
-          >
-            <dl className="mt-4 pt-4 border-t border-line space-y-3 text-sm">
-              {lines.map((line) => (
-                <div key={line.label}>
-                  <dt className="text-[11px] uppercase tracking-wide text-muted">{line.label}</dt>
-                  <dd className="text-ink-soft leading-snug mt-0.5">{line.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {expanded && (
+        <motion.div
+          id={panelId}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={reduced ? { duration: DUR.fast } : PLAN_TRANSITION}
+        >
+          <dl className="mt-4 pt-4 border-t border-line space-y-3 text-sm">
+            {lines.map((line) => (
+              <div key={line.label}>
+                <dt className="text-[11px] uppercase tracking-wide text-muted">{line.label}</dt>
+                <dd className="text-ink-soft leading-snug mt-0.5">{line.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </motion.div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { PLANS, planPriceLabel, type PlanDef } from "@/lib/plans";
 import { isTrialableTier, TRIAL_DAYS } from "@/lib/plan-subscription";
 import { LinkButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { PlanCardShell, PlanFeaturesReveal, usePlanExpansion } from "@/components/ui/expandable-plan-card";
+import { PlanCardGrid, PlanCardShell, PlanFeaturesReveal, usePlanExpansion } from "@/components/ui/expandable-plan-card";
 
 // The tier we lead with. Growth is the plan a venue going live across the
 // whole floor actually lands on — no table cap, no "Powered by Tillz" on
@@ -20,17 +20,15 @@ export function PricingGrid() {
   const { expandedTier, toggle: toggleExpanded } = usePlanExpansion();
 
   return (
-    // Flex, not CSS grid — same responsive column counts as before
-    // (1/2/3/5), but PlanCardShell's per-card flex-basis needs a flex
-    // parent to grow the expanded card and squeeze its siblings narrower.
-    // Same interaction, same component, as the dashboard Billing grid (see
-    // components/ui/expandable-plan-card.tsx). PlanCardShell must be a
-    // DIRECT flex child for its flex-basis to apply, so — unlike the rest
-    // of this page — this grid doesn't route through RevealGroup/RevealItem
-    // (that scroll-triggered stagger needs to own the same element).
-    <div className="mt-10 flex flex-wrap gap-4 pt-3">
+    // Same grid, same interaction, same component as the dashboard Billing
+    // grid (components/ui/expandable-plan-card.tsx). PlanCardShell must be
+    // a DIRECT grid child for its col-span/layout animation to apply, so —
+    // unlike the rest of this page — this grid doesn't route through
+    // RevealGroup/RevealItem (that scroll-triggered stagger needs to own
+    // the same element).
+    <PlanCardGrid className="mt-10 pt-3">
       {PLANS.map((plan) => (
-        <PlanCardShell key={plan.tier} tier={plan.tier} expandedTier={expandedTier} className="h-full">
+        <PlanCardShell key={plan.tier} tier={plan.tier} expandedTier={expandedTier}>
           <PricingCard
             plan={plan}
             expanded={expandedTier === plan.tier}
@@ -38,7 +36,7 @@ export function PricingGrid() {
           />
         </PlanCardShell>
       ))}
-    </div>
+    </PlanCardGrid>
   );
 }
 

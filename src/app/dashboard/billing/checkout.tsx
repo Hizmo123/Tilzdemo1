@@ -13,7 +13,7 @@ import {
 } from "@/lib/plans";
 import { formatCents } from "@/lib/money";
 import { isTrialableTier, TRIAL_DAYS, type TrialStatus } from "@/lib/plan-subscription";
-import { PlanCardShell, PlanFeaturesReveal, usePlanExpansion } from "@/components/ui/expandable-plan-card";
+import { PlanCardGrid, PlanCardShell, PlanFeaturesReveal, usePlanExpansion } from "@/components/ui/expandable-plan-card";
 
 export function Billing({
   currentPlan,
@@ -85,14 +85,12 @@ export function Billing({
         )}
       </div>
 
-      {/* Rendered straight from PLANS, same responsive breakpoints as the
-          marketing pricing grid (src/app/page.tsx) so both handle the 5
-          tiers (Connect added) identically — 3-then-2 from lg up, all 5 in
-          one row only once there's genuinely room for it. A flex row (not
-          CSS grid) so PlanCardShell's per-card flex-basis can grow the
-          expanded card and squeeze its siblings — see
-          components/ui/expandable-plan-card.tsx. */}
-      <div className="flex flex-wrap gap-4">
+      {/* Rendered straight from PLANS, on the same shared PlanCardGrid the
+          marketing pricing section uses (components/ui/expandable-plan-
+          card.tsx) so both handle the 5 tiers identically — equal-height
+          rows, 3-then-2 from lg up, all 5 in one row only once there's
+          genuinely room for it. */}
+      <PlanCardGrid>
         {PLANS.map((p) => {
           const isCurrent = p.tier === currentPlan && active;
           const connect = p.tier === "CONNECT";
@@ -112,7 +110,7 @@ export function Billing({
           return (
             <PlanCardShell key={p.tier} tier={p.tier} expandedTier={expandedTier}>
             <div
-              className={`relative rounded-2xl border bg-surface p-6 flex flex-col h-full ${
+              className={`relative rounded-[var(--radius-card)] border bg-surface p-6 flex flex-col h-full ${
                 p.tier === "GROWTH"
                   ? "border-2 border-pine"
                   : connect
@@ -157,7 +155,7 @@ export function Billing({
               {needsSquareFirst ? (
                 <Link
                   href="/dashboard/settings/integrations?intendedPlan=CONNECT"
-                  className="mt-6 rounded-xl py-3 font-medium text-center border border-pine/40 text-pine-deep hover:bg-pine-tint"
+                  className="mt-6 h-11 rounded-[var(--radius-md)] flex items-center justify-center font-medium text-center border border-pine/40 text-pine-deep hover:bg-pine-tint transition-colors duration-[var(--dur-fast)]"
                 >
                   Connect Square to switch
                 </Link>
@@ -165,7 +163,7 @@ export function Billing({
                 <button
                   disabled={isCurrent || pending}
                   onClick={handleSubscribeClick}
-                  className={`mt-6 rounded-xl py-3 font-medium ${
+                  className={`mt-6 h-11 rounded-[var(--radius-md)] font-medium transition-colors duration-[var(--dur-fast)] ${
                     isCurrent
                       ? "bg-paper text-muted cursor-default"
                       : p.tier === "GROWTH"
@@ -186,7 +184,7 @@ export function Billing({
             </PlanCardShell>
           );
         })}
-      </div>
+      </PlanCardGrid>
 
       {currentPlan === "CONNECT" && active && (
         <ConnectAddons connectPlusEnabled={connectPlusEnabled} connectBrandingHidden={connectBrandingHidden} />
