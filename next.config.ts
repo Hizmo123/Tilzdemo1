@@ -14,7 +14,13 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",
-    value: "camera=(), microphone=(), geolocation=()",
+    // camera=(self): scan-to-activate (Stands, qr-scanner) needs the
+    // browser to prompt for camera access on this site's own pages. Still
+    // blocks camera for any third-party/framed context — just allows
+    // first-party use, unlike the blanket camera=() this replaces.
+    // microphone/geolocation stay locked down — nothing in the app uses
+    // either.
+    value: "camera=(self), microphone=(), geolocation=()",
   },
 ];
 
