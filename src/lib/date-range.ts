@@ -78,14 +78,17 @@ export function pctChange(current: number, previous: number): number | null {
 }
 
 // Reads ?range=&from=&to= off a page's searchParams into a validated preset
-// plus its resolved window. Falls back to "7d" for anything unrecognised.
+// plus its resolved window. Falls back to `defaultPreset` (default "7d", what
+// Analytics/weekly-report/Invoices all use) for anything unrecognised — Order
+// History passes "30d" instead, its own default per the mockup.
 export function parseRangeParams(
   sp: { range?: string; from?: string; to?: string },
   timezone: string,
+  defaultPreset: RangePreset = "7d",
 ): { preset: RangePreset; resolved: ResolvedRange } {
   const preset = (RANGE_PRESETS as readonly string[]).includes(sp.range ?? "")
     ? (sp.range as RangePreset)
-    : "7d";
+    : defaultPreset;
   const resolved = resolveRange(preset, timezone, { from: sp.from, to: sp.to });
   return { preset, resolved };
 }
@@ -107,4 +110,28 @@ export function clampRangeToWindow(
     resolved: { ...resolved, from: earliestAllowed },
     clamped: true,
   };
+}
+
+// Which fixed-length presets ("custom" excluded — it's limited via minDate
+// below instead) would actually get clamped by clampRangeToWindow — used to
+// grey those chips out UP FRONT rather than letting someone pick "Last 90
+// days" on a 14-day plan and only finding out via the after-the-fact
+// HistoryWindowNote. null (unrestricted) disables nothing.
+export function disabledPresets(windowDays: number | null, timezone: string): RangePreset[] {
+  if (windowDays === null) return [];
+  return RANGE_PRESETS.filter((p) => {
+    if (p === "custom") return false;
+    const resolved = resolveRange(p, timezone);
+    return clampRangeToWindow(resolved, windowDays, timezone).clamped;
+  });
+}
+
+// yyyy-mm-dd floor for a custom-range <input type="date">'s `min` attribute —
+// the browser's own date picker greys out anything earlier. null
+// (unrestricted) means no floor.
+export function earliestAllowedDateStr(windowDays: number | null, timezone: string): string | null {
+  if (windowDays === null) return null;
+  const todayStart = startOfTodayInTz(timezone);
+  const earliest = addDays(todayStart, -(windowDays - 1));
+  return earliest.toISOString().slice(0, 10);
 }

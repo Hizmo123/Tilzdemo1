@@ -2420,15 +2420,26 @@ export type OrderHistoryEntry = {
 // Completed orders for the dashboard Orders page's History section — the
 // schema's actual terminal "done" status is SERVED (there's no separate
 // COMPLETED value), so that's what "completed" means here; cancelled orders
-// are a different outcome and aren't included. Capped by count (not a date
-// window like getRecentOrders above), newest first — reuses the
-// [restaurantId, status, servedAt] index also used by getRecentlyServed.
+// are a different outcome and aren't included. Filtered by servedAt within
+// `range` (defaults to the last 30 days when omitted, rather than an
+// unbounded "last `limit` ever") AND capped by `limit` within that range —
+// a busy venue's "This month" can still be a lot of rows even inside a
+// bounded window. Reuses the [restaurantId, status, servedAt] index also
+// used by getRecentlyServed.
+//
+// `range` is expected to already be entitlement-clamped by the caller (see
+// lib/date-range.ts's clampRangeToWindow, the same pattern Analytics uses
+// for entitlements.analyticsWindowDays) — this function trusts it as given
+// rather than re-deriving the plan limit itself.
 export async function getOrderHistory(
   restaurantId: string,
+  range?: { from?: Date; to?: Date },
   limit = 50,
 ): Promise<OrderHistoryEntry[]> {
+  const to = range?.to ?? new Date();
+  const from = range?.from ?? new Date(to.getTime() - 30 * 86_400_000);
   const orders = await prisma.order.findMany({
-    where: { restaurantId, status: "SERVED" },
+    where: { restaurantId, status: "SERVED", servedAt: { gte: from, lt: to } },
     orderBy: { servedAt: "desc" },
     take: limit,
     include: {

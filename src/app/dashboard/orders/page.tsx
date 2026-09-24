@@ -3,10 +3,22 @@ import { getAuthz } from "@/lib/auth";
 import { getEntitlements } from "@/lib/entitlements";
 import { getKitchenOrders, getOrderHistory, type OrderStatusName } from "@/lib/bills";
 import { formatCents } from "@/lib/money";
+import {
+  parseRangeParams,
+  clampRangeToWindow,
+  disabledPresets,
+  earliestAllowedDateStr,
+} from "@/lib/date-range";
+import { DateRangePicker } from "@/components/dashboard/date-range-picker";
+import { HistoryWindowNote } from "@/components/dashboard/history-window-note";
 import { LiveRefresh } from "../live-refresh";
 import { DashboardTicket } from "./dashboard-ticket";
 
-export default async function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
+}) {
   const authz = await getAuthz();
 
   if (!authz.membership) {
@@ -38,13 +50,26 @@ export default async function OrdersPage() {
   }
 
   const restaurant = authz.membership.organization.restaurants[0];
-  const [orders, history, ent] = restaurant
+  const sp = await searchParams;
+  const ent = restaurant ? await getEntitlements(authz.membership.organizationId) : null;
+
+  // Same pattern Analytics uses for entitlements.analyticsWindowDays:
+  // resolve the requested preset/custom range, then clamp it to the plan's
+  // history window (null = unrestricted). Order History defaults to "Last
+  // 30 days" rather than Analytics' own "7d" default.
+  const { preset, resolved: requestedRange } = restaurant
+    ? parseRangeParams(sp, restaurant.timezone, "30d")
+    : { preset: "30d" as const, resolved: { from: new Date(), to: new Date(), label: "" } };
+  const { resolved: historyRange, clamped } = restaurant
+    ? clampRangeToWindow(requestedRange, ent?.analyticsWindowDays ?? null, restaurant.timezone)
+    : { resolved: requestedRange, clamped: false };
+
+  const [orders, history] = restaurant
     ? await Promise.all([
         getKitchenOrders(restaurant.id),
-        getOrderHistory(restaurant.id),
-        getEntitlements(authz.membership.organizationId),
+        getOrderHistory(restaurant.id, historyRange),
       ])
-    : [[], [], null];
+    : [[], []];
   const now = Date.now();
   const currency = restaurant?.currency ?? "AUD";
   // Square owns the kitchen on Connect — no local status-changing control
@@ -96,8 +121,22 @@ export default async function OrdersPage() {
           History
         </h2>
         <p className="text-muted mb-4">
-          The last {history.length} served order{history.length === 1 ? "" : "s"}.
+          {historyRange.label} · {history.length} served order
+          {history.length === 1 ? "" : "s"}.
         </p>
+
+        {restaurant && (
+          <div className="mb-4 space-y-2">
+            <DateRangePicker
+              value={preset}
+              customFrom={sp.from}
+              customTo={sp.to}
+              disabledPresets={disabledPresets(ent?.analyticsWindowDays ?? null, restaurant.timezone)}
+              minCustomDate={earliestAllowedDateStr(ent?.analyticsWindowDays ?? null, restaurant.timezone) ?? undefined}
+            />
+            {clamped && <HistoryWindowNote />}
+          </div>
+        )}
 
         {history.length === 0 ? (
           <div className="rounded-[var(--radius-card)] border border-dashed border-line bg-surface p-8 text-center">
