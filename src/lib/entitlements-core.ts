@@ -29,6 +29,18 @@ export type Entitlements = {
   // publish gate (isOrgSubscribed) additionally requires an active,
   // non-revoked SquareConnection before a Connect org can go live.
   requiresSquare: boolean;
+  // The basic cross-venue view (name/today's sales/live-offline status, no
+  // deep reporting) — free the moment a tier's own venue capacity allows
+  // more than one venue. Derived from venueLimit, not a tier-name check, so
+  // it stays correct if venue limits ever change: true for PRO and for
+  // CONNECT (both venueLimit !== 1 today), false for LITE/BASIC/GROWTH.
+  crossVenueList: boolean;
+  // The DEEPER cross-venue dashboard — trends, cross-venue comparisons,
+  // combined exports. Always true on PRO (bundled in the subscription);
+  // true on CONNECT only when the org has paid for the Connect Plus addon
+  // (Organization.connectPlusEnabled) — a base Connect org gets
+  // crossVenueList but not this. False on every other tier.
+  crossVenueDashboard: boolean;
   // Lapsed-subscription state (spec B4). `lapsed` alone doesn't stop
   // anything — existing service and read access keep running through the
   // grace period. Only `orderingBlocked` (lapsed AND past the grace period)
@@ -118,9 +130,19 @@ const TIER_LIMITS: Record<
   },
 };
 
+// The two CONNECT-only mock addons (see the Organization schema comment) —
+// both default to false, so calling entitlementsForTier without this
+// param (every non-CONNECT caller, and any CONNECT caller before the org's
+// addon flags have been read) is identical to "no addons purchased".
+export type EntitlementAddons = {
+  connectPlusEnabled?: boolean;
+  connectBrandingHidden?: boolean;
+};
+
 export function entitlementsForTier(
   tier: PlanTier,
   lapse: { lapsedAt: Date | null } = { lapsedAt: null },
+  addons: EntitlementAddons = {},
 ): Entitlements {
   const base = TIER_LIMITS[tier] ?? TIER_LIMITS.LITE;
   const lapsedAt = lapse.lapsedAt;
@@ -130,9 +152,23 @@ export function entitlementsForTier(
     : null;
   const orderingBlocked = graceEndsAt !== null && graceEndsAt.getTime() < Date.now();
 
+  // appFeeBps (base.appFeeBps, 200 for CONNECT / 0 elsewhere) is NEVER
+  // touched by either addon below — Connect Plus and branding removal are
+  // pure feature/cosmetic upsells layered on the same flat fee, not fee
+  // discounts. Both addons only ever affect crossVenueDashboard and
+  // showTillzBranding, computed here, nowhere near appFeeBps.
+  const crossVenueList = base.venueLimit !== 1;
+  const crossVenueDashboard =
+    tier === "PRO" || (tier === "CONNECT" && addons.connectPlusEnabled === true);
+  const showTillzBranding =
+    tier === "CONNECT" && addons.connectBrandingHidden === true ? false : base.showTillzBranding;
+
   return {
     tier,
     ...base,
+    showTillzBranding,
+    crossVenueList,
+    crossVenueDashboard,
     lapsed,
     graceEndsAt,
     orderingBlocked,

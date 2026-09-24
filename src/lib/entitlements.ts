@@ -31,10 +31,19 @@ export { entitlementsForTier, entitlementsLabel, type Entitlements };
 export async function getEntitlements(organizationId: string): Promise<Entitlements> {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
-    select: { plan: true, subscriptionLapsedAt: true },
+    select: {
+      plan: true,
+      subscriptionLapsedAt: true,
+      connectPlusEnabled: true,
+      connectBrandingHidden: true,
+    },
   });
   if (!org) return entitlementsForTier("LITE");
-  return entitlementsForTier(org.plan, { lapsedAt: org.subscriptionLapsedAt });
+  return entitlementsForTier(
+    org.plan,
+    { lapsedAt: org.subscriptionLapsedAt },
+    { connectPlusEnabled: org.connectPlusEnabled, connectBrandingHidden: org.connectBrandingHidden },
+  );
 }
 
 // Only blocks CREATING a table beyond the limit — never hides or disables

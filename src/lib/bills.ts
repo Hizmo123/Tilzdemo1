@@ -107,7 +107,14 @@ export async function resolveVisit(
             include: {
               restaurant: {
                 include: {
-                  organization: { select: { plan: true, subscriptionLapsedAt: true } },
+                  organization: {
+                    select: {
+                      plan: true,
+                      subscriptionLapsedAt: true,
+                      connectPlusEnabled: true,
+                      connectBrandingHidden: true,
+                    },
+                  },
                 },
               },
             },
@@ -123,9 +130,14 @@ export async function resolveVisit(
   if (!qr.table.location.restaurant.published) return { ok: false, reason: "not_published" };
 
   const r = qr.table.location.restaurant;
-  const ent = entitlementsForTier(r.organization.plan, {
-    lapsedAt: r.organization.subscriptionLapsedAt,
-  });
+  const ent = entitlementsForTier(
+    r.organization.plan,
+    { lapsedAt: r.organization.subscriptionLapsedAt },
+    {
+      connectPlusEnabled: r.organization.connectPlusEnabled,
+      connectBrandingHidden: r.organization.connectBrandingHidden,
+    },
+  );
   const paymentContext = await getVenuePaymentContext(r.id);
   return {
     ok: true,
