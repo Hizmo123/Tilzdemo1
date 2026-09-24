@@ -171,11 +171,17 @@ export function entitlementsForTier(
     tier === "PRO" || (tier === "CONNECT" && addons.connectPlusEnabled === true);
   const showTillzBranding =
     tier === "CONNECT" && addons.connectBrandingHidden === true ? false : base.showTillzBranding;
+  // Connect Plus unlocks full history on top of the base 14-day CONNECT
+  // window, same as Growth/Pro — same addon-check pattern as
+  // crossVenueDashboard above.
+  const analyticsWindowDays =
+    tier === "CONNECT" && addons.connectPlusEnabled === true ? null : base.analyticsWindowDays;
 
   return {
     tier,
     ...base,
     showTillzBranding,
+    analyticsWindowDays,
     crossVenueList,
     crossVenueDashboard,
     lapsed,
