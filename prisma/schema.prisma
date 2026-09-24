@@ -105,6 +105,15 @@ model Organization {
   // running through a grace period, and only past that does new ordering
   // stop — never an instant, mid-service cutoff.
   subscriptionLapsedAt DateTime?
+  // Two CONNECT-only mock addons (spec: Connect Plus + branding removal).
+  // Both are ORG-LEVEL FLAGS, not their own PlanTier — same pattern as Pro's
+  // extra-venue addon (a flag/mock-confirmation on top of the tier, not a
+  // separate tier). Meaningful ONLY when plan === CONNECT; left false/unused
+  // on every other tier. See lib/entitlements.ts for how these feed into
+  // Entitlements.crossVenueDashboard / showTillzBranding, and
+  // dashboard/billing/actions.ts for the (mock, no-charge) toggles.
+  connectPlusEnabled    Boolean @default(false)
+  connectBrandingHidden Boolean @default(false)
   // A self-service "please delete my account" request, not an instant purge.
   // Paid bills are tax invoices — Australian tax law requires keeping those
   // for 5 years, so financial records survive this request regardless; the
