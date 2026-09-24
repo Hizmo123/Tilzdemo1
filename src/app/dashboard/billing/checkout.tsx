@@ -5,9 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { PlanTier } from "@prisma/client";
 import { subscribe, cancelSubscription, setConnectPlusEnabled, setConnectBrandingHidden } from "./actions";
-import { PLANS } from "@/lib/plans";
+import {
+  PLANS,
+  CONNECT_PLUS_PRICE_CENTS,
+  CONNECT_BRANDING_REMOVAL_PRICE_CENTS,
+  centsToPriceLabel,
+} from "@/lib/plans";
 import { formatCents } from "@/lib/money";
 import { isTrialableTier, TRIAL_DAYS, type TrialStatus } from "@/lib/plan-subscription";
+import { PlanCardShell, PlanFeaturesReveal, usePlanExpansion } from "@/components/ui/expandable-plan-card";
 
 export function Billing({
   currentPlan,
@@ -33,6 +39,7 @@ export function Billing({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const { expandedTier, toggle: toggleExpanded } = usePlanExpansion();
 
   const active = planStatus === "active";
 
@@ -81,8 +88,11 @@ export function Billing({
       {/* Rendered straight from PLANS, same responsive breakpoints as the
           marketing pricing grid (src/app/page.tsx) so both handle the 5
           tiers (Connect added) identically — 3-then-2 from lg up, all 5 in
-          one row only once there's genuinely room for it. */}
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 gap-4">
+          one row only once there's genuinely room for it. A flex row (not
+          CSS grid) so PlanCardShell's per-card flex-basis can grow the
+          expanded card and squeeze its siblings — see
+          components/ui/expandable-plan-card.tsx. */}
+      <div className="flex flex-wrap gap-4">
         {PLANS.map((p) => {
           const isCurrent = p.tier === currentPlan && active;
           const connect = p.tier === "CONNECT";
@@ -100,9 +110,9 @@ export function Billing({
           }
 
           return (
+            <PlanCardShell key={p.tier} tier={p.tier} expandedTier={expandedTier}>
             <div
-              key={p.tier}
-              className={`relative rounded-2xl border bg-surface p-6 flex flex-col ${
+              className={`relative rounded-2xl border bg-surface p-6 flex flex-col h-full ${
                 p.tier === "GROWTH"
                   ? "border-2 border-pine"
                   : connect
@@ -166,7 +176,14 @@ export function Billing({
                   {isCurrent ? "Current plan" : "Switch to this plan"}
                 </button>
               )}
+
+              <PlanFeaturesReveal
+                tier={p.tier}
+                expanded={expandedTier === p.tier}
+                onToggle={() => toggleExpanded(p.tier)}
+              />
             </div>
+            </PlanCardShell>
           );
         })}
       </div>
@@ -199,7 +216,7 @@ function ConnectAddons({
       <AddonToggle
         label="Connect Plus"
         description="Full cross-venue dashboard — trends, comparisons and combined exports across every venue."
-        priceLabel="$19/mo"
+        priceLabel={`${centsToPriceLabel(CONNECT_PLUS_PRICE_CENTS)}/mo`}
         checked={connectPlusEnabled}
         onChange={(next) =>
           setConnectPlusEnabled(next).then(() => router.refresh())
@@ -209,7 +226,7 @@ function ConnectAddons({
       <AddonToggle
         label='Remove "Powered by Tillz"'
         description="Hides the Tillz mark from your customer ordering page."
-        priceLabel="$9/mo"
+        priceLabel={`${centsToPriceLabel(CONNECT_BRANDING_REMOVAL_PRICE_CENTS)}/mo`}
         checked={connectBrandingHidden}
         onChange={(next) =>
           setConnectBrandingHidden(next).then(() => router.refresh())

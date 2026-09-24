@@ -1,4 +1,5 @@
 import type { PlanTier } from "@prisma/client";
+import { entitlementsForTier } from "@/lib/entitlements-core";
 
 // The subscription catalog (AUD, excluding GST). Prices are wired through the
 // mock billing flow so the whole signup -> choose plan -> pay journey works
@@ -92,13 +93,20 @@ export function planByTier(tier: PlanTier): PlanDef {
   return PLANS.find((p) => p.tier === tier) ?? PLANS[0];
 }
 
+// Whole-dollar "$49" or "$4.99" (AUD), no cents when unnecessary. Shared by
+// planPriceLabel below and getFullPlanSpec's addon pricing so every dollar
+// figure on a pricing card renders the same way from the same helper.
+export function centsToPriceLabel(cents: number): string {
+  const dollars = cents / 100;
+  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
+}
+
 // Display-only: "Free" or a whole-dollar "$49" (AUD). Shared by the
 // marketing pricing section and the onboarding plan step so the two render
 // the same figure the same way. Never used for arithmetic.
 export function planPriceLabel(p: PlanDef): string {
   if (p.priceCents === 0) return "Free";
-  const dollars = p.priceCents / 100;
-  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`;
+  return centsToPriceLabel(p.priceCents);
 }
 
 // Price for one physical Tillz stand, ordered from the dashboard (spec: the
@@ -110,3 +118,105 @@ export const STAND_UNIT_PRICE_CENTS = 2900;
 // only today; no charge is ever actually made.
 // TODO(stripe): wire this into a real per-venue subscription line item.
 export const EXTRA_VENUE_PRICE_CENTS = 4999;
+
+// The two CONNECT-only mock addons (dashboard/billing/checkout.tsx's
+// ConnectAddons toggles, lib/entitlements-core.ts's EntitlementAddons) — one
+// source of truth for their price so the Billing toggles and
+// getFullPlanSpec's "Full features" breakdown below can never quote
+// different numbers for the same addon.
+export const CONNECT_PLUS_PRICE_CENTS = 1900;
+export const CONNECT_BRANDING_REMOVAL_PRICE_CENTS = 900;
+
+export type PlanSpecLine = { label: string; value: string };
+
+// The "Full features" expandable panel's content — every line DERIVED from
+// entitlementsForTier (the same TIER_LIMITS table that actually gates the
+// product), never a second hand-typed copy of what a tier includes. Addon
+// lines re-derive their own "what it unlocks" text by calling
+// entitlementsForTier again WITH that addon on, so if the addon's real
+// effect ever changes (e.g. the Connect Plus analytics-window fix), this
+// panel can't silently go stale.
+export function getFullPlanSpec(tier: PlanTier): PlanSpecLine[] {
+  const ent = entitlementsForTier(tier);
+
+  const lines: PlanSpecLine[] = [
+    {
+      label: "Ordering",
+      value: ent.ordering
+        ? "Live ordering, kitchen screen and bill splitting"
+        : "Digital menu only — no live ordering",
+    },
+    {
+      label: "Tables",
+      value:
+        ent.tableLimit === null
+          ? "Unlimited"
+          : ent.tableLimit === 0
+            ? "No tables (menu-only)"
+            : `Up to ${ent.tableLimit}`,
+    },
+    {
+      label: "Kitchen stations",
+      value:
+        ent.kdsStationLimit === null
+          ? "Unlimited"
+          : ent.kdsStationLimit === 0
+            ? tier === "CONNECT"
+              ? "None — Square owns your kitchen screen"
+              : "None"
+            : `${ent.kdsStationLimit}`,
+    },
+    {
+      label: "Venues",
+      value:
+        ent.venueLimit === null
+          ? tier === "CONNECT"
+            ? "Unlimited — each venue connects its own Square account, no extra subscription"
+            : "Unlimited"
+          : ent.venueLimit === 1
+            ? "1 venue"
+            : `${ent.venueLimit} venues included — extra venues ${centsToPriceLabel(EXTRA_VENUE_PRICE_CENTS)}/mo each`,
+    },
+    {
+      label: "Analytics history",
+      value:
+        ent.analyticsWindowDays === null
+          ? "Full history"
+          : ent.analyticsWindowDays === 0
+            ? "None"
+            : `Last ${ent.analyticsWindowDays} days`,
+    },
+    {
+      label: "Branding",
+      value: ent.showTillzBranding
+        ? '"Powered by Tillz" shown on your ordering page'
+        : "Removed — fully your own brand",
+    },
+    {
+      label: "Support",
+      value: ent.prioritySupport ? "Priority support" : "Standard support",
+    },
+  ];
+
+  if (tier === "CONNECT") {
+    lines.push({
+      label: "Per-order fee",
+      value: `${ent.appFeeBps / 100}% per order — your only cost, no monthly subscription`,
+    });
+
+    const withPlus = entitlementsForTier("CONNECT", { lapsedAt: null }, { connectPlusEnabled: true });
+    lines.push({
+      label: "Addon: Connect Plus",
+      value: `${centsToPriceLabel(CONNECT_PLUS_PRICE_CENTS)}/mo — full cross-venue dashboard${
+        withPlus.analyticsWindowDays === null ? ", unlimited analytics history" : ""
+      }`,
+    });
+
+    lines.push({
+      label: 'Addon: remove "Powered by Tillz"',
+      value: `${centsToPriceLabel(CONNECT_BRANDING_REMOVAL_PRICE_CENTS)}/mo — hides the Tillz mark from your ordering page`,
+    });
+  }
+
+  return lines;
+}
