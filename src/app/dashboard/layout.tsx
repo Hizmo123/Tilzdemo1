@@ -226,6 +226,18 @@ export default async function DashboardLayout({
     }
   }
 
+  // Cross-venue overview (entitlements.crossVenueList) — same "depends on a
+  // per-request DB check, not just a permission" reasoning as Square catalog
+  // above. Visible only when the org's own venue capacity allows more than
+  // one venue (PRO, or CONNECT with a matching venueLimit) — same gate the
+  // route itself enforces server-side (dashboard/venues-overview/page.tsx).
+  if (entitlements?.crossVenueList && (!role || roleCan(role, "bills:view"))) {
+    const moneySection = visibleSections.find((s) => s.label === "Money");
+    if (moneySection) {
+      moneySection.items.push({ label: "Venues", href: "/dashboard/venues-overview", perm: null });
+    }
+  }
+
   return (
     // The guided tour lives at layout level so it survives every route
     // change under /dashboard (its steps span Overview, Menu, Tables and
