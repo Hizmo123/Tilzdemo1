@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Reorder, useDragControls, useReducedMotion } from "motion/react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label, Input, FormMessage } from "@/components/ui/field";
@@ -41,19 +42,48 @@ export function CategoriesView({
   const router = useRouter();
   const [reordering, setReordering] = useState(false);
 
-  // Optimistic-order swap, then persist. Reads from the server-ordered
-  // `categories` prop each render, so it always reflects the latest sortOrder
-  // after router.refresh() — no drift between what's shown and what's saved.
+  // Local order the drag list edits directly; the server-ordered
+  // `categories` prop is the source of truth again after every persist +
+  // router.refresh(). While a save is scheduled/in flight the prop is NOT
+  // re-synced, so a refresh landing mid-drag can't snap the list back.
+  const [order, setOrder] = useState(categories);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSave = useRef(false);
+  useEffect(() => {
+    if (!pendingSave.current) setOrder(categories);
+  }, [categories]);
+
+  // Persist the current order, debounced 400ms after the LAST drag end /
+  // move — not on every intermediate reorder frame — through the same
+  // action the old up/down buttons used (it takes any full ordered id list).
+  function scheduleSave() {
+    pendingSave.current = true;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null;
+      setReordering(true);
+      reorderCategoriesAction(orderRef.current.map((c) => c.id)).finally(() => {
+        setReordering(false);
+        pendingSave.current = false;
+        router.refresh();
+      });
+    }, 400);
+  }
+  useEffect(() => () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+  }, []);
+
+  // Keyboard equivalent of the drag: swap with a neighbour, same debounced
+  // persist. Kept so pointer drag is never the only way to reorder.
   function move(index: number, delta: 1 | -1) {
     const target = index + delta;
-    if (target < 0 || target >= categories.length) return;
-    const ids = categories.map((c) => c.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
-    setReordering(true);
-    reorderCategoriesAction(ids).finally(() => {
-      setReordering(false);
-      router.refresh();
-    });
+    if (target < 0 || target >= order.length) return;
+    const next = [...order];
+    [next[index], next[target]] = [next[target], next[index]];
+    setOrder(next);
+    scheduleSave();
   }
 
   return (
@@ -76,18 +106,19 @@ export function CategoriesView({
             <h2 className="font-display text-lg font-semibold tracking-tight">Categories</h2>
             <span className="text-xs text-muted">Order here is the order customers see.</span>
           </div>
-          <ul className="divide-y divide-line">
-            {categories.map((cat, i) => (
+          <Reorder.Group as="ul" axis="y" values={order} onReorder={setOrder} className="divide-y divide-line">
+            {order.map((cat, i) => (
               <CategoryRow
                 key={cat.id}
                 category={cat}
                 stations={kitchenStations}
                 onMoveUp={i > 0 ? () => move(i, -1) : undefined}
-                onMoveDown={i < categories.length - 1 ? () => move(i, 1) : undefined}
+                onMoveDown={i < order.length - 1 ? () => move(i, 1) : undefined}
+                onDragEnd={scheduleSave}
                 reordering={reordering}
               />
             ))}
-          </ul>
+          </Reorder.Group>
         </Card>
       )}
 
@@ -131,16 +162,23 @@ function CategoryRow({
   stations,
   onMoveUp,
   onMoveDown,
+  onDragEnd,
   reordering,
 }: {
   category: MenuCategoryRow;
   stations: string[];
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  onDragEnd: () => void;
   reordering: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
+  const reduced = useReducedMotion();
+  // Drag starts ONLY from the grab handle (dragListener={false} below) — the
+  // row is full of inputs/buttons that must keep working with the pointer.
+  const dragControls = useDragControls();
+  const [dragging, setDragging] = useState(false);
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(category.name);
@@ -213,33 +251,78 @@ function CategoryRow({
   const stationOptions = station && !stations.includes(station) ? [station, ...stations] : stations;
 
   return (
-    <li className="px-5 py-4">
+    <Reorder.Item
+      as="li"
+      value={category}
+      dragListener={false}
+      dragControls={dragControls}
+      onDragStart={() => setDragging(true)}
+      onDragEnd={() => {
+        setDragging(false);
+        onDragEnd();
+      }}
+      // Lifted state: float shadow + a 2% scale (scale is skipped under
+      // reduced motion; the shadow alone still marks the row as picked up).
+      // --ease-spring / --dur-fast for the settle back down.
+      whileDrag={{ scale: reduced ? 1 : 1.02 }}
+      transition={{ duration: 0.15, ease: [0.34, 1.56, 0.64, 1] }}
+      className={`group relative px-5 py-4 bg-surface ${dragging ? "z-10 shadow-float rounded-[var(--radius-card)]" : ""}`}
+    >
       <div className="flex items-center gap-3">
-        <div className="shrink-0 flex flex-col -my-1">
+        <div className="shrink-0 flex items-center">
+          {/* 6-dot grab handle. 44x44 hit target (this reorders on the staff
+              iPad too); touch-none so the browser doesn't scroll instead of
+              dragging. */}
           <button
             type="button"
-            disabled={!onMoveUp || reordering}
-            onClick={onMoveUp}
-            title="Move up"
-            aria-label={`Move ${category.name} up`}
-            className="w-7 h-6 rounded-[var(--radius-sm)] flex items-center justify-center text-muted hover:text-ink hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent"
+            aria-label={`Drag to reorder ${category.name}`}
+            disabled={reordering}
+            onPointerDown={(e) => {
+              if (reordering) return;
+              e.preventDefault();
+              dragControls.start(e);
+            }}
+            className={`w-11 h-11 -ml-2 rounded-[var(--radius-sm)] flex items-center justify-center text-muted hover:text-ink hover:bg-surface-2 touch-none select-none disabled:opacity-30 ${
+              dragging ? "cursor-grabbing" : "cursor-grab"
+            }`}
           >
-            <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M5 12l5-5 5 5" />
+            <svg viewBox="0 0 20 20" className="w-4 h-4" fill="currentColor" aria-hidden>
+              <circle cx="7" cy="4.5" r="1.6" />
+              <circle cx="13" cy="4.5" r="1.6" />
+              <circle cx="7" cy="10" r="1.6" />
+              <circle cx="13" cy="10" r="1.6" />
+              <circle cx="7" cy="15.5" r="1.6" />
+              <circle cx="13" cy="15.5" r="1.6" />
             </svg>
           </button>
-          <button
-            type="button"
-            disabled={!onMoveDown || reordering}
-            onClick={onMoveDown}
-            title="Move down"
-            aria-label={`Move ${category.name} down`}
-            className="w-7 h-6 rounded-[var(--radius-sm)] flex items-center justify-center text-muted hover:text-ink hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent"
-          >
-            <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M5 8l5 5 5-5" />
-            </svg>
-          </button>
+          {/* Keyboard reorder: hidden until the row is focused (or hovered on
+              a pointer device), so drag is never the only way to move a row. */}
+          <div className="flex flex-col -my-1 opacity-0 focus-within:opacity-100 group-hover:opacity-100 transition-opacity duration-[var(--dur-fast)]">
+            <button
+              type="button"
+              disabled={!onMoveUp || reordering}
+              onClick={onMoveUp}
+              title="Move up"
+              aria-label={`Move ${category.name} up`}
+              className="w-7 h-6 rounded-[var(--radius-sm)] flex items-center justify-center text-muted hover:text-ink hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M5 12l5-5 5 5" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              disabled={!onMoveDown || reordering}
+              onClick={onMoveDown}
+              title="Move down"
+              aria-label={`Move ${category.name} down`}
+              className="w-7 h-6 rounded-[var(--radius-sm)] flex items-center justify-center text-muted hover:text-ink hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent"
+            >
+              <svg viewBox="0 0 20 20" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M5 8l5 5 5-5" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 min-w-0">
@@ -322,7 +405,7 @@ function CategoryRow({
         </div>
       </div>
 
-      <div className="mt-3 ml-10 flex flex-wrap items-end gap-3">
+      <div className="mt-3 ml-12 flex flex-wrap items-end gap-3">
         <div className="w-[180px]">
           <label htmlFor={`station-${category.id}`} className="text-xs text-muted block mb-1">
             Station default
@@ -377,7 +460,7 @@ function CategoryRow({
           an item sets its own.
         </p>
       </div>
-    </li>
+    </Reorder.Item>
   );
 }
 
