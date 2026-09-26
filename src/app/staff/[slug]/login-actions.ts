@@ -21,7 +21,8 @@ export async function submitStaffLogin(
   });
   if (!restaurant) return { error: "Restaurant not found." };
   // A deactivated org blocks every restaurant under it, same as the owner's
-  // own dashboard login — see lib/account.ts#deactivateAccount.
+  // own dashboard login — deactivatedAt is set by platform-admin suspension
+  // (lib/admin/account-actions.ts).
   if (restaurant.organization.deactivatedAt) {
     return { error: "This venue's account is currently deactivated." };
   }

@@ -166,9 +166,10 @@ export default async function DashboardLayout({
     redirect("/mfa");
   }
 
-  // A deactivated org blocks the whole team's dashboard access (see
-  // lib/account.ts#deactivateAccount) — the only way back in is the emailed
-  // reactivation link, never from inside here, since this IS "inside here".
+  // A deactivated org blocks the whole team's dashboard access. deactivatedAt
+  // is set only by a platform admin (lib/admin/account-actions.ts#
+  // adminSuspendOrg) and cleared by adminReactivateOrg — never from inside
+  // here, since this IS "inside here".
   if (membership?.organization.deactivatedAt) {
     return (
       <main className="min-h-dvh bg-paper flex items-center justify-center px-6">
@@ -177,8 +178,8 @@ export default async function DashboardLayout({
             Account deactivated
           </h1>
           <p className="text-muted text-sm mt-2">
-            This account was deactivated and its subscription cancelled.
-            Check the owner&apos;s inbox for a reactivation link.
+            This account has been deactivated. Contact Tillz support to have
+            it reactivated.
           </p>
           <form action={signOut} className="mt-6">
             <button
