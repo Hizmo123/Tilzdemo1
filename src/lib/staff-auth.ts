@@ -136,8 +136,8 @@ export const getStaffSession = cache(async () => {
   });
   if (!staff || staff.restaurantId !== payload.restaurantId) return null;
   // A session issued before deactivation stays a valid cookie — this is what
-  // actually cuts it off mid-shift, not just the login step. See
-  // lib/account.ts#deactivateAccount.
+  // actually cuts it off mid-shift, not just the login step. deactivatedAt is
+  // set by platform-admin suspension (lib/admin/account-actions.ts).
   if (staff.restaurant.organization.deactivatedAt) return null;
   return { staff, restaurant: staff.restaurant };
 });

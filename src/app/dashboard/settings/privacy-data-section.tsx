@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { requestDeletionAction, cancelDeletionAction, deactivateAccountAction } from "./privacy-actions";
+import { requestDeletionAction, cancelDeletionAction } from "./privacy-actions";
 
 export function PrivacyDataSection({
   organizationName,
@@ -41,20 +41,6 @@ export function PrivacyDataSection({
     });
   }
 
-  const [deactivateConfirming, setDeactivateConfirming] = useState(false);
-  const [deactivateName, setDeactivateName] = useState("");
-  const [deactivateError, setDeactivateError] = useState<string | null>(null);
-  const [deactivateDone, setDeactivateDone] = useState(false);
-
-  function submitDeactivate() {
-    setDeactivateError(null);
-    start(async () => {
-      const res = await deactivateAccountAction(deactivateName);
-      if (res.error) setDeactivateError(res.error);
-      else setDeactivateDone(true); // dashboard access is now blocked; nothing left to refresh into
-    });
-  }
-
   return (
     <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-5">
       <div>
@@ -62,7 +48,7 @@ export function PrivacyDataSection({
           Your data
         </h2>
         <p className="text-sm text-muted mt-1">
-          Export what Tillz holds about your venue, or pause or close your account.
+          Export what Tillz holds about your venue, or close your account.
         </p>
       </div>
 
@@ -82,62 +68,6 @@ export function PrivacyDataSection({
         >
           Download export
         </a>
-      </div>
-
-      <div className="border-t border-line pt-5">
-        <p className="text-sm font-medium mb-1">Deactivate your account</p>
-        {deactivateDone ? (
-          <p className="text-sm text-muted rounded-[var(--radius-sm)] bg-paper px-3.5 py-3">
-            Your account is now deactivated. Check your email for a link to
-            reactivate — you&apos;ll be signed out shortly.
-          </p>
-        ) : !isOwner ? (
-          <p className="text-sm text-muted">Only the owner can do this.</p>
-        ) : !deactivateConfirming ? (
-          <button
-            onClick={() => setDeactivateConfirming(true)}
-            className="text-sm text-danger underline underline-offset-2"
-          >
-            Deactivate account…
-          </button>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-sm text-muted">
-              This cancels your subscription and immediately signs your whole
-              team out — no one can log in to the dashboard or any staff PIN
-              until you reactivate. You&apos;ll get an email with a
-              reactivation link (valid 7 days). Type{" "}
-              <strong className="text-ink">{organizationName}</strong> to
-              confirm.
-            </p>
-            <input
-              value={deactivateName}
-              onChange={(e) => setDeactivateName(e.target.value)}
-              className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2 text-sm focus:border-danger focus:outline-none"
-            />
-            <div className="flex gap-2">
-              <button
-                disabled={pending}
-                onClick={submitDeactivate}
-                className="rounded-[var(--radius-sm)] bg-danger text-white px-3.5 py-2 text-sm font-medium disabled:opacity-50"
-              >
-                {pending ? "Deactivating…" : "Confirm deactivation"}
-              </button>
-              <button
-                disabled={pending}
-                onClick={() => {
-                  setDeactivateConfirming(false);
-                  setDeactivateName("");
-                  setDeactivateError(null);
-                }}
-                className="rounded-[var(--radius-sm)] border border-line px-3.5 py-2 text-sm disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-        {deactivateError && <p className="text-xs text-danger mt-2">{deactivateError}</p>}
       </div>
 
       <div className="border-t border-line pt-5">
