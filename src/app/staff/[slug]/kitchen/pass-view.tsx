@@ -1,4 +1,5 @@
 import type { OrderStatusName } from "@/lib/bills";
+import { ageAccentClass } from "./kitchen-ticket";
 
 type PassTicket = {
   id: string;
@@ -41,16 +42,11 @@ export function PassView({ tickets }: { tickets: PassTicket[] }) {
     <div className="grid sm:grid-cols-2 gap-3">
       {tickets.map((t) => {
         const mixed = t.byStation.length > 1;
-        const ageBorder =
-          t.minutesAgo >= 10
-            ? "border-l-4 border-l-danger"
-            : t.minutesAgo >= 5
-              ? "border-l-4 border-l-amber-500"
-              : "border-l-4 border-l-pine";
+        const ageBorder = `border-l-4 ${ageAccentClass(t.minutesAgo, t.status !== "READY")}`;
         return (
           <div
             key={t.id}
-            className={`rounded-[var(--radius-card)] border border-line ${ageBorder} bg-surface p-4`}
+            className={`rounded-[var(--radius-card)] border border-line ${ageBorder} bg-surface shadow-rest p-4`}
           >
             <div className="flex items-center justify-between mb-1 gap-2">
               <span className="font-display text-lg font-semibold tracking-tight">

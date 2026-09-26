@@ -113,7 +113,7 @@ export default async function StaffHomePage({
   return (
     <main className="min-h-dvh bg-paper">
       <LiveRefresh seconds={5} restaurantId={restaurant.id} />
-      <header className="border-b border-line bg-surface px-5 sm:px-8 py-4 flex items-center justify-between sticky top-0 z-10">
+      <header className="border-b border-line bg-surface shadow-rest px-5 sm:px-8 py-4 flex items-center justify-between sticky top-0 z-10">
         <div>
           <p className="font-display text-lg font-semibold tracking-tight">
             {restaurant.name}
@@ -219,34 +219,43 @@ export default async function StaffHomePage({
                       !!bill && remaining > 0 && minutesSinceActivity >= UNPAID_ALERT_MINUTES;
 
                     // Priority: assistance > unpaid-too-long > open > empty.
+                    // Readable from across the room: one status token per
+                    // state (danger / warn / info / neutral), on the border
+                    // AND a soft fill, never text alone.
                     const cls = needsHelp
-                      ? "border-warn/40 bg-warn-soft hover:border-warn/60"
+                      ? "border-danger/50 bg-danger-soft hover:border-danger"
                       : unpaidTooLong
-                        ? "border-danger/40 bg-danger-soft hover:border-danger/60"
+                        ? "border-warn/50 bg-warn-soft hover:border-warn"
                         : bill
-                          ? "border-pine/30 bg-pine-soft/40 hover:border-pine/50"
-                          : "border-line bg-surface hover:border-line";
+                          ? "border-info/40 bg-info-soft hover:border-info/70"
+                          : "border-line bg-surface hover:border-line-strong";
 
                     return (
                       <Link
                         key={t.id}
                         href={`/staff/${slug}/table/${t.id}`}
-                        className={`rounded-[var(--radius-card)] border p-4 transition-colors flex flex-col justify-between min-h-[104px] ${cls}`}
+                        className={`rounded-[var(--radius-card)] border p-4 flex flex-col justify-between min-h-[104px] min-w-[88px] shadow-rest active:shadow-raised active:scale-[0.98] transition-[box-shadow,border-color,scale] duration-[var(--dur-fast)] ${cls}`}
                       >
                         <div className="flex items-start justify-between">
                           <span className="font-display text-2xl font-semibold tracking-tight leading-none">
                             {t.label}
                           </span>
                           {needsHelp ? (
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-warn">
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-danger">
+                              {/* Pulse ring — the one motion on this screen,
+                                  reserved for "a guest is waiting on you". */}
+                              <span className="relative flex w-2 h-2" aria-hidden>
+                                <span className="absolute inset-0 rounded-pill bg-danger/50 animate-pulse-ring" />
+                                <span className="relative w-2 h-2 rounded-pill bg-danger" />
+                              </span>
                               Help
                             </span>
                           ) : unpaidTooLong ? (
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-danger">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-warn">
                               Unpaid
                             </span>
                           ) : bill ? (
-                            <span className="text-[10px] uppercase tracking-wide text-pine-deep">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-info">
                               {bill.status === "PARTIALLY_PAID" ? "Part-paid" : "Open"}
                             </span>
                           ) : (
@@ -258,13 +267,13 @@ export default async function StaffHomePage({
 
                         <div className="mt-3">
                           {needsHelp && (
-                            <p className="text-xs font-medium text-warn mb-1">
-                              ● Needs assistance
+                            <p className="text-xs font-medium text-danger mb-1">
+                              Needs assistance
                             </p>
                           )}
                           {!needsHelp && unpaidTooLong && (
-                            <p className="text-xs font-medium text-danger mb-1">
-                              ● Unpaid {minutesSinceActivity}m
+                            <p className="text-xs font-medium text-warn mb-1">
+                              Unpaid {minutesSinceActivity}m
                             </p>
                           )}
                           {bill ? (

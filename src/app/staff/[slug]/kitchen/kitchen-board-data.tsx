@@ -7,7 +7,8 @@ import {
 } from "@/lib/bills";
 import { KitchenLive } from "./kitchen-live";
 import { StationTabs } from "./station-tabs";
-import { KitchenBoard } from "./kitchen-board";
+import { KitchenBoard, type TicketGroup } from "./kitchen-board";
+import type { Ticket, TicketItem } from "./kitchen-ticket";
 import { ApprovalCard } from "./approval-card";
 import { RecentlyServedRow } from "./recently-served-row";
 import { PassView } from "./pass-view";
@@ -65,9 +66,9 @@ export async function KitchenBoardData({
 
   // Board view: filtered to the active station (or everything), one card per
   // ticket, items trimmed to what this screen cares about.
-  const tickets = orders
+  const tickets: Ticket[] = orders
     .map((o) => {
-      const items = o.items
+      const items: TicketItem[] = o.items
         .filter((it) => !active || it.station === active)
         .map((it) => ({
           id: it.id,
@@ -77,6 +78,7 @@ export async function KitchenBoardData({
           allergens: it.menuItem?.allergens ?? [],
           available: it.menuItem?.available ?? true,
           note: it.note,
+          station: it.station,
         }));
       return { o, items };
     })
@@ -93,8 +95,37 @@ export async function KitchenBoardData({
       prepay,
       billPaid: o.bill.totalCents - o.bill.amountPaidCents <= 0,
       minutesAgo: Math.floor((now - new Date(o.createdAt).getTime()) / 60000),
+      station: active,
       items,
     }));
+
+  // Board grouping. With a station selected (or the device locked to one)
+  // there's a single group. On the unfiltered "All" board, tickets are
+  // filed under each station their items belong to — a grill+bar order
+  // shows a card under Grill with just its grill lines and one under Bar
+  // with its bar lines, the way a real KDS routes by station. Status is
+  // still per ORDER (see pass-view.tsx's note), so bumping either card
+  // advances the whole order — unchanged behaviour, just laid out by
+  // station. Lines with no station land under "Kitchen", matching the
+  // pass view.
+  const groups: TicketGroup[] = active
+    ? [{ station: active, tickets }]
+    : (() => {
+        const byStation = new Map<string, Ticket[]>();
+        for (const t of tickets) {
+          const split = new Map<string, TicketItem[]>();
+          for (const it of t.items) {
+            const key = it.station ?? "Kitchen";
+            (split.get(key) ?? split.set(key, []).get(key)!).push(it);
+          }
+          for (const [station, items] of split) {
+            (byStation.get(station) ?? byStation.set(station, []).get(station)!).push({ ...t, station, items });
+          }
+        }
+        return [...byStation.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([station, tickets]) => ({ station, tickets }));
+      })();
 
   // Pass/expo view: unfiltered by station — every active order, every line,
   // grouped by station within the card. Reuses the same `orders` fetch.
@@ -235,7 +266,7 @@ export async function KitchenBoardData({
                 </div>
               )
             ) : (
-              <KitchenBoard slug={slug} tickets={tickets} readOnly={readOnly} />
+              <KitchenBoard slug={slug} groups={groups} readOnly={readOnly} />
             )}
 
             {/* Recall / re-fire recently-served */}

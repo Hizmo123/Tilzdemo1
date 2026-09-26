@@ -11,11 +11,15 @@ export function OrderPanel({
   tableId,
   currency,
   menu,
+  billTotalCents,
 }: {
   slug: string;
   tableId: string;
   currency: string;
   menu: OrderCategory[];
+  // The table's current bill total — shown in MenuOrderer's always-on
+  // staff footer beside the send action.
+  billTotalCents: number;
 }) {
   const router = useRouter();
 
@@ -30,14 +34,16 @@ export function OrderPanel({
   }
 
   return (
-    <div>
+    <div className="rounded-[var(--radius-card)] bg-surface shadow-float p-5">
       <h2 className="font-display text-lg font-semibold tracking-tight mb-3">
         Add to order
       </h2>
       <MenuOrderer
         menu={menu}
         currency={currency}
-        submitLabel={(n) => `Send ${n} ${n === 1 ? "item" : "items"} to the bill`}
+        density="staff"
+        billTotalCents={billTotalCents}
+        submitLabel={(n) => `Send ${n} ${n === 1 ? "item" : "items"} to the kitchen`}
         onSubmit={onSubmit}
       />
     </div>

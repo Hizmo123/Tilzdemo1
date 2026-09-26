@@ -114,7 +114,7 @@ export default async function StaffTablePage({
   return (
     <main className="min-h-dvh bg-paper">
       <LiveRefresh seconds={5} restaurantId={restaurant.id} />
-      <header className="border-b border-line bg-surface px-5 py-4 sticky top-0 flex items-center justify-between">
+      <header className="border-b border-line bg-surface shadow-rest px-5 py-4 sticky top-0 z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link href={`/staff/${slug}/home`} className="text-sm text-muted hover:text-ink">
             ← Tables
@@ -128,7 +128,7 @@ export default async function StaffTablePage({
 
       <div className="max-w-2xl mx-auto px-5 py-6">
         {/* Current bill */}
-        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5 mb-6">
+        <div className="rounded-[var(--radius-card)] bg-surface shadow-float p-5 mb-6">
           <h2 className="text-sm font-medium text-muted mb-3">Current bill</h2>
           {!bill || bill.items.length === 0 ? (
             <p className="text-sm text-muted">Nothing ordered yet.</p>
@@ -220,6 +220,7 @@ export default async function StaffTablePage({
             tableId={table.id}
             currency={currency}
             menu={menu}
+            billTotalCents={bill?.totalCents ?? 0}
           />
         ) : (
           <p className="text-sm text-muted">
