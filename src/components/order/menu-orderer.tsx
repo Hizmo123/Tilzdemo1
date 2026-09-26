@@ -87,6 +87,8 @@ export function MenuOrderer({
   buttonShape = "rounded",
   buttonFill = "solid",
   persistKey,
+  density = "customer",
+  billTotalCents,
 }: {
   menu: OrderCategory[];
   currency: string;
@@ -115,7 +117,18 @@ export function MenuOrderer({
   // their own phone never sees this. Omit for the staff order panel, which
   // has no per-visit token and should keep its in-memory-only behaviour.
   persistKey?: string;
+  // "staff": the shared iPad POS context. Bumps every tap target (add
+  // steppers, option pills, minimal rows) to a 44px+ hit area and keeps the
+  // bottom bar mounted even with an empty cart, so the running bill total
+  // and the send action are always on screen (a POS's commit action never
+  // needs hunting for). Customer rendering is untouched at the default.
+  density?: "customer" | "staff";
+  // Staff only: the table's current bill total, shown in the sticky footer
+  // beside the cart so what's already ordered and what's about to be sent
+  // are both visible without scrolling back up.
+  billTotalCents?: number;
 }) {
+  const dense = density === "staff";
   const cs = resolveCardStyle(layout, cardStyle);
   const ts = resolveTypeScale(typeScale);
   const addBtnClass = menuButtonClass(buttonShape, buttonFill);
@@ -375,6 +388,7 @@ export function MenuOrderer({
                     key={item.id}
                     item={item}
                     ts={ts}
+                    dense={dense}
                     currency={currency}
                     simpleQty={simpleQty.get(item.id) ?? 0}
                     anyQty={anyQty.get(item.id) ?? 0}
@@ -399,6 +413,7 @@ export function MenuOrderer({
                     item={item}
                     cs={cs}
                     ts={ts}
+                    dense={dense}
                     currency={currency}
                     simpleQty={simpleQty.get(item.id) ?? 0}
                     anyQty={anyQty.get(item.id) ?? 0}
@@ -425,9 +440,11 @@ export function MenuOrderer({
         </p>
       )}
 
-      {/* Floating cart bar — springs in when the first item lands. */}
+      {/* Floating cart bar — springs in when the first item lands. In staff
+          density it's always mounted: the running bill and the send action
+          stay pinned to the bottom of the screen throughout the order. */}
       <AnimatePresence>
-        {count > 0 && (
+        {(count > 0 || dense) && (
           <motion.div
             key="cartbar"
             initial={{ y: 96, opacity: 0 }}
@@ -441,14 +458,22 @@ export function MenuOrderer({
               initial={bump > 0 ? { scale: 0.97 } : false}
               animate={{ scale: 1 }}
               transition={SPRING}
-              className="max-w-md md:max-w-lg mx-auto pointer-events-auto"
+              className={`max-w-md md:max-w-lg mx-auto pointer-events-auto ${
+                dense ? "rounded-[var(--radius-card)] bg-surface shadow-float p-3 space-y-2" : ""
+              }`}
             >
+              {dense && billTotalCents !== undefined && (
+                <div className="flex items-baseline justify-between px-1 text-sm">
+                  <span className="text-muted">Current bill</span>
+                  <AnimatedMoney cents={billTotalCents} currency={currency} className={`${MENU_HEADLINE_FONT} text-base font-semibold`} />
+                </div>
+              )}
               <Button
                 variant="primary"
                 size="lg"
                 full
                 onClick={primaryAction}
-                disabled={pending}
+                disabled={pending || count === 0}
                 loading={pending || retrying}
                 className="justify-between px-4"
               >
@@ -456,7 +481,9 @@ export function MenuOrderer({
                   <span className="min-w-7 h-7 px-2 rounded-pill bg-white/20 text-on-accent flex items-center justify-center text-sm font-semibold tabular">
                     <AnimatedInt value={count} />
                   </span>
-                  <span>{retrying ? "Retrying…" : pending ? "Sending…" : submitLabel(count)}</span>
+                  <span>
+                    {retrying ? "Retrying…" : pending ? "Sending…" : count === 0 ? "Add items to send" : submitLabel(count)}
+                  </span>
                 </span>
                 <AnimatedMoney cents={subtotal} currency={currency} className={`${MENU_HEADLINE_FONT} text-lg`} />
               </Button>
@@ -468,6 +495,7 @@ export function MenuOrderer({
       <ItemSheet
         item={sheetItem}
         currency={currency}
+        dense={dense}
         onClose={() => setSheetItem(null)}
         onConfirm={(line) => {
           addConfigured(line);
@@ -505,6 +533,7 @@ function AddControl({
   onAdd,
   onRemove,
   size = "md",
+  dense = false,
 }: {
   item: OrderMenuItem;
   simpleQty: number;
@@ -513,8 +542,11 @@ function AddControl({
   onAdd: () => void;
   onRemove: () => void;
   size?: "sm" | "md";
+  dense?: boolean;
 }) {
-  const dim = size === "sm" ? "h-9 min-w-9" : "h-10 min-w-10";
+  // Staff density: every add/stepper is at least 44px (h-11) regardless of
+  // the row's own size, matching the customer sheet's own steppers.
+  const dim = dense ? "h-12 min-w-12" : size === "sm" ? "h-9 min-w-9" : "h-10 min-w-10";
   if (!item.available) return null;
   const hasGroups = item.groups.length > 0;
 
@@ -581,6 +613,7 @@ function AddControl({
 type CardProps = {
   item: OrderMenuItem;
   ts: TypeSize;
+  dense?: boolean;
   currency: string;
   simpleQty: number;
   anyQty: number;
@@ -672,7 +705,7 @@ function ItemCard({ item, cs, ...p }: CardProps & { cs: CardStyle }) {
         {textEl}
         <div className="mt-2.5 flex items-center justify-between gap-2">
           {priceEl}
-          <AddControl item={item} simpleQty={p.simpleQty} anyQty={p.anyQty} addBtnClass={p.addBtnClass} onAdd={p.onAdd} onRemove={p.onRemove} />
+          <AddControl item={item} simpleQty={p.simpleQty} anyQty={p.anyQty} addBtnClass={p.addBtnClass} onAdd={p.onAdd} onRemove={p.onRemove} dense={p.dense} />
         </div>
       </div>
     </div>
@@ -682,7 +715,7 @@ function ItemCard({ item, cs, ...p }: CardProps & { cs: CardStyle }) {
 function MinimalRow({ item, ...p }: CardProps) {
   const { ts, currency } = p;
   return (
-    <div role="button" tabIndex={0} onClick={p.onOpen} onKeyDown={(e) => e.key === "Enter" && p.onOpen()} className="flex items-center justify-between gap-3 py-3 cursor-pointer">
+    <div role="button" tabIndex={0} onClick={p.onOpen} onKeyDown={(e) => e.key === "Enter" && p.onOpen()} className={`flex items-center justify-between gap-3 cursor-pointer ${p.dense ? "py-4 min-h-[56px]" : "py-3"}`}>
       <div className="min-w-0 flex-1">
         <span style={{ fontSize: ts.itemName }} className={`${MENU_HEADLINE_FONT} font-semibold ${item.available ? "" : "text-muted"}`}>
           {item.name}
@@ -697,7 +730,7 @@ function MinimalRow({ item, ...p }: CardProps) {
       <span style={{ fontSize: ts.itemPrice }} className={`${MENU_HEADLINE_FONT} font-semibold tabular shrink-0`}>
         {formatCents(item.priceCents, currency)}
       </span>
-      <AddControl item={item} simpleQty={p.simpleQty} anyQty={p.anyQty} addBtnClass={p.addBtnClass} onAdd={p.onAdd} onRemove={p.onRemove} size="sm" />
+      <AddControl item={item} simpleQty={p.simpleQty} anyQty={p.anyQty} addBtnClass={p.addBtnClass} onAdd={p.onAdd} onRemove={p.onRemove} size="sm" dense={p.dense} />
     </div>
   );
 }
@@ -706,17 +739,19 @@ function MinimalRow({ item, ...p }: CardProps) {
 function ItemSheet({
   item,
   currency,
+  dense = false,
   onClose,
   onConfirm,
 }: {
   item: OrderMenuItem | null;
   currency: string;
+  dense?: boolean;
   onClose: () => void;
   onConfirm: (line: CartLine) => void;
 }) {
   return (
     <Sheet open={!!item} onClose={onClose} size="lg">
-      {item && <ItemSheetBody key={item.id} item={item} currency={currency} onConfirm={onConfirm} />}
+      {item && <ItemSheetBody key={item.id} item={item} currency={currency} dense={dense} onConfirm={onConfirm} />}
     </Sheet>
   );
 }
@@ -724,10 +759,12 @@ function ItemSheet({
 function ItemSheetBody({
   item,
   currency,
+  dense = false,
   onConfirm,
 }: {
   item: OrderMenuItem;
   currency: string;
+  dense?: boolean;
   onConfirm: (line: CartLine) => void;
 }) {
   const [selected, setSelected] = useState<Record<string, string[]>>({});
@@ -890,7 +927,7 @@ function ItemSheetBody({
                         transition={SPRING_PRESS}
                         aria-pressed={on}
                         onClick={() => toggle(g, o.id)}
-                        className={`h-10 px-3.5 rounded-pill text-sm font-medium inline-flex items-center gap-2 transition-[background-color,color,box-shadow] duration-[var(--dur-fast)] ${
+                        className={`${dense ? "h-12 px-4" : "h-10 px-3.5"} rounded-pill text-sm font-medium inline-flex items-center gap-2 transition-[background-color,color,box-shadow] duration-[var(--dur-fast)] ${
                           on ? "bg-pine text-on-accent shadow-accent" : "bg-surface border border-line text-ink-soft hover:border-line-strong"
                         }`}
                       >
