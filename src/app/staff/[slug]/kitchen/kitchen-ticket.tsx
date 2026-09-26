@@ -225,9 +225,9 @@ export function KitchenTicket({
           Synced from your Square kitchen
         </p>
       ) : (
-        {/* Bump-bar convention: ONE big full-width tap to advance, at the
-            bottom of the card where a thumb lands. Cancel is deliberately
-            small and separate so a rushed bump can't hit it. */}
+        // Bump-bar convention: ONE big full-width tap to advance, at the
+        // bottom of the card where a thumb lands. Cancel is deliberately
+        // small and separate so a rushed bump can't hit it.
         <div className="space-y-1.5">
           {next && (
             <button
