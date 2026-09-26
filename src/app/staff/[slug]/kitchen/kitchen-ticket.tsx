@@ -7,7 +7,7 @@ import { staffSetAvailable } from "../menu/actions";
 import type { OrderStatusName } from "@/lib/bills";
 import { buttonClasses } from "@/components/ui/button-classes";
 
-type TicketItem = {
+export type TicketItem = {
   id: string;
   menuItemId: string | null;
   name: string;
@@ -15,6 +15,7 @@ type TicketItem = {
   allergens: string[];
   available: boolean;
   note: string | null;
+  station: string | null;
 };
 
 export type Ticket = {
@@ -29,8 +30,25 @@ export type Ticket = {
   prepay: boolean;
   billPaid: boolean;
   minutesAgo: number;
+  // The station this card is filed under on the board (null = unfiltered).
+  station: string | null;
   items: TicketItem[];
 };
+
+// Ticket-age escalation, in one place for the board AND the pass view:
+// fresh = info, approaching AGE_WARN = warn, past AGE_OVERDUE = danger.
+// Same tokens the staff Floor uses, so a colour means the same thing on
+// every staff screen. Venue-configurable thresholds would be a settings
+// change (data), out of scope for this polish pass — change them here.
+export const AGE_WARN_MINUTES = 5;
+export const AGE_OVERDUE_MINUTES = 10;
+
+export function ageAccentClass(minutesAgo: number, active = true): string {
+  if (!active) return "border-l-line-strong";
+  if (minutesAgo >= AGE_OVERDUE_MINUTES) return "border-l-danger";
+  if (minutesAgo >= AGE_WARN_MINUTES) return "border-l-warn";
+  return "border-l-info";
+}
 
 export const NEXT_LABEL: Partial<Record<OrderStatusName, { to: OrderStatusName; label: string }>> = {
   SUBMITTED: { to: "PREPARING", label: "Start preparing" },
@@ -93,19 +111,16 @@ export function KitchenTicket({
 
   const next = NEXT_LABEL[ticket.status];
 
-  // Age escalation — a ticket sitting too long turns amber then red so it's
+  // Age escalation — a ticket sitting too long turns warn then danger so it's
   // obvious across the kitchen. Only applies while it's still being worked.
+  // Left-edge accent only (never the whole background) so the ticket text
+  // stays legible under kitchen lighting.
   const active = ticket.status === "SUBMITTED" || ticket.status === "PREPARING";
-  const ageBorder =
-    active && ticket.minutesAgo >= 10
-      ? "border-l-4 border-l-danger"
-      : active && ticket.minutesAgo >= 5
-        ? "border-l-4 border-l-amber-500"
-        : "border-l-4 border-l-pine";
+  const ageBorder = `border-l-4 ${ageAccentClass(ticket.minutesAgo, active)}`;
 
   return (
     <div
-      className={`rounded-[var(--radius-card)] border border-line ${ageBorder} bg-surface p-4 flex flex-col`}
+      className={`rounded-[var(--radius-card)] border border-line ${ageBorder} bg-surface shadow-rest p-4 flex flex-col`}
     >
       <div className="flex items-center justify-between mb-2 gap-2">
         <span className="font-display text-lg font-semibold tracking-tight flex items-center gap-2">
@@ -210,12 +225,15 @@ export function KitchenTicket({
           Synced from your Square kitchen
         </p>
       ) : (
-        <div className="flex gap-2">
+        {/* Bump-bar convention: ONE big full-width tap to advance, at the
+            bottom of the card where a thumb lands. Cancel is deliberately
+            small and separate so a rushed bump can't hit it. */}
+        <div className="space-y-1.5">
           {next && (
             <button
               disabled={pending}
               onClick={() => move(next.to)}
-              className={buttonClasses("primary", "lg", false, "flex-1 disabled:opacity-50")}
+              className={buttonClasses("primary", "lg", true, "h-14 text-lg disabled:opacity-50")}
             >
               {pending ? "…" : next.label}
             </button>
@@ -223,9 +241,9 @@ export function KitchenTicket({
           <button
             disabled={pending}
             onClick={() => move("CANCELLED")}
-            className={buttonClasses("secondary", "lg", false, "text-muted hover:text-danger hover:border-danger/40 disabled:opacity-50")}
+            className={buttonClasses("ghost", "sm", true, "text-muted hover:text-danger hover:bg-danger-soft disabled:opacity-50")}
           >
-            Cancel
+            Cancel ticket
           </button>
         </div>
       )}
