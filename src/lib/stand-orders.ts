@@ -26,6 +26,13 @@ export async function placeStandOrder(args: {
   shippingSuburb: string;
   shippingState: string;
   shippingPostcode: string;
+  // Set by uploadStandOrderDesign before checkout (see dashboard/stands/
+  // design-actions.ts) — this function never uploads anything itself, it
+  // only re-validates requiresCustomDesign against whatever URL the client
+  // claims to have gotten, since the owner-side disabled-submit-button is a
+  // convenience only, never the real gate.
+  designImageUrl?: string | null;
+  designFileName?: string | null;
 }): Promise<PlaceStandOrderResult> {
   const tableIds = [...new Set(args.tableIds)];
   if (tableIds.length === 0) return { error: "Pick at least one table." };
@@ -45,6 +52,14 @@ export async function placeStandOrder(args: {
   if (!product || !product.active) {
     return { error: "That product is no longer available." };
   }
+  if (product.requiresCustomDesign && !args.designImageUrl) {
+    return { error: "Upload a design before ordering this product." };
+  }
+  // A design URL for a product that doesn't even allow one is never trusted
+  // onto the order — same "server re-derives, never trusts the client's
+  // claim" rule as everything else here.
+  const designImageUrl = product.allowsCustomDesign ? args.designImageUrl ?? null : null;
+  const designFileName = designImageUrl ? args.designFileName ?? null : null;
 
   const quantity = tableIds.length;
   const totalCents = product.priceCents * quantity;
@@ -65,6 +80,9 @@ export async function placeStandOrder(args: {
       shippingSuburb: args.shippingSuburb,
       shippingState: args.shippingState,
       shippingPostcode: args.shippingPostcode,
+      designImageUrl,
+      designFileName,
+      designStatus: designImageUrl ? "PENDING_REVIEW" : "NONE",
       items: {
         create: tableIds.map((tableId) => ({ tableId })),
       },

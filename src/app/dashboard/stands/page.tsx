@@ -71,6 +71,11 @@ export default async function StandsPage() {
             imageUrl: p.imageUrl,
             type: p.type,
             priceCents: p.priceCents,
+            allowsCustomDesign: p.allowsCustomDesign,
+            requiresCustomDesign: p.requiresCustomDesign,
+            designGuidelines: p.designGuidelines,
+            maxDesignSizeMb: p.maxDesignSizeMb,
+            acceptedDesignMimeTypes: p.acceptedDesignMimeTypes,
           }))}
           tables={tables.map((t) => ({
             id: t.id,

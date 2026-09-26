@@ -16,6 +16,11 @@ const schema = z.object({
   shippingSuburb: z.string().trim().min(1, "Enter a suburb.").max(100),
   shippingState: z.string().trim().min(1, "Enter a state.").max(10),
   shippingPostcode: z.string().trim().min(1, "Enter a postcode.").max(10),
+  // Set only when uploadStandOrderDesign (design-actions.ts) already
+  // succeeded client-side — placeStandOrder re-validates requiresCustomDesign
+  // against this regardless, so an empty/tampered value can't bypass that.
+  designImageUrl: z.string().url().optional().or(z.literal("")),
+  designFileName: z.string().max(200).optional().or(z.literal("")),
 });
 
 export async function orderStands(
@@ -37,6 +42,8 @@ export async function orderStands(
     shippingSuburb: formData.get("shippingSuburb"),
     shippingState: formData.get("shippingState"),
     shippingPostcode: formData.get("shippingPostcode"),
+    designImageUrl: formData.get("designImageUrl") ?? "",
+    designFileName: formData.get("designFileName") ?? "",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -44,6 +51,8 @@ export async function orderStands(
     organizationId: authz.membership.organizationId,
     restaurantId: restaurant.id,
     ...parsed.data,
+    designImageUrl: parsed.data.designImageUrl || null,
+    designFileName: parsed.data.designFileName || null,
   });
   if ("error" in result) return { error: result.error };
 
