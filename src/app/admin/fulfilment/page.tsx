@@ -2,6 +2,7 @@ import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { listFulfilmentOrders } from "@/lib/admin/queries";
 import { formatCents } from "@/lib/money";
 import { StatusButtons } from "./status-buttons";
+import { DesignStatusBadge, DesignPreview, DesignReviewActions } from "./design-review";
 
 export default async function FulfilmentPage() {
   await requirePlatformAdmin();
@@ -57,6 +58,7 @@ export default async function FulfilmentPage() {
                   >
                     {order.status}
                   </span>
+                  {order.designStatus !== "NONE" && <DesignStatusBadge status={order.designStatus} />}
                   <a
                     href={`/admin/fulfilment/${order.id}/qr-pack`}
                     className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"
@@ -66,6 +68,18 @@ export default async function FulfilmentPage() {
                   <StatusButtons orderId={order.id} status={order.status} />
                 </div>
               </div>
+
+              {order.designImageUrl && (
+                <div className="mt-3 pt-3 border-t border-line flex items-start justify-between gap-4 flex-wrap">
+                  <DesignPreview url={order.designImageUrl} fileName={order.designFileName} />
+                  <DesignReviewActions
+                    orderId={order.id}
+                    status={order.designStatus}
+                    notes={order.designNotes}
+                    reviewedByEmail={order.designReviewedByEmail}
+                  />
+                </div>
+              )}
 
               <div className="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
                 <div>
