@@ -1,52 +1,37 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { requestDeletionAction, cancelDeletionAction } from "./privacy-actions";
+import { deleteAccountAction } from "./privacy-actions";
 
+// INTERIM (Phase 2): one-step name confirmation wired straight to the new
+// immediate-deletion action, so this phase builds on its own. Phase 3
+// replaces the whole delete block with the three-step warning -> confirm ->
+// final-confirmation flow.
 export function PrivacyDataSection({
   organizationName,
   isOwner,
-  deletionRequestedAt,
 }: {
   organizationName: string;
   isOwner: boolean;
-  deletionRequestedAt: string | null;
 }) {
-  const router = useRouter();
   const [confirmName, setConfirmName] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  function submitRequest() {
+  function submitDelete() {
     setError(null);
     start(async () => {
-      const res = await requestDeletionAction(confirmName);
+      const res = await deleteAccountAction(confirmName);
       if (res.error) setError(res.error);
-      else {
-        setConfirming(false);
-        setConfirmName("");
-        router.refresh();
-      }
-    });
-  }
-
-  function cancel() {
-    setError(null);
-    start(async () => {
-      const res = await cancelDeletionAction();
-      if (res.error) setError(res.error);
-      else router.refresh();
+      else window.location.assign("/account-closed");
     });
   }
 
   return (
     <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-5">
       <div>
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          Your data
-        </h2>
+        <h2 className="font-display text-lg font-semibold tracking-tight">Your data</h2>
         <p className="text-sm text-muted mt-1">
           Export what Tillz holds about your venue, or close your account.
         </p>
@@ -72,40 +57,20 @@ export function PrivacyDataSection({
 
       <div className="border-t border-line pt-5">
         <p className="text-sm font-medium mb-1 text-danger">Delete your account</p>
-        {deletionRequestedAt ? (
-          <div className="rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-3 text-sm space-y-2">
-            <p>
-              Deletion requested on{" "}
-              {new Date(deletionRequestedAt).toLocaleDateString("en-AU")}. Your
-              account keeps working normally — support will be in touch to
-              finish closing it (paid bills are tax invoices we're required to
-              keep for 5 years, so those survive regardless).
-            </p>
-            {isOwner && (
-              <button
-                disabled={pending}
-                onClick={cancel}
-                className="rounded-[var(--radius-sm)] border border-danger/30 px-3 py-1.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50"
-              >
-                Cancel request
-              </button>
-            )}
-          </div>
-        ) : !isOwner ? (
-          <p className="text-sm text-muted">Only the owner can request this.</p>
+        {!isOwner ? (
+          <p className="text-sm text-muted">Only the owner can do this.</p>
         ) : !confirming ? (
           <button
             onClick={() => setConfirming(true)}
             className="text-sm text-danger underline underline-offset-2"
           >
-            Request account deletion…
+            Delete account…
           </button>
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-muted">
-              Type <strong className="text-ink">{organizationName}</strong> to
-              confirm. This records a request — it doesn't delete anything
-              immediately.
+              Type <strong className="text-ink">{organizationName}</strong> to confirm. This
+              closes the account immediately and can&apos;t be undone.
             </p>
             <input
               value={confirmName}
@@ -114,11 +79,11 @@ export function PrivacyDataSection({
             />
             <div className="flex gap-2">
               <button
-                disabled={pending}
-                onClick={submitRequest}
+                disabled={pending || confirmName.trim() !== organizationName}
+                onClick={submitDelete}
                 className="rounded-[var(--radius-sm)] bg-danger text-white px-3.5 py-2 text-sm font-medium disabled:opacity-50"
               >
-                {pending ? "Submitting…" : "Confirm deletion request"}
+                {pending ? "Deleting…" : "Delete account"}
               </button>
               <button
                 disabled={pending}

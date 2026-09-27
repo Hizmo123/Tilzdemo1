@@ -7,6 +7,7 @@ import {
   createServiceClient,
   ensurePublicBucket,
   describeStorageError,
+  STAND_DESIGN_BUCKET,
   StorageNotConfiguredError,
 } from "@/lib/supabase/service";
 import { log } from "@/lib/log";
@@ -19,11 +20,10 @@ export type DesignUploadState =
 // menu-images bucket, which is created with allowedMimeTypes locked to
 // jpeg/png/webp and would reject a PDF outright) and no compressImage: that
 // pipeline re-encodes to JPEG at a fixed quality, which is exactly the kind
-// of degradation a print-ready file must not go through.
-// Not exported: a "use server" file may only export async functions (see
-// the same note on dashboard/settings/constants.ts) — a plain constant
-// export here breaks that at runtime.
-const STAND_DESIGN_BUCKET = "stand-designs";
+// of degradation a print-ready file must not go through. The bucket name
+// (STAND_DESIGN_BUCKET) lives in lib/supabase/service.ts: a "use server"
+// file may only export async functions, and account deletion needs the same
+// name to sweep these files.
 
 // Cloned from uploadMenuImage's shape (dashboard/menu/image-actions.ts) —
 // auth check -> validate File -> ensure bucket -> upload -> getPublicUrl —

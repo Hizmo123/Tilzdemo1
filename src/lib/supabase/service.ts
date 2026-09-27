@@ -53,6 +53,12 @@ export function describeStorageError(rawMessage: string): string {
 
 export const MENU_IMAGE_BUCKET = "menu-images";
 
+// Customer-supplied print artwork for custom-design stand orders (see
+// dashboard/stands/design-actions.ts). Lives here rather than in that file
+// because a "use server" module may only export async functions — and
+// account deletion (lib/account-storage.ts) needs the same name.
+export const STAND_DESIGN_BUCKET = "stand-designs";
+
 // Creates the bucket if it's missing, or flips it public if it exists but
 // isn't — a private bucket serves 404s for the public URLs this app hands out
 // everywhere (logo/cover/background/menu images), which was a live bug.
