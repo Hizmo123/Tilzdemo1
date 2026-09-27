@@ -5,6 +5,7 @@ import {
   getRecentlyServed,
   type OrderStatusName,
 } from "@/lib/bills";
+import { log } from "@/lib/log";
 import { KitchenLive } from "./kitchen-live";
 import { StationTabs } from "./station-tabs";
 import { KitchenBoard, type TicketGroup } from "./kitchen-board";
@@ -129,21 +130,40 @@ export async function KitchenBoardData({
 
   // Pass/expo view: unfiltered by station — every active order, every line,
   // grouped by station within the card. Reuses the same `orders` fetch.
-  const passTickets = orders.map((o) => ({
-    id: o.id,
-    orderNumber: o.orderNumber,
-    tableLabel: label(o),
-    status: o.status as OrderStatusName,
-    isRefire: o.isRefire,
-    minutesAgo: Math.floor((now - new Date(o.createdAt).getTime()) / 60000),
-    byStation: Object.entries(
-      o.items.reduce<Record<string, { name: string; quantity: number }[]>>((acc, it) => {
-        const key = it.station ?? "Kitchen";
-        (acc[key] ??= []).push({ name: it.nameSnapshot, quantity: it.quantity });
-        return acc;
-      }, {}),
-    ).sort(([a], [b]) => a.localeCompare(b)),
-  }));
+  //
+  // The user-facing error boundary (app/error.tsx) shows only a digest, so a
+  // failure here used to leave no readable trace anywhere. Log the real
+  // error server-side (Vercel captures stderr) and RE-THROW — this must
+  // still reach the boundary, never be swallowed into a half-rendered pass.
+  // Note this only covers the data transform; a throw while PassView itself
+  // RENDERS is caught by instrumentation.ts#onRequestError instead.
+  const passTickets = (() => {
+    try {
+      return orders.map((o) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        tableLabel: label(o),
+        status: o.status as OrderStatusName,
+        isRefire: o.isRefire,
+        minutesAgo: Math.floor((now - new Date(o.createdAt).getTime()) / 60000),
+        byStation: Object.entries(
+          o.items.reduce<Record<string, { name: string; quantity: number }[]>>((acc, it) => {
+            const key = it.station ?? "Kitchen";
+            (acc[key] ??= []).push({ name: it.nameSnapshot, quantity: it.quantity });
+            return acc;
+          }, {}),
+        ).sort(([a], [b]) => a.localeCompare(b)),
+      }));
+    } catch (e) {
+      log.error("kitchen.pass_transform_failed", {
+        restaurantId,
+        orderCount: orders.length,
+        message: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack?.slice(0, 1500) : undefined,
+      });
+      throw e;
+    }
+  })();
 
   // "All-day" — total of each item across the visible tickets, so the line can
   // batch (e.g. "12× Flat White").

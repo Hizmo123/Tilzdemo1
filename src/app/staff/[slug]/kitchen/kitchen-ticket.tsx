@@ -6,6 +6,7 @@ import { advanceOrder, refireTicketItems } from "./actions";
 import { staffSetAvailable } from "../menu/actions";
 import type { OrderStatusName } from "@/lib/bills";
 import { buttonClasses } from "@/components/ui/button-classes";
+import { ageAccentClass } from "./ticket-age";
 
 export type TicketItem = {
   id: string;
@@ -34,21 +35,6 @@ export type Ticket = {
   station: string | null;
   items: TicketItem[];
 };
-
-// Ticket-age escalation, in one place for the board AND the pass view:
-// fresh = info, approaching AGE_WARN = warn, past AGE_OVERDUE = danger.
-// Same tokens the staff Floor uses, so a colour means the same thing on
-// every staff screen. Venue-configurable thresholds would be a settings
-// change (data), out of scope for this polish pass — change them here.
-export const AGE_WARN_MINUTES = 5;
-export const AGE_OVERDUE_MINUTES = 10;
-
-export function ageAccentClass(minutesAgo: number, active = true): string {
-  if (!active) return "border-l-line-strong";
-  if (minutesAgo >= AGE_OVERDUE_MINUTES) return "border-l-danger";
-  if (minutesAgo >= AGE_WARN_MINUTES) return "border-l-warn";
-  return "border-l-info";
-}
 
 export const NEXT_LABEL: Partial<Record<OrderStatusName, { to: OrderStatusName; label: string }>> = {
   SUBMITTED: { to: "PREPARING", label: "Start preparing" },
