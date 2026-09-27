@@ -1,5 +1,5 @@
 import type { OrderStatusName } from "@/lib/bills";
-import { ageAccentClass } from "./kitchen-ticket";
+import { ageAccentClass } from "./ticket-age";
 
 type PassTicket = {
   id: string;
