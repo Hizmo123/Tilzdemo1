@@ -15,16 +15,21 @@ export function SubmitButton({
   className = "",
   variant = "primary",
   size = "md",
+  disabled = false,
 }: {
   children: React.ReactNode;
   pendingLabel?: string;
   className?: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
+  // For a submit gated on something besides "is the action running" (e.g. a
+  // required upload that hasn't happened yet) — combined with the pending
+  // state Button already handles via `loading`, not a replacement for it.
+  disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" variant={variant} size={size} full loading={pending} className={className}>
+    <Button type="submit" variant={variant} size={size} full loading={pending} disabled={disabled} className={className}>
       {pending ? pendingLabel : children}
     </Button>
   );

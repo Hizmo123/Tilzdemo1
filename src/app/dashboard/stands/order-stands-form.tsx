@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useEffect, useState } from "react";
 import { orderStands, type StandOrderActionState } from "./actions";
+import { uploadStandOrderDesign } from "./design-actions";
 import { Label, Input, FormMessage } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatCents } from "@/lib/money";
@@ -15,6 +16,18 @@ type ProductRow = {
   imageUrl: string | null;
   type: "QR" | "NFC";
   priceCents: number;
+  allowsCustomDesign: boolean;
+  requiresCustomDesign: boolean;
+  designGuidelines: string | null;
+  maxDesignSizeMb: number;
+  acceptedDesignMimeTypes: string[];
+};
+
+const MIME_LABELS: Record<string, string> = {
+  "image/png": "PNG",
+  "image/jpeg": "JPEG",
+  "application/pdf": "PDF",
+  "image/svg+xml": "SVG",
 };
 
 type TableRow = {
@@ -35,15 +48,46 @@ export function OrderStandsForm({
   const formRef = useRef<HTMLFormElement>(null);
   const [productId, setProductId] = useState(products[0]?.id ?? "");
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [design, setDesign] = useState<{ url: string; fileName: string } | null>(null);
+  const [designUploading, setDesignUploading] = useState(false);
+  const [designError, setDesignError] = useState<string | null>(null);
 
   useEffect(() => {
     if (state?.success) {
       formRef.current?.reset();
       setChecked(new Set());
       setProductId(products[0]?.id ?? "");
+      setDesign(null);
+      setDesignError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
+
+  // Switching products drops whatever design was staged for the previous
+  // one — a design uploaded against product A's guidelines/limits has no
+  // guaranteed relevance to product B.
+  function selectProduct(id: string) {
+    setProductId(id);
+    setDesign(null);
+    setDesignError(null);
+  }
+
+  async function pickDesignFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !selectedProduct) return;
+    setDesignError(null);
+    setDesignUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await uploadStandOrderDesign(selectedProduct.id, fd);
+    setDesignUploading(false);
+    if ("error" in res) {
+      setDesignError(res.error);
+      return;
+    }
+    setDesign(res);
+  }
 
   function toggle(id: string) {
     setChecked((prev) => {
@@ -64,6 +108,10 @@ export function OrderStandsForm({
 
   const selectedProduct = products.find((p) => p.id === productId) ?? null;
   const totalCents = selectedProduct ? selectedProduct.priceCents * checked.size : 0;
+  // Convenience gate only — placeStandOrder re-checks requiresCustomDesign
+  // server-side regardless, so this can't be the only thing stopping a
+  // design-less order for a product that requires one.
+  const needsDesign = !!selectedProduct?.requiresCustomDesign && !design;
 
   return (
     <form ref={formRef} action={action} className="space-y-6">
@@ -91,7 +139,7 @@ export function OrderStandsForm({
                   name="productId"
                   value={p.id}
                   checked={selected}
-                  onChange={() => setProductId(p.id)}
+                  onChange={() => selectProduct(p.id)}
                   className="sr-only"
                 />
                 <div className="w-16 h-16 rounded-[var(--radius-sm)] overflow-hidden bg-paper border border-line shrink-0 flex items-center justify-center">
@@ -123,6 +171,73 @@ export function OrderStandsForm({
           })}
         </div>
       </div>
+
+      {selectedProduct?.allowsCustomDesign && (
+        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
+          <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
+            Upload your design
+            {selectedProduct.requiresCustomDesign && (
+              <span className="ml-2 text-xs font-normal uppercase tracking-wide text-warn align-middle">
+                Required
+              </span>
+            )}
+          </h2>
+          {selectedProduct.designGuidelines && (
+            <p className="text-sm text-muted mb-4 whitespace-pre-line">
+              {selectedProduct.designGuidelines}
+            </p>
+          )}
+          <p className="text-xs text-muted mb-4">
+            Accepted: {selectedProduct.acceptedDesignMimeTypes.map((m) => MIME_LABELS[m] ?? m).join(", ")} · up to{" "}
+            {selectedProduct.maxDesignSizeMb} MB.
+          </p>
+
+          {design ? (
+            <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-line bg-paper px-3.5 py-2.5">
+              {design.url.match(/\.(png|jpe?g)$/i) ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={design.url} alt="" className="w-12 h-12 rounded-[var(--radius-sm)] object-cover border border-line shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-[var(--radius-sm)] bg-surface border border-line shrink-0 flex items-center justify-center text-[10px] text-muted">
+                  FILE
+                </div>
+              )}
+              <span className="text-sm truncate flex-1 min-w-0">{design.fileName}</span>
+              <button
+                type="button"
+                onClick={() => setDesign(null)}
+                className="text-xs text-muted hover:text-danger shrink-0"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <div>
+              <label
+                className={`inline-flex items-center justify-center rounded-[var(--radius-md)] border border-line px-4 py-2.5 text-sm font-medium cursor-pointer hover:border-ink/30 transition-colors ${
+                  designUploading ? "opacity-60 pointer-events-none" : ""
+                }`}
+              >
+                {designUploading ? "Uploading…" : "Choose file"}
+                <input
+                  type="file"
+                  accept={selectedProduct.acceptedDesignMimeTypes.join(",")}
+                  onChange={pickDesignFile}
+                  disabled={designUploading}
+                  className="sr-only"
+                />
+              </label>
+              {designError && <p className="text-xs text-danger mt-2">{designError}</p>}
+            </div>
+          )}
+
+          {/* Hidden inputs so orderStands' FormData actually carries the
+              already-uploaded design — this form never re-uploads the file
+              itself, only the URL from the upload above. */}
+          <input type="hidden" name="designImageUrl" value={design?.url ?? ""} />
+          <input type="hidden" name="designFileName" value={design?.fileName ?? ""} />
+        </div>
+      )}
 
       <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
         <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
@@ -208,8 +323,14 @@ export function OrderStandsForm({
         </FormMessage>
       )}
 
+      {needsDesign && (
+        <p className="text-sm text-warn">
+          Upload a design above before you can place this order.
+        </p>
+      )}
+
       <div className="max-w-xs">
-        <SubmitButton pendingLabel="Placing order…">
+        <SubmitButton pendingLabel="Placing order…" disabled={needsDesign}>
           Order {checked.size || ""} stand{checked.size === 1 ? "" : "s"}
         </SubmitButton>
       </div>

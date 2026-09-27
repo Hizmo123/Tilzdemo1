@@ -594,6 +594,18 @@ enum StandOrderStatus {
   SHIPPED
 }
 
+// Lifecycle of an uploaded custom design on a StandOrder. NONE is the
+// default for every order — most stand products never involve a design at
+// all, and this must never gate fulfilment for those. PENDING_REVIEW is set
+// the moment an order with an uploaded design is placed; only an admin
+// (Approve/Reject on /admin/fulfilment) moves it to APPROVED/REJECTED.
+enum DesignStatus {
+  NONE
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
 // QR vs NFC is display/labelling only — both resolve through the exact same
 // /s/<qrToken> flow (lib/stands.ts), never a backend fork.
 enum StandType {
@@ -614,6 +626,18 @@ model StandProduct {
   priceCents  Int
   active      Boolean    @default(true)
   sortOrder   Int        @default(0)
+  // Custom design upload, admin-controlled per product — most products never
+  // set either of these (a plain QR stand has nothing to design). allows*
+  // reveals the upload step at all; requires* additionally blocks checkout
+  // without one (see placeStandOrder's server-side re-check — the owner-side
+  // disabled submit button is a convenience only, never the real gate).
+  allowsCustomDesign   Boolean  @default(false)
+  requiresCustomDesign Boolean  @default(false)
+  // Shown to the owner above the upload field — accepted formats,
+  // dimensions, bleed/DPI notes. Free text, admin's own words.
+  designGuidelines     String?
+  maxDesignSizeMb      Int      @default(10)
+  acceptedDesignMimeTypes String[] @default(["image/png", "image/jpeg", "application/pdf"])
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   standOrders StandOrder[]
@@ -646,6 +670,18 @@ model StandOrder {
   paidAt         DateTime?
   printedAt      DateTime?
   shippedAt      DateTime?
+  // Customer-supplied print artwork, uploaded before checkout via
+  // uploadStandOrderDesign (stand-designs/<organizationId>/... in Supabase
+  // storage) and attached to the order at placeStandOrder time. Null for
+  // every order that never involved a design (the overwhelming majority).
+  designImageUrl String?
+  designFileName String?
+  designStatus   DesignStatus @default(NONE)
+  // Admin's reviewer note — populated on reject to say why, optional on
+  // approve.
+  designNotes          String?
+  designReviewedAt     DateTime?
+  designReviewedByEmail String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   items          StandOrderItem[]

@@ -31,7 +31,18 @@ export default async function ProductsPage() {
         </p>
         <ProductForm
           action={createStandProduct}
-          defaults={{ title: "", description: "", type: "QR", priceDollars: "", sortOrder: products.length }}
+          defaults={{
+            title: "",
+            description: "",
+            type: "QR",
+            priceDollars: "",
+            sortOrder: products.length,
+            allowsCustomDesign: false,
+            requiresCustomDesign: false,
+            designGuidelines: "",
+            maxDesignSizeMb: 10,
+            acceptedDesignMimeTypes: ["image/png", "image/jpeg", "application/pdf"],
+          }}
           submitLabel="Add product"
           resetOnSuccess
         />
@@ -60,6 +71,15 @@ export default async function ProductsPage() {
                       Retired
                     </span>
                   )}
+                  {p.requiresCustomDesign ? (
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-warn-soft text-warn">
+                      Design: required
+                    </span>
+                  ) : p.allowsCustomDesign ? (
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-info-soft text-info">
+                      Design: optional
+                    </span>
+                  ) : null}
                 </div>
                 <ActiveToggle productId={p.id} active={p.active} />
               </div>
@@ -74,6 +94,11 @@ export default async function ProductsPage() {
                   type: p.type,
                   priceDollars: (p.priceCents / 100).toFixed(2),
                   sortOrder: p.sortOrder,
+                  allowsCustomDesign: p.allowsCustomDesign,
+                  requiresCustomDesign: p.requiresCustomDesign,
+                  designGuidelines: p.designGuidelines ?? "",
+                  maxDesignSizeMb: p.maxDesignSizeMb,
+                  acceptedDesignMimeTypes: p.acceptedDesignMimeTypes,
                 }}
                 submitLabel="Save changes"
               />
