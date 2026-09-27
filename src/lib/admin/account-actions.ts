@@ -19,11 +19,23 @@ async function findOrg(orgId: string) {
   return prisma.organization.findUnique({ where: { id: orgId } });
 }
 
-// Admin suspension — distinct from the owner's own self-service
-// deactivateAccount() in lib/account.ts, which mails a reactivationToken so
-// the owner can lift it themselves. An admin suspension (non-payment, abuse,
-// etc.) must NOT be self-liftable, so this deliberately sets deactivatedAt/
-// deactivatedByEmail WITHOUT a reactivationToken, and sends no email. Reuses
+// An org its owner deleted (lib/account.ts#executeAccountDeletion) is closed
+// for good: its content is gone and its remaining financial records are on a
+// retention clock that /admin/deletions purges. Suspending it would overwrite
+// planStatus "deleted" (breaking purge eligibility) and reactivating it would
+// revive an empty shell, so every mutator below refuses it. The admin UI also
+// hides these controls for a deleted org, but a server action can be invoked
+// directly, so the refusal has to live here.
+function deletedOrgError(org: { planStatus: string; deletionExecutedAt: Date | null }): AccountActionResult | null {
+  if (org.planStatus === "deleted" || org.deletionExecutedAt) {
+    return { error: "This account was deleted by its owner and can't be changed. See Deletions for its retention status." };
+  }
+  return null;
+}
+
+// Admin suspension (non-payment, abuse, etc.). The owner can't lift it
+// themselves, so this sets deactivatedAt/deactivatedByEmail with no
+// reactivationToken, and sends no email. Reuses
 // the exact same Organization.deactivatedAt field that already blocks
 // owner/team dashboard login (dashboard/layout.tsx) and every staff PIN
 // login in the org (lib/staff-auth.ts, staff/[slug]/login-actions.ts) — no
@@ -35,6 +47,8 @@ export async function adminSuspendOrg(
 ): Promise<AccountActionResult> {
   const org = await findOrg(orgId);
   if (!org) return { error: "Organisation not found." };
+  const deleted = deletedOrgError(org);
+  if (deleted) return deleted;
 
   await prisma.organization.update({
     where: { id: orgId },
@@ -68,6 +82,8 @@ export async function adminReactivateOrg(
 ): Promise<AccountActionResult> {
   const org = await findOrg(orgId);
   if (!org) return { error: "Organisation not found." };
+  const deleted = deletedOrgError(org);
+  if (deleted) return deleted;
 
   await prisma.organization.update({
     where: { id: orgId },
@@ -109,6 +125,8 @@ export async function adminChangePlan(
 
   const org = await findOrg(orgId);
   if (!org) return { error: "Organisation not found." };
+  const deleted = deletedOrgError(org);
+  if (deleted) return deleted;
 
   await prisma.organization.update({
     where: { id: orgId },
@@ -152,38 +170,6 @@ export async function adminSetLapsed(
     metadata: {
       before: { subscriptionLapsedAt: org.subscriptionLapsedAt },
       after: { subscriptionLapsedAt: lapsed ? "now" : null },
-    },
-  });
-
-  return { ok: true };
-}
-
-export async function adminClearDeletionRequest(
-  orgId: string,
-  adminUserId: string,
-  adminEmail: string,
-): Promise<AccountActionResult> {
-  const org = await findOrg(orgId);
-  if (!org) return { error: "Organisation not found." };
-
-  await prisma.organization.update({
-    where: { id: orgId },
-    data: { deletionRequestedAt: null, deletionRequestedByEmail: null },
-  });
-
-  await audit({
-    organizationId: orgId,
-    actorUserId: adminUserId,
-    actorEmail: adminEmail,
-    action: "admin.clear_deletion_request",
-    resourceType: "Organization",
-    resourceId: orgId,
-    metadata: {
-      before: {
-        deletionRequestedAt: org.deletionRequestedAt,
-        deletionRequestedByEmail: org.deletionRequestedByEmail,
-      },
-      after: { deletionRequestedAt: null, deletionRequestedByEmail: null },
     },
   });
 

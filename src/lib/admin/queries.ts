@@ -162,11 +162,11 @@ export async function getRecentActivity(limit = 25) {
 }
 
 // No `select` on the top-level org, so every Organization scalar column
-// (plan, planStatus, subscriptionLapsedAt, deactivatedAt,
-// deactivatedByEmail, deletionRequestedAt, deletionRequestedByEmail,
-// cardLast4, subscribedAt, ...) is already present on the returned `org` —
-// the admin controls card (see orgs/[orgId]/page.tsx) reads these directly,
-// nothing further to add here.
+// (plan, planStatus, subscriptionLapsedAt, deactivatedAt, deactivatedByEmail,
+// deletionExecutedAt, deletionPurgeEligibleAt, deletedByEmail, cardLast4,
+// subscribedAt, ...) is already present on the returned `org` — the admin
+// controls card (see orgs/[orgId]/page.tsx) reads these directly, nothing
+// further to add here.
 export async function getOrgDetail(organizationId: string) {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
@@ -182,13 +182,14 @@ export async function getOrgDetail(organizationId: string) {
 
 // ---- Account lifecycle ---------------------------------------------------
 
-// Orgs an admin has suspended, and orgs whose owner has requested deletion —
-// the two lists the /admin/accounts screen surfaces. An org can appear in
-// both if a suspended org's owner also requested deletion afterwards.
+// Orgs an admin has suspended — the list /admin/accounts surfaces. An org its
+// OWNER deleted also has deactivatedAt set (that's how login is blocked), but
+// it isn't "suspended" and must never appear here with a Reactivate button:
+// it's closed for good and lives on /admin/deletions instead.
 export async function listAccountLifecycle() {
-  const [suspended, deletionRequested] = await Promise.all([
+  const [suspended, deletedCount] = await Promise.all([
     prisma.organization.findMany({
-      where: { deactivatedAt: { not: null } },
+      where: { deactivatedAt: { not: null }, planStatus: { not: "deleted" } },
       orderBy: { deactivatedAt: "desc" },
       select: {
         id: true,
@@ -197,27 +198,29 @@ export async function listAccountLifecycle() {
         planStatus: true,
         deactivatedAt: true,
         deactivatedByEmail: true,
-        deletionRequestedAt: true,
-        deletionRequestedByEmail: true,
       },
     }),
-    prisma.organization.findMany({
-      where: { deletionRequestedAt: { not: null } },
-      orderBy: { deletionRequestedAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        plan: true,
-        planStatus: true,
-        deactivatedAt: true,
-        deactivatedByEmail: true,
-        deletionRequestedAt: true,
-        deletionRequestedByEmail: true,
-      },
-    }),
+    prisma.organization.count({ where: { planStatus: "deleted" } }),
   ]);
 
-  return { suspended, deletionRequested };
+  return { suspended, deletedCount };
+}
+
+// Orgs whose owner deleted them — earliest retention end first, so whatever is
+// closest to (or past) purge-eligibility is at the top of /admin/deletions.
+export async function listDeletedOrganizations() {
+  return prisma.organization.findMany({
+    where: { planStatus: "deleted" },
+    orderBy: [{ deletionPurgeEligibleAt: "asc" }, { deletionExecutedAt: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      planStatus: true,
+      deletedByEmail: true,
+      deletionExecutedAt: true,
+      deletionPurgeEligibleAt: true,
+    },
+  });
 }
 
 // ---- Stand fulfilment ---------------------------------------------------
