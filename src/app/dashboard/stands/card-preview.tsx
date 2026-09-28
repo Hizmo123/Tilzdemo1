@@ -2,16 +2,16 @@
 
 // Live HTML/CSS approximation of the printed A6 stand card (see
 // src/lib/stand-card-template.ts for the actual print-ready PDF this
-// mirrors). Positions below are the same mm measurements from that module,
-// converted to percentages of the trim box (105 x 148mm) — since the
-// preview's aspect-ratio is locked to 105/148, a width-% and a height-%
-// derived from the same mm value render as the same pixel length, so a
-// "52mm square" tile stays square regardless of the preview's own size.
+// mirrors). The PDF's layout is baseline-based mm coordinates; CSS boxes
+// position by top-edge + line-height, not baselines, so the two coordinate
+// systems don't correspond 1:1 once real text metrics are involved. Only
+// the QR tile + its accent frame are geometry-driven (a square must render
+// as a square) and use the trim-box percentages below — everything else
+// flows in a single top-to-bottom flex column with gaps tuned by eye.
 const TRIM_W = 105;
 const TRIM_H = 148;
 
 const pctX = (mm: number) => `${(mm / TRIM_W) * 100}%`;
-const pctY = (mm: number) => `${(mm / TRIM_H) * 100}%`;
 
 const PALETTES = {
   dark: { bg: "#0B0F0D", ink: "#FFFFFF", muted: "#9CA89F", accent: "#22C55E" },
@@ -20,21 +20,16 @@ const PALETTES = {
 
 export type CardPalette = keyof typeof PALETTES;
 
-// Geometry, ported 1:1 from stand-card-template.ts's own constants (measured
-// from the trim box's top edge here, since CSS positions down from the top).
+// QR tile/frame geometry, ported 1:1 from stand-card-template.ts's own
+// constants — this part alone still corresponds directly to the PDF, since
+// it's pure square geometry with no text baselines involved.
 const TILE_SIZE = 52;
-const TILE_TOP = 32;
-const TILE_LEFT = (TRIM_W - TILE_SIZE) / 2;
 const FRAME_OFFSET = 3;
 const FRAME_SIZE = TILE_SIZE + FRAME_OFFSET * 2;
-const FRAME_TOP = TILE_TOP - FRAME_OFFSET;
-const FRAME_LEFT = TILE_LEFT - FRAME_OFFSET;
 const QR_INSET = 4;
 const QR_SIZE = TILE_SIZE - QR_INSET * 2;
-const SCAN_Y = TILE_TOP + TILE_SIZE + 10;
-const ROW_TOP = SCAN_Y + 4;
-const ICON_SIZE = 9;
 const COLUMN_W = TRIM_W / 3;
+const ICON_SIZE = 9;
 
 const STEPS: { label: string; icon: (color: string) => React.ReactNode }[] = [
   {
@@ -79,88 +74,96 @@ export function CardPreview({
 
   return (
     <div
-      className="relative w-full overflow-hidden rounded-[var(--radius-md)] border border-line shadow-sm select-none"
+      className="relative w-full overflow-hidden rounded-[var(--radius-md)] border border-line shadow-sm select-none flex flex-col items-center"
       style={{
         aspectRatio: `${TRIM_W} / ${TRIM_H}`,
         background: c.bg,
         containerType: "inline-size",
       }}
     >
-      {/* Headline */}
+      {/* Headline + underline, flowed in DOM order so the underline sits
+          right after the headline's actual rendered height rather than
+          guessing where it ends. */}
       <div
-        className="absolute left-0 right-0 text-center font-display font-bold"
-        style={{ top: pctY(14), color: c.accent, fontSize: "clamp(10px, 8.2cqw, 22px)" }}
+        className="flex flex-col items-center text-center w-full"
+        style={{ marginTop: "9%", padding: "0 8%" }}
       >
-        {headlineText}
-      </div>
-
-      {/* Underline */}
-      <div
-        className="absolute"
-        style={{
-          top: pctY(19),
-          left: pctX(TRIM_W / 2 - 9),
-          width: pctX(18),
-          height: 1.5,
-          background: c.accent,
-        }}
-      />
-
-      {/* Outer accent frame */}
-      <div
-        className="absolute rounded-[8%]"
-        style={{
-          top: pctY(FRAME_TOP),
-          left: pctX(FRAME_LEFT),
-          width: pctX(FRAME_SIZE),
-          height: pctY(FRAME_SIZE),
-          border: `1.5px solid ${c.accent}`,
-        }}
-      />
-
-      {/* QR tile */}
-      <div
-        className="absolute rounded-[8%] bg-white"
-        style={{
-          top: pctY(TILE_TOP),
-          left: pctX(TILE_LEFT),
-          width: pctX(TILE_SIZE),
-          height: pctY(TILE_SIZE),
-          border: `2px solid ${c.accent}`,
-        }}
-      >
-        {/* Inset QR area, positioned as a % of the tile itself (not the
-            trim box) since QR_INSET/QR_SIZE are measured from the tile's
-            own edges. No real QR exists pre-payment — this always shows
-            the placeholder, never a fake code. */}
         <div
-          className="absolute flex items-center justify-center text-center leading-tight border border-dashed rounded-[6%]"
+          className="font-display font-bold"
           style={{
-            top: `${(QR_INSET / TILE_SIZE) * 100}%`,
-            left: `${(QR_INSET / TILE_SIZE) * 100}%`,
-            width: `${(QR_SIZE / TILE_SIZE) * 100}%`,
-            height: `${(QR_SIZE / TILE_SIZE) * 100}%`,
-            borderColor: "#c9c9c9",
-            color: "#9a9a9a",
-            fontSize: "clamp(6px, 2.6cqw, 9px)",
+            color: c.accent,
+            fontSize: "clamp(10px, 8.2cqw, 22px)",
+            lineHeight: 1.15,
+            overflowWrap: "break-word",
           }}
         >
-          QR CODE
-          <br />
-          added after you order
+          {headlineText}
+        </div>
+        <div
+          style={{
+            marginTop: "3%",
+            width: pctX(18),
+            height: 1.5,
+            background: c.accent,
+            flexShrink: 0,
+          }}
+        />
+      </div>
+
+      {/* QR frame + tile — the one part that stays purely geometry-driven,
+          sized as % of the card's own width (see pctX's comment) so a
+          "52mm square" renders as an actual square at any preview size. */}
+      <div
+        className="relative"
+        style={{ marginTop: "7%", width: pctX(FRAME_SIZE), aspectRatio: "1 / 1", flexShrink: 0 }}
+      >
+        <div
+          className="absolute inset-0 rounded-[8%]"
+          style={{ border: `1.5px solid ${c.accent}` }}
+        />
+        <div
+          className="absolute rounded-[8%] bg-white"
+          style={{
+            top: "50%",
+            left: "50%",
+            width: `${(TILE_SIZE / FRAME_SIZE) * 100}%`,
+            aspectRatio: "1 / 1",
+            transform: "translate(-50%, -50%)",
+            border: `2px solid ${c.accent}`,
+          }}
+        >
+          {/* Inset QR area, sized as a % of the tile itself. No real QR
+              exists pre-payment — this always shows the placeholder. */}
+          <div
+            className="absolute flex items-center justify-center text-center leading-tight border border-dashed rounded-[6%]"
+            style={{
+              top: `${(QR_INSET / TILE_SIZE) * 100}%`,
+              left: `${(QR_INSET / TILE_SIZE) * 100}%`,
+              width: `${(QR_SIZE / TILE_SIZE) * 100}%`,
+              height: `${(QR_SIZE / TILE_SIZE) * 100}%`,
+              borderColor: "#c9c9c9",
+              color: "#9a9a9a",
+              fontSize: "clamp(6px, 2.6cqw, 9px)",
+            }}
+          >
+            QR CODE
+            <br />
+            added after you order
+          </div>
         </div>
       </div>
 
-      {/* SCAN TO ORDER */}
+      {/* SCAN TO ORDER, flowed after the QR block with a real gap. */}
       <div
-        className="absolute left-0 right-0 text-center font-bold"
-        style={{ top: pctY(SCAN_Y), color: c.ink, fontSize: "clamp(7px, 3.4cqw, 12px)" }}
+        className="font-bold text-center"
+        style={{ marginTop: "6%", color: c.ink, fontSize: "clamp(7px, 3.4cqw, 12px)", flexShrink: 0 }}
       >
         SCAN TO ORDER
       </div>
 
-      {/* Order / Pay / Enjoy row */}
-      <div className="absolute left-0 right-0 flex" style={{ top: pctY(ROW_TOP) }}>
+      {/* Order / Pay / Enjoy row, flowed after "SCAN TO ORDER" with a real
+          gap rather than a second independently-guessed offset. */}
+      <div className="flex w-full" style={{ marginTop: "7%", flexShrink: 0 }}>
         {STEPS.map((step, i) => (
           <div
             key={step.label}
@@ -173,7 +176,7 @@ export function CardPreview({
                 style={{ width: 1, background: c.muted, opacity: 0.35 }}
               />
             )}
-            <div style={{ width: pctX(ICON_SIZE), height: pctY(ICON_SIZE) }}>
+            <div style={{ width: pctX(ICON_SIZE), aspectRatio: "1 / 1" }}>
               {step.icon(c.accent)}
             </div>
             <div
@@ -186,10 +189,18 @@ export function CardPreview({
         ))}
       </div>
 
-      {/* Footer */}
+      {/* Footer — pinned to the bottom of the column via margin-top: auto,
+          so it stays flush with the card's bottom edge regardless of how
+          much space the content above actually takes up. */}
       <div
-        className="absolute left-0 right-0 text-center"
-        style={{ bottom: pctY(6), color: c.muted, fontSize: "clamp(5px, 2.1cqw, 7px)" }}
+        className="text-center w-full"
+        style={{
+          marginTop: "auto",
+          marginBottom: "4%",
+          padding: "0 6%",
+          color: c.muted,
+          fontSize: "clamp(5px, 2.1cqw, 7px)",
+        }}
       >
         Powered by Tillz
       </div>

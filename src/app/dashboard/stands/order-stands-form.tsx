@@ -62,6 +62,21 @@ export function OrderStandsForm({
     "TILLZ_DEFAULT",
   );
   const headlineText = cardHeadlineMode === "VENUE_NAME" ? restaurantName : "TILLZ";
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (!previewOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPreviewOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [previewOpen]);
 
   useEffect(() => {
     if (state?.success) {
@@ -127,6 +142,7 @@ export function OrderStandsForm({
   const needsDesign = !!selectedProduct?.requiresCustomDesign && !design;
 
   return (
+    <>
     <form ref={formRef} action={action} className="space-y-6">
       <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
         <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
@@ -307,6 +323,13 @@ export function OrderStandsForm({
           </div>
           <div className="w-40 mx-auto sm:mx-0">
             <CardPreview palette={cardTemplate} headlineText={headlineText} />
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(true)}
+              className="mt-2 w-full text-xs rounded-[var(--radius-sm)] border border-line px-3 py-2 hover:border-ink/30 transition-colors"
+            >
+              Preview card
+            </button>
           </div>
         </div>
         <input
@@ -413,5 +436,31 @@ export function OrderStandsForm({
         </SubmitButton>
       </div>
     </form>
+
+    {previewOpen && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-6"
+        onClick={() => setPreviewOpen(false)}
+      >
+        <div
+          className="relative"
+          style={{ height: "min(85vh, 700px)", width: "calc(min(85vh, 700px) * 105 / 148)" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(false)}
+            aria-label="Close preview"
+            className="absolute -top-11 right-0 h-9 w-9 rounded-pill flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+              <path d="M5 5l10 10M15 5L5 15" />
+            </svg>
+          </button>
+          <CardPreview palette={cardTemplate} headlineText={headlineText} />
+        </div>
+      </div>
+    )}
+    </>
   );
 }
