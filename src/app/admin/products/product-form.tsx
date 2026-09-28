@@ -22,6 +22,7 @@ type Defaults = {
   type: "QR" | "NFC";
   priceDollars: string;
   sortOrder: number;
+  hasCardInsert: boolean;
   allowsCustomDesign: boolean;
   requiresCustomDesign: boolean;
   designGuidelines: string;
@@ -42,14 +43,16 @@ export function ProductForm({
 }) {
   const [state, formAction] = useActionState(action, initial);
   const formRef = useRef<HTMLFormElement>(null);
+  const [hasCardInsert, setHasCardInsert] = useState(defaults.hasCardInsert);
   const [allowsDesign, setAllowsDesign] = useState(defaults.allowsCustomDesign);
 
   useEffect(() => {
     if (resetOnSuccess && state && !state.error) {
       formRef.current?.reset();
+      setHasCardInsert(defaults.hasCardInsert);
       setAllowsDesign(defaults.allowsCustomDesign);
     }
-  }, [state, resetOnSuccess, defaults.allowsCustomDesign]);
+  }, [state, resetOnSuccess, defaults.hasCardInsert, defaults.allowsCustomDesign]);
 
   return (
     <form ref={formRef} action={formAction} className="space-y-4">
@@ -118,18 +121,40 @@ export function ProductForm({
       </div>
 
       <div className="rounded-[var(--radius-card)] border border-line bg-paper p-4 space-y-3">
-        <label className="flex items-center gap-2.5 text-sm font-medium cursor-pointer">
+        <label className="flex items-start gap-2.5 text-sm font-medium cursor-pointer">
           <input
             type="checkbox"
-            name="allowsCustomDesign"
-            checked={allowsDesign}
-            onChange={(e) => setAllowsDesign(e.target.checked)}
-            className="w-4 h-4 accent-pine"
+            name="hasCardInsert"
+            checked={hasCardInsert}
+            onChange={(e) => setHasCardInsert(e.target.checked)}
+            className="w-4 h-4 accent-pine mt-0.5"
           />
-          Allow custom design upload
+          <span>
+            Ships with a printed card insert
+            <span className="block text-xs font-normal text-muted mt-0.5">
+              On: the venue picks a card template at order time and fulfilment gets a
+              print-ready card PDF. Off: the QR is on the product itself — no card step.
+            </span>
+          </span>
         </label>
 
-        {allowsDesign && (
+        {/* Custom artwork is artwork for the card, so it only makes sense
+            when there is one — hidden (and forced off server-side in
+            actions.ts) otherwise. */}
+        {hasCardInsert && (
+          <label className="flex items-center gap-2.5 text-sm font-medium cursor-pointer pl-6 ml-1.5">
+            <input
+              type="checkbox"
+              name="allowsCustomDesign"
+              checked={allowsDesign}
+              onChange={(e) => setAllowsDesign(e.target.checked)}
+              className="w-4 h-4 accent-pine"
+            />
+            Allow custom design upload
+          </label>
+        )}
+
+        {hasCardInsert && allowsDesign && (
           <div className="pl-6 space-y-3 border-l-2 border-line ml-1.5">
             <label className="flex items-center gap-2.5 text-sm cursor-pointer">
               <input

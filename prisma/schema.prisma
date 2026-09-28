@@ -642,6 +642,13 @@ model StandProduct {
   priceCents  Int
   active      Boolean    @default(true)
   sortOrder   Int        @default(0)
+  // Whether the product ships with a printed A6 card insert at all. True
+  // (acrylic stand): the venue picks a card template/headline at order time
+  // and fulfilment composites a card PDF per stand. False (metal A-frame):
+  // the QR is on the product itself, so there's no card step and fulfilment
+  // ships raw QR PNGs. Everything below about custom design only applies
+  // when this is true — actions.ts forces allows/requires off otherwise.
+  hasCardInsert Boolean @default(false)
   // Custom design upload, admin-controlled per product — most products never
   // set either of these (a plain QR stand has nothing to design). allows*
   // reveals the upload step at all; requires* additionally blocks checkout

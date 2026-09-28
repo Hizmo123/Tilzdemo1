@@ -37,6 +37,7 @@ export default async function ProductsPage() {
             type: "QR",
             priceDollars: "",
             sortOrder: products.length,
+            hasCardInsert: false,
             allowsCustomDesign: false,
             requiresCustomDesign: false,
             designGuidelines: "",
@@ -71,6 +72,11 @@ export default async function ProductsPage() {
                       Retired
                     </span>
                   )}
+                  {p.hasCardInsert && (
+                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-pine-soft text-pine-deep">
+                      Card insert
+                    </span>
+                  )}
                   {p.requiresCustomDesign ? (
                     <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-warn-soft text-warn">
                       Design: required
@@ -94,6 +100,7 @@ export default async function ProductsPage() {
                   type: p.type,
                   priceDollars: (p.priceCents / 100).toFixed(2),
                   sortOrder: p.sortOrder,
+                  hasCardInsert: p.hasCardInsert,
                   allowsCustomDesign: p.allowsCustomDesign,
                   requiresCustomDesign: p.requiresCustomDesign,
                   designGuidelines: p.designGuidelines ?? "",
