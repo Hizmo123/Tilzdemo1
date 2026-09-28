@@ -1,43 +1,56 @@
 "use client";
 
-import { useActionState, useRef, useEffect, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { LayoutGroup } from "motion/react";
 import { orderStands, type StandOrderActionState } from "./actions";
 import { uploadStandOrderDesign } from "./design-actions";
-import { Label, Input, FormMessage } from "@/components/ui/field";
-import { SubmitButton } from "@/components/ui/submit-button";
 import { formatCents } from "@/lib/money";
 import { CardPreview, type CardPalette } from "./card-preview";
+import { StepShell, type StepStatus } from "./steps/step-shell";
+import { ProductStep } from "./steps/product-step";
+import { CardDesignStep, type HeadlineMode } from "./steps/card-design-step";
+import { ArtworkStep } from "./steps/artwork-step";
+import { TablesStep } from "./steps/tables-step";
+import { ShippingStep } from "./steps/shipping-step";
+import { OrderSummary, OrderBottomBar } from "./order-summary-rail";
+import {
+  EMPTY_SHIPPING,
+  shippingComplete,
+  type ProductRow,
+  type TableRow,
+  type StagedDesign,
+  type ShippingValues,
+} from "./steps/types";
 
 const initial: StandOrderActionState = {};
 
-type ProductRow = {
-  id: string;
-  title: string;
-  description: string;
-  imageUrl: string | null;
-  type: "QR" | "NFC";
-  priceCents: number;
-  allowsCustomDesign: boolean;
-  requiresCustomDesign: boolean;
-  designGuidelines: string | null;
-  maxDesignSizeMb: number;
-  acceptedDesignMimeTypes: string[];
+type StepKey = "product" | "card" | "artwork" | "tables" | "shipping";
+
+// Which steps a given product needs. Product and tables/shipping always;
+// the card step only when the product ships with a card insert; artwork
+// only when the admin allows a custom design for it (which itself implies
+// a card insert — see admin/products/actions.ts).
+function stepsFor(product: ProductRow | null): StepKey[] {
+  const steps: StepKey[] = ["product"];
+  if (product?.hasCardInsert) steps.push("card");
+  if (product?.allowsCustomDesign) steps.push("artwork");
+  steps.push("tables", "shipping");
+  return steps;
+}
+
+const STEP_TITLES: Record<StepKey, string> = {
+  product: "Product",
+  card: "Card design",
+  artwork: "Your artwork",
+  tables: "Tables",
+  shipping: "Shipping",
 };
 
-const MIME_LABELS: Record<string, string> = {
-  "image/png": "PNG",
-  "image/jpeg": "JPEG",
-  "application/pdf": "PDF",
-  "image/svg+xml": "SVG",
-};
-
-type TableRow = {
-  id: string;
-  label: string;
-  section: string | null;
-  hasStand: boolean;
-};
-
+// The stepped configurator. All state lives here; each step is a dumb
+// controlled component under ./steps, and every value orderStands reads is
+// posted through the hidden inputs at the bottom — so a step collapsing
+// (its inputs unmounting) never drops a value from the FormData. The field
+// names and the server action are unchanged from the single-form version.
 export function OrderStandsForm({
   products,
   tables,
@@ -48,21 +61,60 @@ export function OrderStandsForm({
   restaurantName: string;
 }) {
   const [state, action] = useActionState(orderStands, initial);
-  const formRef = useRef<HTMLFormElement>(null);
-  const [productId, setProductId] = useState(products[0]?.id ?? "");
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [design, setDesign] = useState<{ url: string; fileName: string } | null>(null);
-  const [designUploading, setDesignUploading] = useState(false);
-  const [designError, setDesignError] = useState<string | null>(null);
+
+  const [productId, setProductId] = useState<string | null>(null);
   const [cardTemplate, setCardTemplate] = useState<CardPalette>("dark");
   // Default is generic "TILLZ" branding, not the venue's own name — matches
   // the schema default (StandCardHeadline.TILLZ_DEFAULT) so a venue has to
   // opt into printing their own name on the card.
-  const [cardHeadlineMode, setCardHeadlineMode] = useState<"TILLZ_DEFAULT" | "VENUE_NAME">(
-    "TILLZ_DEFAULT",
-  );
-  const headlineText = cardHeadlineMode === "VENUE_NAME" ? restaurantName : "TILLZ";
+  const [cardHeadlineMode, setCardHeadlineMode] = useState<HeadlineMode>("TILLZ_DEFAULT");
+  // The card step is complete on arrival (both controls have defaults) but
+  // is still shown expanded once so the choice is actually seen; "Looks
+  // good" flips this.
+  const [cardConfirmed, setCardConfirmed] = useState(false);
+  const [design, setDesign] = useState<StagedDesign | null>(null);
+  const [designSkipped, setDesignSkipped] = useState(false);
+  const [designUploading, setDesignUploading] = useState(false);
+  const [designError, setDesignError] = useState<string | null>(null);
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [shipping, setShipping] = useState<ShippingValues>(EMPTY_SHIPPING);
+  const [activeStep, setActiveStep] = useState<StepKey>("product");
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  const selectedProduct = products.find((p) => p.id === productId) ?? null;
+  const steps = stepsFor(selectedProduct);
+  const headlineText = cardHeadlineMode === "VENUE_NAME" ? restaurantName : "TILLZ";
+  const totalCents = selectedProduct ? selectedProduct.priceCents * checked.size : 0;
+
+  function isComplete(key: StepKey, product: ProductRow | null = selectedProduct): boolean {
+    switch (key) {
+      case "product":
+        return product !== null;
+      case "card":
+        return cardConfirmed;
+      case "artwork":
+        return design !== null || designSkipped;
+      case "tables":
+        return checked.size > 0;
+      case "shipping":
+        return shippingComplete(shipping);
+    }
+  }
+
+  // After completing `from`, open the next step that still needs input; if
+  // everything after it is already done (a "Change" round-trip), land on
+  // the last step so there's always exactly one open.
+  function advanceFrom(from: StepKey, product: ProductRow | null = selectedProduct, overrides: Partial<Record<StepKey, boolean>> = {}) {
+    const list = stepsFor(product);
+    const after = list.slice(list.indexOf(from) + 1);
+    const next = after.find((k) => !(overrides[k] ?? isComplete(k, product)));
+    setActiveStep(next ?? list[list.length - 1]);
+  }
+
+  function statusOf(key: StepKey): StepStatus {
+    if (key === activeStep) return "active";
+    return isComplete(key) ? "complete" : "locked";
+  }
 
   useEffect(() => {
     if (!previewOpen) return;
@@ -80,24 +132,37 @@ export function OrderStandsForm({
 
   useEffect(() => {
     if (state?.success) {
-      formRef.current?.reset();
-      setChecked(new Set());
-      setProductId(products[0]?.id ?? "");
-      setDesign(null);
-      setDesignError(null);
+      setProductId(null);
       setCardTemplate("dark");
       setCardHeadlineMode("TILLZ_DEFAULT");
+      setCardConfirmed(false);
+      setDesign(null);
+      setDesignSkipped(false);
+      setDesignError(null);
+      setChecked(new Set());
+      setShipping(EMPTY_SHIPPING);
+      setActiveStep("product");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  // Switching products drops whatever design was staged for the previous
-  // one — a design uploaded against product A's guidelines/limits has no
-  // guaranteed relevance to product B.
   function selectProduct(id: string) {
+    const product = products.find((p) => p.id === id) ?? null;
+    if (id !== productId) {
+      // A design staged against product A's guidelines/limits has no
+      // guaranteed relevance to product B, and a card choice never confirmed
+      // for this product should be shown again.
+      setDesign(null);
+      setDesignSkipped(false);
+      setDesignError(null);
+      setCardConfirmed(false);
+    }
     setProductId(id);
-    setDesign(null);
-    setDesignError(null);
+    advanceFrom("product", product, id !== productId ? { card: false, artwork: false } : {});
+  }
+
+  function confirmCard() {
+    setCardConfirmed(true);
+    advanceFrom("card", selectedProduct, { card: true });
   }
 
   async function pickDesignFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -106,22 +171,34 @@ export function OrderStandsForm({
     if (!file || !selectedProduct) return;
     setDesignError(null);
     setDesignUploading(true);
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await uploadStandOrderDesign(selectedProduct.id, fd);
+    const res = await uploadStandOrderDesign(selectedProduct.id, fd(file));
     setDesignUploading(false);
     if ("error" in res) {
       setDesignError(res.error);
       return;
     }
     setDesign(res);
+    advanceFrom("artwork", selectedProduct, { artwork: true });
   }
 
-  function toggle(id: string) {
+  function skipDesign() {
+    setDesignSkipped(true);
+    advanceFrom("artwork", selectedProduct, { artwork: true });
+  }
+
+  function toggleTable(id: string) {
     setChecked((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAllWithoutStand() {
+    setChecked((prev) => {
+      const next = new Set(prev);
+      for (const t of tables) if (!t.hasStand) next.add(t.id);
       return next;
     });
   }
@@ -134,333 +211,162 @@ export function OrderStandsForm({
     );
   }
 
-  const selectedProduct = products.find((p) => p.id === productId) ?? null;
-  const totalCents = selectedProduct ? selectedProduct.priceCents * checked.size : 0;
-  // Convenience gate only — placeStandOrder re-checks requiresCustomDesign
-  // server-side regardless, so this can't be the only thing stopping a
-  // design-less order for a product that requires one.
-  const needsDesign = !!selectedProduct?.requiresCustomDesign && !design;
+  const firstIncomplete = steps.find((k) => !isComplete(k)) ?? null;
+  const blocker = firstIncomplete ? blockerFor(firstIncomplete, selectedProduct) : null;
+
+  const summary = {
+    product: selectedProduct,
+    count: checked.size,
+    cardLine: selectedProduct?.hasCardInsert
+      ? `${cardTemplate === "dark" ? "Dark" : "Light"} · “${headlineText}”`
+      : null,
+    artworkName: selectedProduct?.allowsCustomDesign ? (design?.fileName ?? null) : null,
+    totalCents,
+    blocker,
+    error: state.error,
+    success: state.success,
+  };
+
+  const stepSummaries: Record<StepKey, string> = {
+    product: selectedProduct ? `${selectedProduct.title} · ${formatCents(selectedProduct.priceCents)} each` : "",
+    card: `${cardTemplate === "dark" ? "Dark" : "Light"} template · ${
+      cardHeadlineMode === "VENUE_NAME" ? "Your venue name" : "Tillz branding"
+    }`,
+    artwork: design ? design.fileName : "Tillz design",
+    tables: `${checked.size} table${checked.size === 1 ? "" : "s"}`,
+    shipping: [shipping.name, `${shipping.suburb} ${shipping.state} ${shipping.postcode}`.trim()].filter(Boolean).join(", "),
+  };
 
   return (
     <>
-    <form ref={formRef} action={action} className="space-y-6">
-      <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-        <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
-          Choose a product
-        </h2>
-        <p className="text-sm text-muted mb-4">
-          Pick which stand you&apos;d like to order.
-        </p>
-        <div className="grid sm:grid-cols-2 gap-3">
-          {products.map((p) => {
-            const selected = productId === p.id;
-            return (
-              <label
-                key={p.id}
-                className={`flex gap-3 rounded-[var(--radius-card)] border p-4 cursor-pointer transition-colors ${
-                  selected
-                    ? "border-pine bg-pine-soft/40"
-                    : "border-line hover:border-ink/30"
-                }`}
+      <form action={action} className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8 lg:items-start">
+        <LayoutGroup>
+          <div className="space-y-4 min-w-0">
+            {steps.map((key, i) => (
+              <StepShell
+                key={key}
+                number={i + 1}
+                title={STEP_TITLES[key]}
+                status={statusOf(key)}
+                summary={stepSummaries[key]}
+                onChange={() => setActiveStep(key)}
               >
-                <input
-                  type="radio"
-                  name="productId"
-                  value={p.id}
-                  checked={selected}
-                  onChange={() => selectProduct(p.id)}
-                  className="sr-only"
-                />
-                <div className="w-16 h-16 rounded-[var(--radius-sm)] overflow-hidden bg-paper border border-line shrink-0 flex items-center justify-center">
-                  {p.imageUrl ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-[10px] text-muted text-center leading-tight px-1">
-                      No photo
-                    </span>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm">{p.title}</span>
-                    <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-paper text-muted">
-                      {p.type}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted mt-0.5 line-clamp-2">
-                    {p.description}
-                  </p>
-                  <p className="text-sm font-medium mt-1">
-                    {formatCents(p.priceCents)}
-                  </p>
-                </div>
-              </label>
-            );
-          })}
-        </div>
-      </div>
-
-      {selectedProduct?.allowsCustomDesign && (
-        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-          <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
-            Upload your design
-            {selectedProduct.requiresCustomDesign && (
-              <span className="ml-2 text-xs font-normal uppercase tracking-wide text-warn align-middle">
-                Required
-              </span>
-            )}
-          </h2>
-          {selectedProduct.designGuidelines && (
-            <p className="text-sm text-muted mb-4 whitespace-pre-line">
-              {selectedProduct.designGuidelines}
-            </p>
-          )}
-          <p className="text-xs text-muted mb-4">
-            Accepted: {selectedProduct.acceptedDesignMimeTypes.map((m) => MIME_LABELS[m] ?? m).join(", ")} · up to{" "}
-            {selectedProduct.maxDesignSizeMb} MB.
-          </p>
-
-          {design ? (
-            <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-line bg-paper px-3.5 py-2.5">
-              {design.url.match(/\.(png|jpe?g)$/i) ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={design.url} alt="" className="w-12 h-12 rounded-[var(--radius-sm)] object-cover border border-line shrink-0" />
-              ) : (
-                <div className="w-12 h-12 rounded-[var(--radius-sm)] bg-surface border border-line shrink-0 flex items-center justify-center text-[10px] text-muted">
-                  FILE
-                </div>
-              )}
-              <span className="text-sm truncate flex-1 min-w-0">{design.fileName}</span>
-              <button
-                type="button"
-                onClick={() => setDesign(null)}
-                className="text-xs text-muted hover:text-danger shrink-0"
-              >
-                Remove
-              </button>
-            </div>
-          ) : (
-            <div>
-              <label
-                className={`inline-flex items-center justify-center rounded-[var(--radius-md)] border border-line px-4 py-2.5 text-sm font-medium cursor-pointer hover:border-ink/30 transition-colors ${
-                  designUploading ? "opacity-60 pointer-events-none" : ""
-                }`}
-              >
-                {designUploading ? "Uploading…" : "Choose file"}
-                <input
-                  type="file"
-                  accept={selectedProduct.acceptedDesignMimeTypes.join(",")}
-                  onChange={pickDesignFile}
-                  disabled={designUploading}
-                  className="sr-only"
-                />
-              </label>
-              {designError && <p className="text-xs text-danger mt-2">{designError}</p>}
-            </div>
-          )}
-
-          {/* Hidden inputs so orderStands' FormData actually carries the
-              already-uploaded design — this form never re-uploads the file
-              itself, only the URL from the upload above. */}
-          <input type="hidden" name="designImageUrl" value={design?.url ?? ""} />
-          <input type="hidden" name="designFileName" value={design?.fileName ?? ""} />
-        </div>
-      )}
-
-      <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-        <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
-          Card design
-        </h2>
-        <p className="text-sm text-muted mb-4">
-          Every stand ships as a printed card with this design — a real QR
-          code is composited in after your stands are minted.
-        </p>
-        <div className="grid sm:grid-cols-[1fr_auto] gap-6 items-start">
-          <div className="space-y-4">
-            <div>
-              <Label>Template</Label>
-              <div className="flex gap-2 mt-1.5">
-                {(["dark", "light"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setCardTemplate(t)}
-                    className={`flex-1 rounded-[var(--radius-md)] border px-3 py-2 text-sm font-medium capitalize transition-colors ${
-                      cardTemplate === t
-                        ? "border-pine bg-pine-soft/40"
-                        : "border-line hover:border-ink/30"
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <Label>Headline</Label>
-              <div className="space-y-1.5 mt-1.5">
-                <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm cursor-pointer hover:border-ink/30 transition-colors">
-                  <input
-                    type="radio"
-                    name="cardHeadlineModeChoice"
-                    checked={cardHeadlineMode === "TILLZ_DEFAULT"}
-                    onChange={() => setCardHeadlineMode("TILLZ_DEFAULT")}
+                {key === "product" && (
+                  <ProductStep products={products} selectedId={productId} onSelect={selectProduct} />
+                )}
+                {key === "card" && (
+                  <CardDesignStep
+                    template={cardTemplate}
+                    onTemplate={setCardTemplate}
+                    headlineMode={cardHeadlineMode}
+                    onHeadlineMode={setCardHeadlineMode}
+                    headlineText={headlineText}
+                    restaurantName={restaurantName}
+                    onPreview={() => setPreviewOpen(true)}
+                    onConfirm={confirmCard}
                   />
-                  Keep Tillz branding
-                </label>
-                <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm cursor-pointer hover:border-ink/30 transition-colors">
-                  <input
-                    type="radio"
-                    name="cardHeadlineModeChoice"
-                    checked={cardHeadlineMode === "VENUE_NAME"}
-                    onChange={() => setCardHeadlineMode("VENUE_NAME")}
+                )}
+                {key === "artwork" && selectedProduct && (
+                  <ArtworkStep
+                    product={selectedProduct}
+                    design={design}
+                    uploading={designUploading}
+                    error={designError}
+                    onPickFile={pickDesignFile}
+                    onRemove={() => setDesign(null)}
+                    onSkip={skipDesign}
+                    onContinue={() => advanceFrom("artwork", selectedProduct, { artwork: true })}
                   />
-                  Use &quot;{restaurantName}&quot;
-                </label>
-              </div>
+                )}
+                {key === "tables" && (
+                  <TablesStep
+                    tables={tables}
+                    checked={checked}
+                    onToggle={toggleTable}
+                    onSelectAllWithoutStand={selectAllWithoutStand}
+                    onContinue={() => advanceFrom("tables", selectedProduct, { tables: true })}
+                  />
+                )}
+                {key === "shipping" && <ShippingStep value={shipping} onChange={setShipping} />}
+              </StepShell>
+            ))}
+
+            {/* Below lg the summary sits in flow here, with the CTA in the
+                sticky bar underneath; from lg it's the rail on the right. */}
+            <div className="lg:hidden">
+              <OrderSummary {...summary} showCta={false} />
             </div>
           </div>
-          <div className="w-40 mx-auto sm:mx-0">
-            <CardPreview palette={cardTemplate} headlineText={headlineText} />
+        </LayoutGroup>
+
+        <aside className="hidden lg:block lg:sticky lg:top-6">
+          <OrderSummary {...summary} showCta />
+        </aside>
+
+        <OrderBottomBar totalCents={totalCents} blocker={blocker} error={state.error} success={state.success} />
+
+        {/* Everything orderStands reads, always mounted regardless of which
+            step is open. Same names as before the stepped layout. */}
+        <input type="hidden" name="productId" value={productId ?? ""} />
+        {[...checked].map((id) => (
+          <input key={id} type="hidden" name="tableIds" value={id} />
+        ))}
+        <input type="hidden" name="cardTemplate" value={cardTemplate === "dark" ? "DARK" : "LIGHT"} />
+        <input type="hidden" name="cardHeadlineMode" value={cardHeadlineMode} />
+        <input type="hidden" name="designImageUrl" value={design?.url ?? ""} />
+        <input type="hidden" name="designFileName" value={design?.fileName ?? ""} />
+        <input type="hidden" name="shippingName" value={shipping.name} />
+        <input type="hidden" name="shippingAddress" value={shipping.address} />
+        <input type="hidden" name="shippingSuburb" value={shipping.suburb} />
+        <input type="hidden" name="shippingState" value={shipping.state} />
+        <input type="hidden" name="shippingPostcode" value={shipping.postcode} />
+      </form>
+
+      {previewOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-6"
+          onClick={() => setPreviewOpen(false)}
+        >
+          <div
+            className="relative"
+            style={{ height: "min(85vh, 700px)", width: "calc(min(85vh, 700px) * 105 / 148)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
-              onClick={() => setPreviewOpen(true)}
-              className="mt-2 w-full text-xs rounded-[var(--radius-sm)] border border-line px-3 py-2 hover:border-ink/30 transition-colors"
+              onClick={() => setPreviewOpen(false)}
+              aria-label="Close preview"
+              className="absolute -top-11 right-0 h-9 w-9 rounded-pill flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
             >
-              Preview card
+              <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+                <path d="M5 5l10 10M15 5L5 15" />
+              </svg>
             </button>
+            <CardPreview palette={cardTemplate} headlineText={headlineText} />
           </div>
-        </div>
-        <input
-          type="hidden"
-          name="cardTemplate"
-          value={cardTemplate === "dark" ? "DARK" : "LIGHT"}
-        />
-        <input type="hidden" name="cardHeadlineMode" value={cardHeadlineMode} />
-      </div>
-
-      <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-        <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
-          Which tables?
-        </h2>
-        <p className="text-sm text-muted mb-4">
-          One stand is ordered per table you tick. Tables that already have an
-          active stand are shown but pre-selecting them will order a spare.
-        </p>
-        <div className="grid sm:grid-cols-2 gap-2">
-          {tables.map((t) => (
-            <label
-              key={t.id}
-              className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm cursor-pointer hover:border-ink/30 transition-colors"
-            >
-              <input
-                type="checkbox"
-                name="tableIds"
-                value={t.id}
-                checked={checked.has(t.id)}
-                onChange={() => toggle(t.id)}
-              />
-              <span>
-                {t.label}
-                {t.section ? ` · ${t.section}` : ""}
-              </span>
-              {t.hasStand && (
-                <span className="ml-auto text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-pine-soft text-pine-deep">
-                  Has stand
-                </span>
-              )}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {selectedProduct && checked.size > 0 && (
-        <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-          <h2 className="font-display text-lg font-semibold tracking-tight mb-3">
-            Review
-          </h2>
-          <p className="text-sm">
-            {checked.size} × {selectedProduct.title} ({formatCents(selectedProduct.priceCents)})
-          </p>
-          <p className="text-lg font-semibold mt-2">
-            Total: {formatCents(totalCents)}
-          </p>
         </div>
       )}
-
-      <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-        <h2 className="font-display text-lg font-semibold tracking-tight mb-4">
-          Shipping address
-        </h2>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="sm:col-span-2">
-            <Label htmlFor="shippingName">Recipient name</Label>
-            <Input id="shippingName" name="shippingName" required />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="shippingAddress">Street address</Label>
-            <Input id="shippingAddress" name="shippingAddress" required />
-          </div>
-          <div>
-            <Label htmlFor="shippingSuburb">Suburb</Label>
-            <Input id="shippingSuburb" name="shippingSuburb" required />
-          </div>
-          <div>
-            <Label htmlFor="shippingState">State</Label>
-            <Input id="shippingState" name="shippingState" required />
-          </div>
-          <div>
-            <Label htmlFor="shippingPostcode">Postcode</Label>
-            <Input id="shippingPostcode" name="shippingPostcode" required />
-          </div>
-        </div>
-      </div>
-
-      {state.error && <FormMessage tone="error">{state.error}</FormMessage>}
-      {state.success && (
-        <FormMessage tone="info">
-          Order placed — we&apos;ll ship it soon.
-        </FormMessage>
-      )}
-
-      {needsDesign && (
-        <p className="text-sm text-warn">
-          Upload a design above before you can place this order.
-        </p>
-      )}
-
-      <div className="max-w-xs">
-        <SubmitButton pendingLabel="Placing order…" disabled={needsDesign}>
-          Order {checked.size || ""} stand{checked.size === 1 ? "" : "s"}
-        </SubmitButton>
-      </div>
-    </form>
-
-    {previewOpen && (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-6"
-        onClick={() => setPreviewOpen(false)}
-      >
-        <div
-          className="relative"
-          style={{ height: "min(85vh, 700px)", width: "calc(min(85vh, 700px) * 105 / 148)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            onClick={() => setPreviewOpen(false)}
-            aria-label="Close preview"
-            className="absolute -top-11 right-0 h-9 w-9 rounded-pill flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
-              <path d="M5 5l10 10M15 5L5 15" />
-            </svg>
-          </button>
-          <CardPreview palette={cardTemplate} headlineText={headlineText} />
-        </div>
-      </div>
-    )}
     </>
   );
+}
+
+function fd(file: File): FormData {
+  const data = new FormData();
+  data.append("file", file);
+  return data;
+}
+
+function blockerFor(step: StepKey, product: ProductRow | null): string {
+  switch (step) {
+    case "product":
+      return "Choose a product";
+    case "card":
+      return "Confirm your card design";
+    case "artwork":
+      return product?.requiresCustomDesign ? "Upload your artwork" : "Upload artwork or skip";
+    case "tables":
+      return "Pick at least one table";
+    case "shipping":
+      return "Enter a shipping address";
+  }
 }
