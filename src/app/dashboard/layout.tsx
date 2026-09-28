@@ -167,19 +167,26 @@ export default async function DashboardLayout({
   }
 
   // A deactivated org blocks the whole team's dashboard access. deactivatedAt
-  // is set only by a platform admin (lib/admin/account-actions.ts#
-  // adminSuspendOrg) and cleared by adminReactivateOrg — never from inside
-  // here, since this IS "inside here".
+  // is set by exactly two things (see its schema comment): a platform admin's
+  // suspension (planStatus "suspended" — lib/admin/account-actions.ts#
+  // adminSuspendOrg, lifted by adminReactivateOrg), or the owner's own
+  // deletion (planStatus "deleted" — lib/account.ts#executeAccountDeletion,
+  // never lifted). Neither is undone from inside here, since this IS "inside
+  // here" — but the two need different copy: a deleted account was never
+  // going to be reactivated, so telling its owner to contact support about
+  // that would be misleading.
   if (membership?.organization.deactivatedAt) {
+    const deleted = membership.organization.planStatus === "deleted";
     return (
       <main className="min-h-dvh bg-paper flex items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
           <h1 className="font-display text-2xl font-semibold tracking-tight">
-            Account deactivated
+            {deleted ? "Account deleted" : "Account deactivated"}
           </h1>
           <p className="text-muted text-sm mt-2">
-            This account has been deactivated. Contact Tillz support to have
-            it reactivated.
+            {deleted
+              ? "This account was permanently deleted and can't be recovered."
+              : "This account has been deactivated. Contact Tillz support to have it reactivated."}
           </p>
           <form action={signOut} className="mt-6">
             <button
