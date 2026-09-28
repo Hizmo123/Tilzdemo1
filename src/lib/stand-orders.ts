@@ -33,6 +33,12 @@ export async function placeStandOrder(args: {
   // convenience only, never the real gate.
   designImageUrl?: string | null;
   designFileName?: string | null;
+  // Print-card look chosen on the order form — see lib/stand-card-template.ts
+  // and StandOrder.cardTemplate/cardHeadlineMode in schema.prisma. Defaults
+  // match the schema defaults so a caller that omits them (e.g. a future
+  // admin-side re-order) still gets sane values.
+  cardTemplate?: "DARK" | "LIGHT";
+  cardHeadlineMode?: "TILLZ_DEFAULT" | "VENUE_NAME";
 }): Promise<PlaceStandOrderResult> {
   const tableIds = [...new Set(args.tableIds)];
   if (tableIds.length === 0) return { error: "Pick at least one table." };
@@ -83,6 +89,8 @@ export async function placeStandOrder(args: {
       designImageUrl,
       designFileName,
       designStatus: designImageUrl ? "PENDING_REVIEW" : "NONE",
+      cardTemplate: args.cardTemplate ?? "DARK",
+      cardHeadlineMode: args.cardHeadlineMode ?? "TILLZ_DEFAULT",
       items: {
         create: tableIds.map((tableId) => ({ tableId })),
       },

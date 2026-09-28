@@ -64,6 +64,7 @@ export default async function StandsPage() {
         </div>
       ) : (
         <OrderStandsForm
+          restaurantName={ctx.restaurant.name}
           products={products.map((p) => ({
             id: p.id,
             title: p.title,

@@ -6,6 +6,7 @@ import { uploadStandOrderDesign } from "./design-actions";
 import { Label, Input, FormMessage } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { formatCents } from "@/lib/money";
+import { CardPreview, type CardPalette } from "./card-preview";
 
 const initial: StandOrderActionState = {};
 
@@ -40,9 +41,11 @@ type TableRow = {
 export function OrderStandsForm({
   products,
   tables,
+  restaurantName,
 }: {
   products: ProductRow[];
   tables: TableRow[];
+  restaurantName: string;
 }) {
   const [state, action] = useActionState(orderStands, initial);
   const formRef = useRef<HTMLFormElement>(null);
@@ -51,6 +54,14 @@ export function OrderStandsForm({
   const [design, setDesign] = useState<{ url: string; fileName: string } | null>(null);
   const [designUploading, setDesignUploading] = useState(false);
   const [designError, setDesignError] = useState<string | null>(null);
+  const [cardTemplate, setCardTemplate] = useState<CardPalette>("dark");
+  // Default is generic "TILLZ" branding, not the venue's own name — matches
+  // the schema default (StandCardHeadline.TILLZ_DEFAULT) so a venue has to
+  // opt into printing their own name on the card.
+  const [cardHeadlineMode, setCardHeadlineMode] = useState<"TILLZ_DEFAULT" | "VENUE_NAME">(
+    "TILLZ_DEFAULT",
+  );
+  const headlineText = cardHeadlineMode === "VENUE_NAME" ? restaurantName : "TILLZ";
 
   useEffect(() => {
     if (state?.success) {
@@ -59,6 +70,8 @@ export function OrderStandsForm({
       setProductId(products[0]?.id ?? "");
       setDesign(null);
       setDesignError(null);
+      setCardTemplate("dark");
+      setCardHeadlineMode("TILLZ_DEFAULT");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
@@ -238,6 +251,71 @@ export function OrderStandsForm({
           <input type="hidden" name="designFileName" value={design?.fileName ?? ""} />
         </div>
       )}
+
+      <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
+        <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
+          Card design
+        </h2>
+        <p className="text-sm text-muted mb-4">
+          Every stand ships as a printed card with this design — a real QR
+          code is composited in after your stands are minted.
+        </p>
+        <div className="grid sm:grid-cols-[1fr_auto] gap-6 items-start">
+          <div className="space-y-4">
+            <div>
+              <Label>Template</Label>
+              <div className="flex gap-2 mt-1.5">
+                {(["dark", "light"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setCardTemplate(t)}
+                    className={`flex-1 rounded-[var(--radius-md)] border px-3 py-2 text-sm font-medium capitalize transition-colors ${
+                      cardTemplate === t
+                        ? "border-pine bg-pine-soft/40"
+                        : "border-line hover:border-ink/30"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>Headline</Label>
+              <div className="space-y-1.5 mt-1.5">
+                <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm cursor-pointer hover:border-ink/30 transition-colors">
+                  <input
+                    type="radio"
+                    name="cardHeadlineModeChoice"
+                    checked={cardHeadlineMode === "TILLZ_DEFAULT"}
+                    onChange={() => setCardHeadlineMode("TILLZ_DEFAULT")}
+                  />
+                  Keep Tillz branding
+                </label>
+                <label className="flex items-center gap-2 rounded-[var(--radius-sm)] border border-line px-3 py-2 text-sm cursor-pointer hover:border-ink/30 transition-colors">
+                  <input
+                    type="radio"
+                    name="cardHeadlineModeChoice"
+                    checked={cardHeadlineMode === "VENUE_NAME"}
+                    onChange={() => setCardHeadlineMode("VENUE_NAME")}
+                  />
+                  Use &quot;{restaurantName}&quot;
+                </label>
+              </div>
+            </div>
+          </div>
+          <div className="w-40 mx-auto sm:mx-0">
+            <CardPreview palette={cardTemplate} headlineText={headlineText} />
+          </div>
+        </div>
+        <input
+          type="hidden"
+          name="cardTemplate"
+          value={cardTemplate === "dark" ? "DARK" : "LIGHT"}
+        />
+        <input type="hidden" name="cardHeadlineMode" value={cardHeadlineMode} />
+      </div>
 
       <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
         <h2 className="font-display text-lg font-semibold tracking-tight mb-1">
