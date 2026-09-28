@@ -73,20 +73,41 @@ export async function canCreateTable(
 }
 
 // Same "never take away what already works" rule as canCreateTable, applied
-// to kitchen prep stations (Restaurant.kitchenStations). Stations live on
-// Restaurant, not scoped through a location the way tables are, so this
-// resolves the org's current restaurant the same way the rest of the app's
-// single-venue-assumption code does today (restaurants[0]) — task E's
-// active-venue cookie replaces that assumption everywhere else, not here.
-export async function canCreateStation(
+// to kitchen prep stations (Restaurant.kitchenStations).
+//
+// Answers "may this restaurant have `requestedCount` stations", not "may I
+// add one more" — the caller (updateKitchenStations) writes a whole
+// submitted array in one call, so a check that only compared the CURRENT
+// count against the limit (the old canCreateStation) let a BASIC org
+// sitting at 1 of 2 stations write 26 in a single save (1 >= 2 is false,
+// and the array replace itself was unchecked). Comparing the requested
+// total directly closes that regardless of how many are added at once.
+//
+// Also takes restaurantId explicitly and verifies it belongs to
+// organizationId, rather than resolving "the org's restaurant" internally
+// via `findFirst({ where: { organizationId } })` — on a multi-venue
+// PRO/CONNECT org that resolved an ARBITRARY venue, not necessarily the one
+// actually being edited. The entitlement limit itself is still org-level
+// (kdsStationLimit comes from the plan, not the venue), so this ownership
+// check exists purely so a mismatched restaurantId can never sneak past
+// silently rather than to look up anything restaurant-specific.
+export async function canSetStations(
   organizationId: string,
+  restaurantId: string,
+  requestedCount: number,
 ): Promise<{ allowed: true } | { allowed: false; reason: string }> {
+  const restaurant = await prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { organizationId: true },
+  });
+  if (!restaurant || restaurant.organizationId !== organizationId) {
+    return { allowed: false, reason: "Restaurant not found." };
+  }
+
   const ent = await getEntitlements(organizationId);
   if (ent.kdsStationLimit === null) return { allowed: true };
 
-  const restaurant = await prisma.restaurant.findFirst({ where: { organizationId } });
-  const count = restaurant?.kitchenStations.length ?? 0;
-  if (count >= ent.kdsStationLimit) {
+  if (requestedCount > ent.kdsStationLimit) {
     return {
       allowed: false,
       reason:
