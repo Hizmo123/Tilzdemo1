@@ -51,8 +51,16 @@ export async function getEntitlements(organizationId: string): Promise<Entitleme
 // they're already over it (e.g. downgraded from Pro to Basic with 40 tables).
 // Taking away something that already works is exactly what this module
 // exists to prevent.
+//
+// Also the gate setTableActive calls before REACTIVATING a table
+// (context: "reactivate") — both ask the exact same question ("would this
+// push active tables past the limit?"), just from different UI actions, so
+// they share the count query and only the wording differs: a brand-new
+// table only has "upgrade" as a next step, but a reactivation can also just
+// deactivate a different one first.
 export async function canCreateTable(
   organizationId: string,
+  context: "create" | "reactivate" = "create",
 ): Promise<{ allowed: true } | { allowed: false; reason: string }> {
   const ent = await getEntitlements(organizationId);
   if (ent.tableLimit === null) return { allowed: true };
@@ -61,11 +69,17 @@ export async function canCreateTable(
     where: { active: true, location: { restaurant: { organizationId } } },
   });
   if (count >= ent.tableLimit) {
+    if (ent.tableLimit === 0) {
+      return {
+        allowed: false,
+        reason: `The ${entitlementsLabel(ent.tier)} plan doesn't include live ordering. Upgrade to add tables.`,
+      };
+    }
     return {
       allowed: false,
       reason:
-        ent.tableLimit === 0
-          ? `The ${entitlementsLabel(ent.tier)} plan doesn't include live ordering. Upgrade to add tables.`
+        context === "reactivate"
+          ? `You're at your plan's limit of ${ent.tableLimit} active tables. Deactivate another table first, or upgrade.`
           : `The ${entitlementsLabel(ent.tier)} plan includes up to ${ent.tableLimit} tables. Upgrade to add more.`,
     };
   }
