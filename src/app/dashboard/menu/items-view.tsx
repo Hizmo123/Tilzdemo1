@@ -164,7 +164,7 @@ export function ItemsView({
       ) : (
         <Card padded={false} className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[600px] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-muted border-b border-line">
                   <th className="px-4 py-3 font-medium w-14">
@@ -175,7 +175,13 @@ export function ItemsView({
                   <th className="px-3 py-3 font-medium text-right">Price</th>
                   <th className="px-3 py-3 font-medium">Station</th>
                   <th className="px-3 py-3 font-medium">Available</th>
-                  <th className="px-4 py-3 font-medium text-right">
+                  {/* Sticky so Edit/Delete stay reachable once the table
+                      scrolls horizontally — bg-surface matches the table's
+                      own background (see Card's bg-surface) so scrolled
+                      content doesn't show through behind the pinned cell,
+                      and border-l reads as a pinned edge rather than a
+                      floating column. */}
+                  <th className="sticky right-0 bg-surface px-4 py-3 font-medium text-right border-l border-line">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
@@ -238,7 +244,7 @@ function ItemTableRow({ row, currency, onEdit }: { row: Row; currency: string; o
   }
 
   return (
-    <tr className={`transition-colors hover:bg-surface-2/50 ${row.available ? "" : "text-muted"}`}>
+    <tr className={`group transition-colors hover:bg-surface-2/50 ${row.available ? "" : "text-muted"}`}>
       <td className="pl-4 pr-1 py-2.5">
         <div className="w-10 h-10 rounded-[var(--radius-sm)] overflow-hidden bg-paper border border-line flex items-center justify-center">
           {row.imageUrl ? (
@@ -252,7 +258,7 @@ function ItemTableRow({ row, currency, onEdit }: { row: Row; currency: string; o
           )}
         </div>
       </td>
-      <td className="px-3 py-2.5 min-w-[220px]">
+      <td className="px-3 py-2.5 min-w-[160px]">
         <button type="button" onClick={onEdit} className="text-left group">
           <span className={`font-medium group-hover:text-pine ${row.available ? "text-ink" : "line-through"}`}>
             {row.name}
@@ -273,20 +279,29 @@ function ItemTableRow({ row, currency, onEdit }: { row: Row; currency: string; o
       <td className="px-3 py-2.5 text-right tabular-nums font-medium whitespace-nowrap">
         {formatCents(row.priceCents, currency)}
       </td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            className={`inline-block w-1.5 h-1.5 rounded-pill ${effectiveStation ? "bg-pine" : "bg-line-strong"}`}
-            aria-hidden
-          />
-          <span>{effectiveStation ?? "Default board"}</span>
-          {!row.station && <span className="text-xs text-muted">via category</span>}
-        </span>
+      <td className="px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+            <span
+              className={`inline-block w-1.5 h-1.5 rounded-pill ${effectiveStation ? "bg-pine" : "bg-line-strong"}`}
+              aria-hidden
+            />
+            <span>{effectiveStation ?? "Default board"}</span>
+          </span>
+          {!row.station && <span className="text-xs text-muted whitespace-nowrap">via category</span>}
+        </div>
       </td>
       <td className="px-3 py-2.5">
         <Switch checked={row.available} onChange={toggle} disabled={pending} label={`${row.name} available`} />
       </td>
-      <td className="pl-3 pr-4 py-2.5 text-right whitespace-nowrap">
+      {/* Sticky, matching the header cell above. bg-surface is the base
+          (opaque) layer so scrolled columns don't show through behind it;
+          group-hover:bg-surface-2/50 layers the same semi-transparent
+          overlay the rest of the row gets on hover, on top of that opaque
+          base, so the composited color matches exactly instead of drifting
+          when this cell is pinned mid-scroll. Text color (including the
+          unavailable-row text-muted) inherits from the <tr> as normal. */}
+      <td className="sticky right-0 bg-surface group-hover:bg-surface-2/50 pl-3 pr-4 py-2.5 text-right whitespace-nowrap border-l border-line">
         {confirming ? (
           <span className="inline-flex items-center gap-2">
             <span className="text-xs text-muted">Delete?</span>
