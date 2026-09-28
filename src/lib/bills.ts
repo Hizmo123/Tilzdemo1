@@ -64,6 +64,12 @@ export type ResolvedVisit = {
   // customer page and its actions don't need a second round trip for them.
   showTillzBranding: boolean;
   orderingBlocked: boolean;
+  // false only on LITE (ent.ordering) — a plan that never included live
+  // ordering at all, as opposed to orderingBlocked's "used to work, lapsed
+  // past the grace period." addItemsToBill checks this FIRST: it's the
+  // reason new orders stop for a downgraded-to-LITE org even though nothing
+  // ever "lapsed" (LITE has no subscription to lapse).
+  planAllowsOrdering: boolean;
   // Tillz's per-order app fee for THIS org's tier (0 except CONNECT) — the
   // only source chargeBillViaSquare's appFeeBps input should ever be
   // derived from. See lib/entitlements-core.ts's TIER_LIMITS comment.
@@ -175,6 +181,7 @@ export async function resolveVisit(
       surchargeBasisPoints: r.surchargeBasisPoints,
       showTillzBranding: ent.showTillzBranding,
       orderingBlocked: ent.orderingBlocked,
+      planAllowsOrdering: ent.ordering,
       appFeeBps: ent.appFeeBps,
       cardStyle: r.cardStyle,
       typeScale: r.typeScale,
@@ -327,6 +334,13 @@ export async function addItemsToBill(
 ) {
   const resolved = await resolveVisit(token);
   if (!resolved.ok) return { error: "This table is no longer available." };
+  // A LITE org's plan never included live ordering at all (as opposed to
+  // orderingBlocked below, which is a paid tier that lapsed past its grace
+  // period) — checked first, and deliberately worded around "not taking
+  // orders" rather than exposing the venue's plan tier to a customer.
+  if (!resolved.visit.planAllowsOrdering) {
+    return { error: "This venue isn't taking orders through Tillz right now." };
+  }
   // Lapsed-subscription grace period (spec B4): existing service, viewing
   // and paying an already-open bill all keep working — this is the ONE place
   // new ordering actually stops, and only once the grace period has passed.

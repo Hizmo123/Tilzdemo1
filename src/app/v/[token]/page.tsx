@@ -177,7 +177,7 @@ export default async function VisitPage({
       squareLocationId={visit.squareLocationId}
       squareEnv={visit.squareEnv}
       open={open}
-      canOrder={visit.customerOrdering && open}
+      canOrder={visit.customerOrdering && visit.planAllowsOrdering && open}
       canPay={visit.customerPayment}
       orders={orderStatuses}
       menu={menu}
