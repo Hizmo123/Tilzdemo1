@@ -63,7 +63,13 @@ export default async function FulfilmentPage() {
                     href={`/admin/fulfilment/${order.id}/qr-pack`}
                     className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"
                   >
-                    Download QR pack
+                    Download print-ready PDF
+                  </a>
+                  <a
+                    href={`/admin/fulfilment/${order.id}/qr-pack?format=zip`}
+                    className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"
+                  >
+                    Download raw QR codes
                   </a>
                   <StatusButtons orderId={order.id} status={order.status} />
                 </div>
