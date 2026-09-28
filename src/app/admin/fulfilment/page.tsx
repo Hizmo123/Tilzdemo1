@@ -59,12 +59,18 @@ export default async function FulfilmentPage() {
                     {order.status}
                   </span>
                   {order.designStatus !== "NONE" && <DesignStatusBadge status={order.designStatus} />}
-                  <a
-                    href={`/admin/fulfilment/${order.id}/qr-pack`}
-                    className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"
-                  >
-                    Download print-ready PDF
-                  </a>
+                  {order.hasCardInsertSnapshot ? (
+                    <a
+                      href={`/admin/fulfilment/${order.id}/qr-pack`}
+                      className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"
+                    >
+                      Download print-ready PDF
+                    </a>
+                  ) : (
+                    <span className="text-xs text-muted">
+                      This product has no card insert — download the raw QR codes
+                    </span>
+                  )}
                   <a
                     href={`/admin/fulfilment/${order.id}/qr-pack?format=zip`}
                     className="text-xs rounded-[var(--radius-xs)] border border-line px-2.5 py-1.5 hover:border-ink/30"

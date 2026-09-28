@@ -710,6 +710,11 @@ model StandOrder {
   // minted (see lib/stand-card-template.ts).
   cardTemplate     StandCardTemplate @default(DARK)
   cardHeadlineMode StandCardHeadline @default(TILLZ_DEFAULT)
+  // StandProduct.hasCardInsert as it was at order time — read by
+  // qr-pack/route.ts to decide between the composited card PDF and the
+  // raw-QR zip, never the live product (which can be edited or retired to
+  // null after the fact, like productTitleSnapshot/productType).
+  hasCardInsertSnapshot Boolean @default(false)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   items          StandOrderItem[]

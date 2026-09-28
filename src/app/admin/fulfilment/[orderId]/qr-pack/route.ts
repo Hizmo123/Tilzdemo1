@@ -18,6 +18,11 @@ import { createZip, type ZipEntry } from "@/lib/zip";
 //   printer.
 // - "zip" — the older raw-PNG-per-stand download, kept as a secondary
 //   option rather than removed, for whoever just wants the bare QR images.
+//
+// Only orders whose product shipped with a card insert get the PDF at all
+// (hasCardInsertSnapshot, taken at order time — the live product may since
+// have been edited or retired). Without an insert there's no card to
+// composite, so the zip is the only format, whatever ?format= says.
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ orderId: string }> },
@@ -35,7 +40,13 @@ export async function GET(
 
   const format = new URL(request.url).searchParams.get("format");
 
-  if (format === "zip") {
+  if (!order.hasCardInsertSnapshot && format === "pdf") {
+    return new NextResponse("This product has no card insert — download the raw QR codes instead.", {
+      status: 409,
+    });
+  }
+
+  if (format === "zip" || !order.hasCardInsertSnapshot) {
     const entries: ZipEntry[] = [];
     for (const item of mintedItems) {
       const png = await standQrPng(item.stand!.qrToken);

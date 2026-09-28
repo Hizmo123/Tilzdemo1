@@ -89,8 +89,13 @@ export async function placeStandOrder(args: {
       designImageUrl,
       designFileName,
       designStatus: designImageUrl ? "PENDING_REVIEW" : "NONE",
-      cardTemplate: args.cardTemplate ?? "DARK",
-      cardHeadlineMode: args.cardHeadlineMode ?? "TILLZ_DEFAULT",
+      // No card insert -> no card to design, so the submitted template and
+      // headline are ignored in favour of the defaults (the stepped form
+      // never shows that step for such a product, but the FormData still
+      // carries the fields).
+      hasCardInsertSnapshot: product.hasCardInsert,
+      cardTemplate: product.hasCardInsert ? args.cardTemplate ?? "DARK" : "DARK",
+      cardHeadlineMode: product.hasCardInsert ? args.cardHeadlineMode ?? "TILLZ_DEFAULT" : "TILLZ_DEFAULT",
       items: {
         create: tableIds.map((tableId) => ({ tableId })),
       },
