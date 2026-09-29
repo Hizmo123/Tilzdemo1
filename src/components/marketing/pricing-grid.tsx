@@ -1,6 +1,6 @@
 "use client";
 
-import { PLANS, planPriceLabel, type PlanDef } from "@/lib/plans";
+import { PLANS, planPriceLabel, CONNECT_FEE_BLURB, type PlanDef } from "@/lib/plans";
 import { isTrialableTier, TRIAL_DAYS } from "@/lib/plan-subscription";
 import { LinkButton } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -88,7 +88,7 @@ function PricingCard({
         )}
       </p>
       {plan.cadence === "free" && <p className="text-xs text-muted mt-1">No card needed</p>}
-      {connect && <p className="text-xs text-pine-deep font-medium mt-1">+ ~2% per order — cancel any time</p>}
+      {connect && <p className="text-xs text-pine-deep font-medium mt-1">+ {CONNECT_FEE_BLURB} — cancel any time</p>}
       {isTrialableTier(plan.tier) && (
         <p className="text-xs text-pine-deep font-medium mt-1">{TRIAL_DAYS}-day free trial</p>
       )}

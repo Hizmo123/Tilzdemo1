@@ -133,6 +133,10 @@ export type ChargeBillViaSquareResult = {
   status: PaymentStatus;
   providerRef: string;
   squareOrderId: string;
+  // The exact cents actually sent to Square as appFeeMoney (0 when the fee
+  // was 0 and the field was omitted from the request entirely — see
+  // computeAppFeeCents) — the caller persists this onto Payment.appFeeCents.
+  appFeeCents: number;
 };
 
 // Tillz stores currency as a plain string (always a real ISO 4217 code, e.g.
@@ -146,6 +150,35 @@ export function mapSquareStatus(status: string | undefined): PaymentStatus {
   if (status === "COMPLETED" || status === "APPROVED") return "SUCCEEDED";
   if (status === "CANCELED" || status === "FAILED") return "FAILED";
   return "PENDING";
+}
+
+// Tillz's application fee for ONE payment (called once per payment, not
+// once per bill — a split bill's fee is the sum of what each individual
+// payment computes here, never one figure computed against the bill total
+// and divided up). Charged on the goods amount only — never tip or
+// surcharge, which are the customer's and stay outside Tillz's cut — and
+// rounded to the nearest cent rather than always down or up, so the
+// platform doesn't systematically over- or under-collect a fraction of a
+// cent across many orders. AU menu prices are GST-inclusive with no
+// separate tax line in this codebase, so goodsCents already carries GST;
+// there's no separate "ex-GST" base to choose between.
+//
+// Clamped to [0, 90% of the total actually charged to the card] — the
+// upper bound is Square's own hard limit on appFeeMoney (a request above
+// it is rejected outright), so that clamp stays Math.floor deliberately:
+// rounding it instead could push the cap a cent past what Square allows,
+// where rounding the FEE itself has no such one-sided constraint. The
+// lower bound guards a fee that could otherwise go negative (a negative
+// appFeeBps should never happen — see ChargeBillViaSquareInput's own doc
+// comment — but this function fails safe rather than trusting that).
+export function computeAppFeeCents(
+  goodsCents: number,
+  appFeeBps: number,
+  totalChargeCents: number,
+): number {
+  const raw = Math.round((goodsCents * appFeeBps) / 10000);
+  const cap = Math.floor(totalChargeCents * 0.9);
+  return Math.max(0, Math.min(raw, cap));
 }
 
 export async function chargeBillViaSquare(
@@ -281,16 +314,10 @@ export async function chargeBillViaSquare(
   }
 
   // ---- 3. Create the payment --------------------------------------------------
-  // Tillz's application fee, on the goods amount only — never on tip or
-  // surcharge — capped at 90% of the total amount actually charged to the
-  // card, matching Square's own hard limit on appFeeMoney. appFeeBps comes
-  // from the CALLER (the org's plan tier), not a global env var — see the
-  // field's doc comment on ChargeBillViaSquareInput above.
+  // appFeeBps comes from the CALLER (the org's plan tier), not a global env
+  // var — see the field's doc comment on ChargeBillViaSquareInput above.
   const totalChargeCents = goodsCents + tipCents + surchargeCents;
-  const appFeeCents = Math.min(
-    Math.floor((goodsCents * appFeeBps) / 10000),
-    Math.floor(totalChargeCents * 0.9),
-  );
+  const appFeeCents = computeAppFeeCents(goodsCents, appFeeBps, totalChargeCents);
 
   let paymentResponse;
   try {
@@ -317,6 +344,7 @@ export async function chargeBillViaSquare(
     status: mapSquareStatus(payment.status),
     providerRef: payment.id,
     squareOrderId: order.id,
+    appFeeCents,
   };
 }
 

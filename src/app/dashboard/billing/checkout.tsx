@@ -9,6 +9,7 @@ import {
   PLANS,
   CONNECT_PLUS_PRICE_CENTS,
   CONNECT_BRANDING_REMOVAL_PRICE_CENTS,
+  CONNECT_FEE_BLURB,
   centsToPriceLabel,
 } from "@/lib/plans";
 import { formatCents } from "@/lib/money";
@@ -138,7 +139,7 @@ export function Billing({
               </p>
               {connect && (
                 <p className="text-xs text-pine-deep font-medium mt-1">
-                  + ~2% per order — cancel any time
+                  + {CONNECT_FEE_BLURB} — cancel any time
                 </p>
               )}
               {isTrialableTier(p.tier) && (

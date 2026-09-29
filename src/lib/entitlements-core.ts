@@ -10,6 +10,36 @@ import type { PlanTier } from "@prisma/client";
 
 const GRACE_PERIOD_DAYS = 7;
 
+// Connect's per-order application fee — the ONE place this number is
+// defined. Every consumer (TIER_LIMITS.CONNECT.appFeeBps below,
+// square/pay.ts's charge path via entitlementsForTier, and every piece of
+// pricing/billing/onboarding copy that mentions the rate) must read from
+// this constant, directly or via connectFeePercentLabel() below — never
+// hardcode the percentage as a separate literal, which is exactly how the
+// rate and the pricing copy drifted apart before (code at 200 bps/2% while
+// the owner had already changed the advertised rate to 1.5%).
+// 150 bps = 1.5%.
+//
+// Changing this number is PROSPECTIVE ONLY, automatically — not because of
+// any migration step, but because nothing in this codebase stores a fee
+// rate anywhere: no Organization/Restaurant/Payment column persists it, and
+// entitlementsForTier(org.plan) is recomputed from THIS constant fresh on
+// every single request (see resolveVisit in lib/bills.ts, which feeds
+// square/pay.ts's chargeBillViaSquare). So editing this value changes the
+// rate for every Connect org's very next charge, with nothing to backfill
+// — and, symmetrically, there is no local record of what rate a PAST
+// charge actually used; Square's own ledger (the app_fee_money on that
+// payment) is the only source of truth for historical charges, since this
+// app never mirrors it onto the local Payment row.
+export const CONNECT_APP_FEE_BPS = 150;
+
+// "1.5%" — display copy derives the percentage from CONNECT_APP_FEE_BPS
+// through this, rather than re-typing "1.5" (or worse, "2") as a separate
+// string literal in every pricing card.
+export function connectFeePercentLabel(): string {
+  return `${CONNECT_APP_FEE_BPS / 100}%`;
+}
+
 export type Entitlements = {
   tier: PlanTier;
   ordering: boolean; // false only for LITE — no tables, no bills, no KDS.
@@ -134,7 +164,7 @@ const TIER_LIMITS: Record<
     analyticsWindowDays: 14,
     showTillzBranding: true,
     prioritySupport: false,
-    appFeeBps: 200, // 2% — the org's only revenue relationship with Tillz on this tier.
+    appFeeBps: CONNECT_APP_FEE_BPS, // the org's only revenue relationship with Tillz on this tier.
     requiresSquare: true,
   },
 };
@@ -161,8 +191,8 @@ export function entitlementsForTier(
     : null;
   const orderingBlocked = graceEndsAt !== null && graceEndsAt.getTime() < Date.now();
 
-  // appFeeBps (base.appFeeBps, 200 for CONNECT / 0 elsewhere) is NEVER
-  // touched by either addon below — Connect Plus and branding removal are
+  // appFeeBps (base.appFeeBps, CONNECT_APP_FEE_BPS for CONNECT / 0
+  // elsewhere) is NEVER touched by either addon below — Connect Plus and branding removal are
   // pure feature/cosmetic upsells layered on the same flat fee, not fee
   // discounts. Both addons only ever affect crossVenueDashboard and
   // showTillzBranding, computed here, nowhere near appFeeBps.

@@ -1013,6 +1013,15 @@ model Payment {
   // The Square Order this payment was charged against (Phase 3) — null for
   // every mock-provider payment and for anything predating this column.
   squareOrderId  String?
+  // The exact cents actually charged as Tillz's Connect app fee — computed
+  // by computeAppFeeCents (lib/square/pay.ts) and stored as-is, including 0
+  // for a fee-free charge (a non-Connect org, or a goods-free/tip-only
+  // payment). Null for every non-Square payment (mock provider — there's no
+  // app fee outside Connect) and for anything predating this column; never
+  // backfilled — changing CONNECT_APP_FEE_BPS is prospective only (see its
+  // own comment in lib/entitlements-core.ts), so an old null row correctly
+  // has no rate to report rather than being assigned today's.
+  appFeeCents    Int?
   idempotencyKey String        @unique
   // Cached running total of successful refunds against this payment. Kept in
   // sync via the same compare-and-swap pattern as Bill.amountPaidCents.

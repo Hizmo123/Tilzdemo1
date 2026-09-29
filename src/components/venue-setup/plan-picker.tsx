@@ -2,7 +2,7 @@
 
 import type { PlanTier } from "@prisma/client";
 import { motion } from "motion/react";
-import { PLANS, planPriceLabel } from "@/lib/plans";
+import { PLANS, planPriceLabel, CONNECT_FEE_BLURB } from "@/lib/plans";
 import { SPRING_PRESS, SPRING } from "@/components/ui/motion";
 import { CHOICE_IDLE, CHOICE_SELECTED } from "./choice";
 
@@ -85,7 +85,7 @@ export function PlanPicker({
                 <span className="text-sm text-muted font-normal font-sans tracking-normal"> · no card needed</span>
               )}
             </span>
-            {connect && <p className="text-xs text-pine-deep font-medium mt-0.5">+ ~2% per order — no monthly fee</p>}
+            {connect && <p className="text-xs text-pine-deep font-medium mt-0.5">+ {CONNECT_FEE_BLURB} — no monthly fee</p>}
 
             <ul className="mt-4 space-y-1.5 text-sm text-ink-soft">
               {p.features.map((f) => (
