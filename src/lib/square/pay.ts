@@ -133,6 +133,10 @@ export type ChargeBillViaSquareResult = {
   status: PaymentStatus;
   providerRef: string;
   squareOrderId: string;
+  // The exact cents actually sent to Square as appFeeMoney (0 when the fee
+  // was 0 and the field was omitted from the request entirely — see
+  // computeAppFeeCents) — the caller persists this onto Payment.appFeeCents.
+  appFeeCents: number;
 };
 
 // Tillz stores currency as a plain string (always a real ISO 4217 code, e.g.
@@ -340,6 +344,7 @@ export async function chargeBillViaSquare(
     status: mapSquareStatus(payment.status),
     providerRef: payment.id,
     squareOrderId: order.id,
+    appFeeCents,
   };
 }
 

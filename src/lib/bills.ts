@@ -1215,6 +1215,10 @@ export async function payBillAmount(
       providerRef: string | undefined;
       squareOrderId: string | null;
       test: boolean;
+      // Exact cents charged as Tillz's Connect app fee — see
+      // ChargeBillViaSquareResult's doc comment. Always null for a
+      // mock-provider payment: there's no app fee outside Connect/Square.
+      appFeeCents: number | null;
     };
 
     if (paymentContext.mode === "square") {
@@ -1304,6 +1308,7 @@ export async function payBillAmount(
           providerRef: result.providerRef,
           squareOrderId: result.squareOrderId,
           test: paymentContext.squareEnv !== "production",
+          appFeeCents: result.appFeeCents,
         };
       } catch (e) {
         await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
@@ -1338,6 +1343,7 @@ export async function payBillAmount(
         providerRef: result.providerRef,
         squareOrderId: null,
         test: result.test,
+        appFeeCents: null,
       };
     }
 
@@ -1354,6 +1360,7 @@ export async function payBillAmount(
         squareOrderId: paymentRow.squareOrderId,
         idempotencyKey,
         test: paymentRow.test,
+        appFeeCents: paymentRow.appFeeCents,
       },
     });
     if (paymentRow.squareOrderId) {
@@ -1573,6 +1580,10 @@ export async function payBillItems(
       providerRef: string | undefined;
       squareOrderId: string | null;
       test: boolean;
+      // Exact cents charged as Tillz's Connect app fee — see
+      // ChargeBillViaSquareResult's doc comment. Always null for a
+      // mock-provider payment: there's no app fee outside Connect/Square.
+      appFeeCents: number | null;
     };
 
     if (paymentContext.mode === "square") {
@@ -1626,6 +1637,7 @@ export async function payBillItems(
           providerRef: result.providerRef,
           squareOrderId: result.squareOrderId,
           test: paymentContext.squareEnv !== "production",
+          appFeeCents: result.appFeeCents,
         };
       } catch (e) {
         await releaseItemsReserve(bill.id, reservations, newPaid, expectedPaid, bill.status, bill.paidAt);
@@ -1662,6 +1674,7 @@ export async function payBillItems(
         providerRef: result.providerRef,
         squareOrderId: null,
         test: result.test,
+        appFeeCents: null,
       };
     }
 
@@ -1678,6 +1691,7 @@ export async function payBillItems(
         squareOrderId: paymentRow.squareOrderId,
         idempotencyKey,
         test: paymentRow.test,
+        appFeeCents: paymentRow.appFeeCents,
         itemAllocations: reservations.map((r) => ({
           billItemId: r.billItemId,
           count: r.newPaidQuantity - r.previousPaidQuantity,
