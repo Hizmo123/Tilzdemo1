@@ -2,11 +2,15 @@ import type { PlanTier } from "@prisma/client";
 import { entitlementsForTier, connectFeePercentLabel } from "@/lib/entitlements-core";
 
 // The one string every Connect pricing snippet across marketing, venue
-// setup and billing renders — "~1.5% per order" — so none of them can
-// independently drift from the actual charged rate the way "~2%" did
-// before. Derived from CONNECT_APP_FEE_BPS via connectFeePercentLabel(),
-// never typed out as its own literal.
-export const CONNECT_FEE_BLURB = `~${connectFeePercentLabel()} per order`;
+// setup and billing renders — "1.5% of the order subtotal, excluding
+// tips" — so none of them can independently drift from the actual charged
+// rate the way "~2%" did before. States the BASE explicitly (goods/
+// subtotal only — see computeAppFeeCents in lib/square/pay.ts, which is
+// what this copy actually describes) rather than the ambiguous "per
+// order", which a merchant could reasonably read as including their tip.
+// The percentage is derived from CONNECT_APP_FEE_BPS via
+// connectFeePercentLabel(); only the wording around it is a literal.
+export const CONNECT_FEE_BLURB = `${connectFeePercentLabel()} of the order subtotal, excluding tips`;
 
 // The subscription catalog (AUD, excluding GST). Prices are wired through the
 // mock billing flow so the whole signup -> choose plan -> pay journey works
@@ -208,7 +212,7 @@ export function getFullPlanSpec(tier: PlanTier): PlanSpecLine[] {
   if (tier === "CONNECT") {
     lines.push({
       label: "Per-order fee",
-      value: `${ent.appFeeBps / 100}% per order — your only cost, no monthly subscription`,
+      value: `${CONNECT_FEE_BLURB} — your only cost, no monthly subscription`,
     });
 
     const withPlus = entitlementsForTier("CONNECT", { lapsedAt: null }, { connectPlusEnabled: true });

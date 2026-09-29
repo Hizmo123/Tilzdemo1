@@ -30,17 +30,21 @@ describe("Connect commission has one source of truth", () => {
     expect(connectFeePercentLabel()).toBe("1.5%");
   });
 
+  it("CONNECT_FEE_BLURB states the base explicitly — subtotal, excluding tips — not the ambiguous 'per order'", () => {
+    expect(CONNECT_FEE_BLURB).toBe("1.5% of the order subtotal, excluding tips");
+  });
+
   it("the pricing catalog's Connect cadence copy is derived from the same blurb, and states 1.5% not 2%", () => {
     const connectPlan = PLANS.find((p) => p.tier === "CONNECT")!;
     expect(connectPlan.cadence).toBe(`free + ${CONNECT_FEE_BLURB}`);
-    expect(connectPlan.cadence).toContain("1.5%");
+    expect(connectPlan.cadence).toContain("1.5% of the order subtotal, excluding tips");
     expect(connectPlan.cadence).not.toContain("2%");
   });
 
-  it("the billing page's full-spec 'Per-order fee' line also renders 1.5%, from the same entitlement", () => {
+  it("the billing page's full-spec 'Per-order fee' line also states the base explicitly, from the same blurb", () => {
     const lines = getFullPlanSpec("CONNECT");
     const feeLine = lines.find((l) => l.label === "Per-order fee");
-    expect(feeLine?.value).toContain("1.5%");
+    expect(feeLine?.value).toContain("1.5% of the order subtotal, excluding tips");
     expect(feeLine?.value).not.toContain("2%");
   });
 });
