@@ -19,6 +19,18 @@ const GRACE_PERIOD_DAYS = 7;
 // rate and the pricing copy drifted apart before (code at 200 bps/2% while
 // the owner had already changed the advertised rate to 1.5%).
 // 150 bps = 1.5%.
+//
+// Changing this number is PROSPECTIVE ONLY, automatically — not because of
+// any migration step, but because nothing in this codebase stores a fee
+// rate anywhere: no Organization/Restaurant/Payment column persists it, and
+// entitlementsForTier(org.plan) is recomputed from THIS constant fresh on
+// every single request (see resolveVisit in lib/bills.ts, which feeds
+// square/pay.ts's chargeBillViaSquare). So editing this value changes the
+// rate for every Connect org's very next charge, with nothing to backfill
+// — and, symmetrically, there is no local record of what rate a PAST
+// charge actually used; Square's own ledger (the app_fee_money on that
+// payment) is the only source of truth for historical charges, since this
+// app never mirrors it onto the local Payment row.
 export const CONNECT_APP_FEE_BPS = 150;
 
 // "1.5%" — display copy derives the percentage from CONNECT_APP_FEE_BPS
