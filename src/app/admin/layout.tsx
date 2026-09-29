@@ -42,6 +42,12 @@ export default async function AdminLayout({
             Accounts
           </Link>
           <Link
+            href="/admin/deletions"
+            className="flex items-center rounded-[var(--radius-sm)] px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
+          >
+            Deletions
+          </Link>
+          <Link
             href="/admin/fulfilment"
             className="flex items-center rounded-[var(--radius-sm)] px-3 py-2 text-sm text-ink hover:bg-paper transition-colors"
           >

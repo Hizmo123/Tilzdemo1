@@ -24,14 +24,13 @@ export default async function PrivacySettingsPage() {
           Privacy & data
         </h1>
         <p className="text-muted mt-1">
-          Export your data, or request account deletion.
+          Export your data, or delete your account.
         </p>
       </div>
 
       <PrivacyDataSection
         organizationName={organization.name}
         isOwner={authz.role === "OWNER"}
-        deletionRequestedAt={organization.deletionRequestedAt?.toISOString() ?? null}
       />
     </div>
   );

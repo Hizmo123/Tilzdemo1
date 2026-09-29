@@ -1,52 +1,65 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { requestDeletionAction, cancelDeletionAction } from "./privacy-actions";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
+import { ACCOUNT_RETENTION_YEARS } from "@/lib/account-retention";
+import { deleteAccountAction } from "./privacy-actions";
+
+// idle -> warn (what will happen) -> confirm (type the name) -> final (last
+// yes/no) -> the action runs and the browser is sent to /account-closed. Any
+// Cancel/No before the final "Yes" returns to idle with nothing changed.
+type Step = "idle" | "warn" | "confirm" | "final";
 
 export function PrivacyDataSection({
   organizationName,
   isOwner,
-  deletionRequestedAt,
 }: {
   organizationName: string;
   isOwner: boolean;
-  deletionRequestedAt: string | null;
 }) {
-  const router = useRouter();
+  const [step, setStep] = useState<Step>("idle");
   const [confirmName, setConfirmName] = useState("");
-  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
   const [pending, start] = useTransition();
 
-  function submitRequest() {
+  // Each step replaces the last in place, so move focus to the new step's
+  // heading — otherwise a keyboard or screen-reader user is left on a button
+  // that no longer exists. (Step 2's input takes focus itself via autoFocus.)
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (step === "warn" || step === "final") headingRef.current?.focus();
+  }, [step]);
+
+  const nameMatches = confirmName.trim() === organizationName;
+  const busy = pending || done;
+
+  function reset() {
+    setStep("idle");
+    setConfirmName("");
     setError(null);
-    start(async () => {
-      const res = await requestDeletionAction(confirmName);
-      if (res.error) setError(res.error);
-      else {
-        setConfirming(false);
-        setConfirmName("");
-        router.refresh();
-      }
-    });
   }
 
-  function cancel() {
+  function deleteNow() {
     setError(null);
     start(async () => {
-      const res = await cancelDeletionAction();
-      if (res.error) setError(res.error);
-      else router.refresh();
+      const res = await deleteAccountAction(confirmName);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      // The account is closed and this session is signed out. A hard
+      // navigation (not router.push) so no cached, now-unusable dashboard
+      // state survives, and it lands on a plain page rather than the dashboard.
+      setDone(true);
+      window.location.assign("/account-closed");
     });
   }
 
   return (
     <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-5">
       <div>
-        <h2 className="font-display text-lg font-semibold tracking-tight">
-          Your data
-        </h2>
+        <h2 className="font-display text-lg font-semibold tracking-tight">Your data</h2>
         <p className="text-sm text-muted mt-1">
           Export what Tillz holds about your venue, or close your account.
         </p>
@@ -72,69 +85,143 @@ export function PrivacyDataSection({
 
       <div className="border-t border-line pt-5">
         <p className="text-sm font-medium mb-1 text-danger">Delete your account</p>
-        {deletionRequestedAt ? (
-          <div className="rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-3 text-sm space-y-2">
-            <p>
-              Deletion requested on{" "}
-              {new Date(deletionRequestedAt).toLocaleDateString("en-AU")}. Your
-              account keeps working normally — support will be in touch to
-              finish closing it (paid bills are tax invoices we're required to
-              keep for 5 years, so those survive regardless).
+
+        {!isOwner ? (
+          <p className="text-sm text-muted">Only the owner can do this.</p>
+        ) : step === "idle" ? (
+          <>
+            <p className="text-sm text-muted mb-3">
+              Permanently close {organizationName}. This takes effect immediately.
             </p>
-            {isOwner && (
-              <button
-                disabled={pending}
-                onClick={cancel}
-                className="rounded-[var(--radius-sm)] border border-danger/30 px-3 py-1.5 text-xs font-medium hover:bg-white/40 disabled:opacity-50"
-              >
-                Cancel request
-              </button>
+            <Button type="button" variant="secondary" size="sm" onClick={() => setStep("warn")} className="text-danger">
+              Delete account…
+            </Button>
+          </>
+        ) : (
+          <div
+            role="group"
+            aria-label="Delete account"
+            className="rounded-[var(--radius-card)] border border-danger/30 bg-danger-soft/50 p-5 shadow-raised space-y-4"
+          >
+            {step === "warn" && (
+              <>
+                <div>
+                  <h3
+                    ref={headingRef}
+                    tabIndex={-1}
+                    className="font-display text-lg font-semibold tracking-tight text-danger outline-none"
+                  >
+                    Before you delete {organizationName}
+                  </h3>
+                  <p className="text-sm text-ink-soft mt-1">
+                    Deleting closes the account straight away. Please read what that means:
+                  </p>
+                </div>
+                <ul className="space-y-2 text-sm text-ink-soft list-disc pl-5 marker:text-danger">
+                  <li>
+                    <strong className="text-ink">Everyone is signed out immediately</strong> — you, your team, and
+                    every staff PIN login. Nobody can sign in again.
+                  </li>
+                  <li>
+                    <strong className="text-ink">Your tables and QR codes stop taking orders</strong> the moment you
+                    confirm.
+                  </li>
+                  <li>
+                    <strong className="text-ink">Your subscription is cancelled right away</strong> and won&apos;t
+                    renew.
+                  </li>
+                  <li>
+                    <strong className="text-ink">Your menu, images, uploaded files, staff accounts and branding are
+                    permanently deleted.</strong>
+                  </li>
+                  <li>
+                    <strong className="text-ink">This cannot be undone.</strong>
+                  </li>
+                  <li>
+                    Records of payments and refunds — and the bills and orders they belong to — are kept privately
+                    for {ACCOUNT_RETENTION_YEARS} years because Australian law requires it. You won&apos;t be able to
+                    access them, and after that they&apos;re permanently deleted.
+                  </li>
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="danger" onClick={() => setStep("confirm")}>
+                    I understand, continue
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={reset}>
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {step === "confirm" && (
+              <>
+                <div>
+                  <h3 className="font-display text-lg font-semibold tracking-tight text-danger">
+                    Confirm account deletion
+                  </h3>
+                  <p className="text-sm text-ink-soft mt-1">
+                    This will permanently close <strong className="text-ink">{organizationName}</strong>&apos;s
+                    account. Type <strong className="text-ink">{organizationName}</strong> to confirm.
+                  </p>
+                </div>
+                <div>
+                  <label htmlFor="delete-confirm-name" className="sr-only">
+                    Type {organizationName} to confirm
+                  </label>
+                  <input
+                    id="delete-confirm-name"
+                    autoFocus
+                    autoComplete="off"
+                    value={confirmName}
+                    onChange={(e) => setConfirmName(e.target.value)}
+                    placeholder={organizationName}
+                    className="w-full h-11 rounded-[var(--radius-md)] border border-danger/40 bg-surface px-3.5 text-ink shadow-rest placeholder:text-muted/60 focus:outline-none focus:border-danger focus:ring-[3px] focus:ring-danger/20"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="danger" disabled={!nameMatches} onClick={() => setStep("final")}>
+                    Delete account
+                  </Button>
+                  <Button type="button" variant="secondary" onClick={reset}>
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+
+            {step === "final" && (
+              <>
+                <div>
+                  <h3
+                    ref={headingRef}
+                    tabIndex={-1}
+                    className="font-display text-lg font-semibold tracking-tight text-danger outline-none"
+                  >
+                    Are you absolutely sure?
+                  </h3>
+                  <p className="text-sm text-ink-soft mt-1">
+                    This is your last chance. {organizationName} will be closed right now, and this can&apos;t be
+                    undone.
+                  </p>
+                </div>
+                {error && (
+                  <p role="alert" className="rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm">
+                    {error}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="danger" loading={busy} onClick={deleteNow}>
+                    {busy ? "Deleting…" : "Yes, delete permanently"}
+                  </Button>
+                  <Button type="button" variant="secondary" disabled={busy} onClick={() => setStep("confirm")}>
+                    No, go back
+                  </Button>
+                </div>
+              </>
             )}
           </div>
-        ) : !isOwner ? (
-          <p className="text-sm text-muted">Only the owner can request this.</p>
-        ) : !confirming ? (
-          <button
-            onClick={() => setConfirming(true)}
-            className="text-sm text-danger underline underline-offset-2"
-          >
-            Request account deletion…
-          </button>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-sm text-muted">
-              Type <strong className="text-ink">{organizationName}</strong> to
-              confirm. This records a request — it doesn't delete anything
-              immediately.
-            </p>
-            <input
-              value={confirmName}
-              onChange={(e) => setConfirmName(e.target.value)}
-              className="w-full rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2 text-sm focus:border-danger focus:outline-none"
-            />
-            <div className="flex gap-2">
-              <button
-                disabled={pending}
-                onClick={submitRequest}
-                className="rounded-[var(--radius-sm)] bg-danger text-white px-3.5 py-2 text-sm font-medium disabled:opacity-50"
-              >
-                {pending ? "Submitting…" : "Confirm deletion request"}
-              </button>
-              <button
-                disabled={pending}
-                onClick={() => {
-                  setConfirming(false);
-                  setConfirmName("");
-                  setError(null);
-                }}
-                className="rounded-[var(--radius-sm)] border border-line px-3.5 py-2 text-sm disabled:opacity-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
         )}
-        {error && <p className="text-xs text-danger mt-2">{error}</p>}
       </div>
     </section>
   );

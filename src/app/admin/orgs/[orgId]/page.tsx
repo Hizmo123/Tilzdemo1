@@ -5,7 +5,6 @@ import { getOrgDetail } from "@/lib/admin/queries";
 import { planByTier, PLANS } from "@/lib/plans";
 import { SuspendButton } from "@/components/admin/suspend-button";
 import { ReactivateButton } from "@/components/admin/reactivate-button";
-import { ClearRequestButton } from "@/components/admin/clear-request-button";
 import { ChangePlanForm } from "@/components/admin/change-plan-form";
 import { LapsedToggle } from "@/components/admin/lapsed-toggle";
 
@@ -19,6 +18,7 @@ export default async function AdminOrgDetailPage({
   const found = await getOrgDetail(orgId);
   if (!found) notFound();
   const { org } = found;
+  const isDeleted = org.planStatus === "deleted";
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -55,44 +55,51 @@ export default async function AdminOrgDetailPage({
           )}
           {org.deactivatedAt && (
             <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-[var(--radius-xs)] bg-danger-soft text-danger">
-              Suspended by {org.deactivatedByEmail ?? "unknown"} on{" "}
+              {isDeleted ? "Deleted" : "Suspended"} by {org.deactivatedByEmail ?? "unknown"} on{" "}
               {new Date(org.deactivatedAt).toLocaleDateString("en-AU")}
             </span>
           )}
         </div>
 
-        {org.deletionRequestedAt && (
+        {isDeleted && (
           <div className="rounded-[var(--radius-sm)] border border-danger/30 bg-danger-soft/40 p-3 flex items-center justify-between gap-4 flex-wrap">
             <p className="text-sm text-ink">
-              Deletion requested by {org.deletionRequestedByEmail ?? "unknown"} on{" "}
-              {new Date(org.deletionRequestedAt).toLocaleDateString("en-AU")}.
+              Deleted by its owner ({org.deletedByEmail ?? "unknown"}) on{" "}
+              {org.deletionExecutedAt ? new Date(org.deletionExecutedAt).toLocaleDateString("en-AU") : "—"}. Financial
+              records are retained until{" "}
+              {org.deletionPurgeEligibleAt ? new Date(org.deletionPurgeEligibleAt).toLocaleDateString("en-AU") : "—"}.
+              This account can&apos;t be suspended, reactivated or changed.
             </p>
-            <ClearRequestButton orgId={org.id} orgName={org.name} />
+            <Link href="/admin/deletions" className="text-sm text-pine hover:underline">
+              Deletions →
+            </Link>
           </div>
         )}
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs text-muted mb-1.5">Suspension</p>
-            {org.deactivatedAt ? (
-              <ReactivateButton orgId={org.id} orgName={org.name} />
-            ) : (
-              <SuspendButton orgId={org.id} orgName={org.name} />
-            )}
+        {!isDeleted && (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-muted mb-1.5">Suspension</p>
+              {org.deactivatedAt ? (
+                <ReactivateButton orgId={org.id} orgName={org.name} />
+              ) : (
+                <SuspendButton orgId={org.id} orgName={org.name} />
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted mb-1.5">Lapsed status</p>
+              <LapsedToggle orgId={org.id} lapsed={!!org.subscriptionLapsedAt} />
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-xs text-muted mb-1.5">Plan</p>
+              <ChangePlanForm
+                orgId={org.id}
+                currentTier={org.plan}
+                tiers={PLANS.map((p) => ({ tier: p.tier, name: p.name }))}
+              />
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-muted mb-1.5">Lapsed status</p>
-            <LapsedToggle orgId={org.id} lapsed={!!org.subscriptionLapsedAt} />
-          </div>
-          <div className="sm:col-span-2">
-            <p className="text-xs text-muted mb-1.5">Plan</p>
-            <ChangePlanForm
-              orgId={org.id}
-              currentTier={org.plan}
-              tiers={PLANS.map((p) => ({ tier: p.tier, name: p.name }))}
-            />
-          </div>
-        </div>
+        )}
       </section>
 
       <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6">

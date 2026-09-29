@@ -95,6 +95,9 @@ model Organization {
   id          String       @id @default(cuid())
   name        String
   plan        PlanTier     @default(LITE)
+  // "none" | "active" | "suspended" (platform admin) | "deleted" (owner
+  // closed the account — see deletionExecutedAt below). A plain string, so
+  // adding a value needs no migration.
   planStatus  String       @default("none")
   cardLast4   String?
   subscribedAt DateTime?
@@ -124,21 +127,29 @@ model Organization {
   // first) never grants a second trial.
   trialEndsAt   DateTime?
   hasUsedTrial  Boolean   @default(false)
-  // A self-service "please delete my account" request, not an instant purge.
-  // Paid bills are tax invoices — Australian tax law requires keeping those
-  // for 5 years, so financial records survive this request regardless; the
-  // request records the owner's intent and lets support finish the deletion
-  // once that's accounted for, rather than either doing nothing or silently
-  // destroying records the venue may still legally need. See lib/account.ts.
-  deletionRequestedAt      DateTime?
-  deletionRequestedByEmail String?
-  // Self-service "pause everything" — distinct from a deletion request.
-  // While set: the owner/team's dashboard login is blocked (see the check in
-  // dashboard/layout.tsx) and every staff PIN login for every restaurant in
-  // this org is blocked (see staffLogin in lib/staff-auth.ts). Also records
-  // it as the moment the subscription was cancelled — see planStatus below.
-  // Cleared only by following the emailed reactivation link, never from
-  // inside the (now-inaccessible) dashboard.
+  // Self-service account deletion (lib/account.ts#executeAccountDeletion):
+  // the owner confirmed and the account was closed on the spot. Login and
+  // ordering are blocked immediately through the EXISTING deactivatedAt
+  // mechanism (deactivatedAt is set to this same instant — dashboard/
+  // layout.tsx and lib/staff-auth.ts gate on it, unchanged), planStatus
+  // becomes "deleted", and non-financial content is deleted at once.
+  // Payment/Refund/Bill/Order/BillItem/StandOrder rows are RETAINED but
+  // unreachable: paid bills are tax invoices with a 5-year statutory
+  // retention period in Australia. deletionPurgeEligibleAt is the earliest
+  // moment a platform admin may hard-delete what remains (/admin/deletions) —
+  // deliberately an admin-supervised action, not an unattended job.
+  deletionExecutedAt       DateTime?
+  deletionPurgeEligibleAt  DateTime?
+  deletedByEmail           String?
+  // THE login block. While set: the owner/team's dashboard login is blocked
+  // (see the check in dashboard/layout.tsx) and every staff PIN login for
+  // every restaurant in this org is blocked (see staffLogin in
+  // lib/staff-auth.ts). Set by exactly two things: a platform admin's
+  // suspension (planStatus "suspended", lib/admin/account-actions.ts — lifted
+  // by adminReactivateOrg), or the owner's own deletion (planStatus
+  // "deleted", the same instant as deletionExecutedAt — never lifted; a
+  // deleted org can't be reactivated). Nothing else sets it, and there is no
+  // self-service deactivate/reactivate any more.
   deactivatedAt               DateTime?
   deactivatedByEmail           String?
   reactivationToken            String?   @unique

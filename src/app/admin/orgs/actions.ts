@@ -8,7 +8,6 @@ import {
   adminReactivateOrg,
   adminChangePlan,
   adminSetLapsed,
-  adminClearDeletionRequest,
   type AccountActionResult,
 } from "@/lib/admin/account-actions";
 
@@ -60,16 +59,6 @@ export async function setLapsedAction(
   const { userId } = await requirePlatformAdmin();
   const email = await adminEmail();
   const result = await adminSetLapsed(orgId, lapsed, userId, email);
-  revalidateAll(orgId);
-  return result;
-}
-
-export async function clearDeletionRequestAction(
-  orgId: string,
-): Promise<AccountActionResult> {
-  const { userId } = await requirePlatformAdmin();
-  const email = await adminEmail();
-  const result = await adminClearDeletionRequest(orgId, userId, email);
   revalidateAll(orgId);
   return result;
 }
