@@ -8,7 +8,7 @@ import { dollarsToCents } from "@/lib/money";
 import { audit } from "@/lib/audit";
 import { ALLERGEN_SET } from "@/lib/allergens";
 import { BADGE_VALUES } from "@/lib/menu-badges";
-import { canCreateStation } from "@/lib/entitlements";
+import { canSetStations } from "@/lib/entitlements";
 import { deleteAllMenuData } from "@/lib/menu-import";
 
 const BADGE_SET = new Set<string>(BADGE_VALUES);
@@ -513,19 +513,14 @@ export async function updateKitchenStations(
   );
   if (clean.length === 0) clean.push("Kitchen");
 
-  // Plan-gated, not a hardcoded cap — but only enforced when this save
-  // actually GROWS the station count (a new station being added). Renaming
-  // or removing stations, or simply re-saving the same set, never gets
-  // blocked here — same "never take away what already works" rule as
-  // canCreateTable (see lib/entitlements.ts).
-  const restaurant = await prisma.restaurant.findUnique({
-    where: { id: restaurantId },
-    select: { kitchenStations: true },
-  });
-  if (clean.length > (restaurant?.kitchenStations.length ?? 0)) {
-    const check = await canCreateStation(authz.membership!.organizationId);
-    if (!check.allowed) return { error: check.reason };
-  }
+  // Plan-gated against the REQUESTED total, unconditionally — not only when
+  // the array grew relative to the current count. A same-length (or
+  // shorter) array can still be over an already-exceeded limit (e.g. a
+  // downgrade left the org over its new cap), and checking only on growth
+  // let a single save jump straight from 1 station to 26 in one call. See
+  // canSetStations's own comment for the full story.
+  const check = await canSetStations(authz.membership!.organizationId, restaurantId, clean.length);
+  if (!check.allowed) return { error: check.reason };
 
   await prisma.restaurant.update({
     where: { id: restaurantId },

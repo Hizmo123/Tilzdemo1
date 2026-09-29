@@ -476,7 +476,7 @@ function StationsEditor({ stations }: { stations: string[] }) {
   const [error, setError] = useState<string | null>(null);
 
   // No client-side cap — the server is the authority on how many stations
-  // this plan allows (see updateKitchenStations -> canCreateStation in
+  // this plan allows (see updateKitchenStations -> canSetStations in
   // lib/entitlements.ts). Optimistically shows the new list, then rolls
   // back and surfaces the reason if the server refuses it.
   function save(next: string[], previous: string[]) {

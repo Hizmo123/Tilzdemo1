@@ -123,7 +123,7 @@ function stationFor(categoryName: string): string {
 // item station pickers offer). "Kitchen + bar + coffee" used to route the
 // SAMPLE categories to those names without ever adding them to this list,
 // so the pickers never showed them. Clamped to the tier's KDS station limit
-// (Basic = 2) the same way canCreateStation would refuse a third later.
+// (Basic = 2) the same way canSetStations would refuse a third later.
 function stationsFor(a: z.infer<typeof schema>, kdsStationLimit: number | null): string[] {
   const wanted = a.menuStations ? ["Kitchen", "Bar", "Coffee"] : ["Kitchen"];
   const limit = kdsStationLimit === null ? wanted.length : Math.max(1, kdsStationLimit);

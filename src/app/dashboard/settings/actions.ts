@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { getEntitlements, entitlementsLabel } from "@/lib/entitlements";
 import { findContrastIssue } from "@/lib/theme";
 import {
   createServiceClient,
@@ -194,6 +195,20 @@ export async function updateSettings(input: {
 
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  // Defence in depth: the customer-facing gate is addItemsToBill checking
+  // planAllowsOrdering (lib/bills.ts) regardless of this flag, but a LITE
+  // org should never even be ABLE to save customerOrdering: true — the
+  // setting would just sit there silently doing nothing, which reads as a
+  // bug to an owner rather than the plan limit it actually is.
+  if (parsed.data.customerOrdering) {
+    const ent = await getEntitlements(authz.membership!.organizationId);
+    if (!ent.ordering) {
+      return {
+        error: `The ${entitlementsLabel(ent.tier)} plan doesn't include live ordering. Upgrade to turn this on.`,
+      };
+    }
+  }
 
   // Legibility guardrail (A5): reject the save outright rather than silently
   // storing an appearance that would be hard to read — see

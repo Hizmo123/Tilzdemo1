@@ -266,6 +266,15 @@ export async function setTableActive(
   const table = await getOwnedTable(authz.membership!.organizationId, tableId);
   if (!table) return { error: "Table not found." };
 
+  // Reactivating is functionally "add a table back" — unchecked, deactivate
+  // N / create N new / reactivate the N is a repeatable way past the plan's
+  // table limit (canCreateTable only counts active:true tables). Only
+  // reactivating needs the check; deactivating never grows the active count.
+  if (active) {
+    const check = await canCreateTable(authz.membership!.organizationId, "reactivate");
+    if (!check.allowed) return { error: check.reason };
+  }
+
   await prisma.table.update({ where: { id: table.id }, data: { active } });
 
   await audit({
