@@ -1,5 +1,12 @@
 import type { PlanTier } from "@prisma/client";
-import { entitlementsForTier } from "@/lib/entitlements-core";
+import { entitlementsForTier, connectFeePercentLabel } from "@/lib/entitlements-core";
+
+// The one string every Connect pricing snippet across marketing, venue
+// setup and billing renders — "~1.5% per order" — so none of them can
+// independently drift from the actual charged rate the way "~2%" did
+// before. Derived from CONNECT_APP_FEE_BPS via connectFeePercentLabel(),
+// never typed out as its own literal.
+export const CONNECT_FEE_BLURB = `~${connectFeePercentLabel()} per order`;
 
 // The subscription catalog (AUD, excluding GST). Prices are wired through the
 // mock billing flow so the whole signup -> choose plan -> pay journey works
@@ -76,7 +83,7 @@ export const PLANS: PlanDef[] = [
     tier: "CONNECT",
     name: "Connect",
     priceCents: 0,
-    cadence: "free + ~2% per order",
+    cadence: `free + ${CONNECT_FEE_BLURB}`,
     blurb: "Connect your own Square — free monthly, a small fee per order.",
     features: [
       "Orders + payments settle to your own Square account",
