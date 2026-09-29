@@ -48,13 +48,13 @@ export default async function StandsPage() {
   );
 
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="space-y-8">
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">
           Order Tillz stands
         </h1>
         <p className="text-muted mt-1">
-          A physical table-top card, mailed to you.
+          Physical QR stands for your tables, shipped to you.
         </p>
       </div>
 
@@ -64,6 +64,7 @@ export default async function StandsPage() {
         </div>
       ) : (
         <OrderStandsForm
+          restaurantName={ctx.restaurant.name}
           products={products.map((p) => ({
             id: p.id,
             title: p.title,
@@ -71,6 +72,7 @@ export default async function StandsPage() {
             imageUrl: p.imageUrl,
             type: p.type,
             priceCents: p.priceCents,
+            hasCardInsert: p.hasCardInsert,
             allowsCustomDesign: p.allowsCustomDesign,
             requiresCustomDesign: p.requiresCustomDesign,
             designGuidelines: p.designGuidelines,

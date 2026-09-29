@@ -613,6 +613,22 @@ enum StandType {
   NFC
 }
 
+// Which palette lib/stand-card-template.ts renders the print card in —
+// chosen on the order form, carried onto the order, then read back by
+// qr-pack/route.ts when compositing the print-ready PDF after payment.
+enum StandCardTemplate {
+  DARK
+  LIGHT
+}
+
+// Whether the card's headline reads the venue's own name or generic "TILLZ"
+// branding. Default TILLZ_DEFAULT, not VENUE_NAME — see the headline choice
+// on the order form, which defaults to "Keep Tillz branding".
+enum StandCardHeadline {
+  TILLZ_DEFAULT
+  VENUE_NAME
+}
+
 // Admin-managed catalog listing a venue picks from on the "Order Tillz
 // stands" screen (dashboard/stands). Never hard-deleted — retiring one only
 // sets active=false, since a past StandOrder can still reference it (see
@@ -626,6 +642,13 @@ model StandProduct {
   priceCents  Int
   active      Boolean    @default(true)
   sortOrder   Int        @default(0)
+  // Whether the product ships with a printed A6 card insert at all. True
+  // (acrylic stand): the venue picks a card template/headline at order time
+  // and fulfilment composites a card PDF per stand. False (metal A-frame):
+  // the QR is on the product itself, so there's no card step and fulfilment
+  // ships raw QR PNGs. Everything below about custom design only applies
+  // when this is true — actions.ts forces allows/requires off otherwise.
+  hasCardInsert Boolean @default(false)
   // Custom design upload, admin-controlled per product — most products never
   // set either of these (a plain QR stand has nothing to design). allows*
   // reveals the upload step at all; requires* additionally blocks checkout
@@ -682,6 +705,16 @@ model StandOrder {
   designNotes          String?
   designReviewedAt     DateTime?
   designReviewedByEmail String?
+  // Print-card look, chosen on the order form and read back by
+  // qr-pack/route.ts to composite the actual stand-card PDF once stands are
+  // minted (see lib/stand-card-template.ts).
+  cardTemplate     StandCardTemplate @default(DARK)
+  cardHeadlineMode StandCardHeadline @default(TILLZ_DEFAULT)
+  // StandProduct.hasCardInsert as it was at order time — read by
+  // qr-pack/route.ts to decide between the composited card PDF and the
+  // raw-QR zip, never the live product (which can be edited or retired to
+  // null after the fact, like productTitleSnapshot/productType).
+  hasCardInsertSnapshot Boolean @default(false)
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   items          StandOrderItem[]

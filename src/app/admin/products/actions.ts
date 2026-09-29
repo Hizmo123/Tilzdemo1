@@ -17,6 +17,7 @@ const productSchema = z.object({
   type: z.enum(["QR", "NFC"]),
   priceDollars: z.number().min(0.01, "Enter a price greater than zero."),
   sortOrder: z.number().int(),
+  hasCardInsert: z.boolean(),
   allowsCustomDesign: z.boolean(),
   // Never true without allowsCustomDesign — enforced below (refine), not just
   // by the form's disabled/hidden state, since a direct action call can't be
@@ -31,14 +32,19 @@ const productSchema = z.object({
 });
 
 function parseInput(formData: FormData) {
+  // A custom design is artwork FOR the card insert — with no insert there's
+  // nothing to print it on, so both design flags are forced off here rather
+  // than trusting the form to have hidden them.
+  const hasCardInsert = formData.get("hasCardInsert") === "on";
   return productSchema.safeParse({
     title: formData.get("title"),
     description: formData.get("description"),
     type: formData.get("type"),
     priceDollars: Number(formData.get("priceDollars")),
     sortOrder: Number(formData.get("sortOrder") ?? 0),
-    allowsCustomDesign: formData.get("allowsCustomDesign") === "on",
-    requiresCustomDesign: formData.get("requiresCustomDesign") === "on",
+    hasCardInsert,
+    allowsCustomDesign: hasCardInsert && formData.get("allowsCustomDesign") === "on",
+    requiresCustomDesign: hasCardInsert && formData.get("requiresCustomDesign") === "on",
     designGuidelines: formData.get("designGuidelines") ?? "",
     maxDesignSizeMb: Number(formData.get("maxDesignSizeMb") || 10),
     acceptedDesignMimeTypes: formData.getAll("acceptedDesignMimeTypes"),
@@ -61,6 +67,7 @@ export async function createStandProduct(
       type: parsed.data.type,
       priceCents: Math.round(parsed.data.priceDollars * 100),
       sortOrder: parsed.data.sortOrder,
+      hasCardInsert: parsed.data.hasCardInsert,
       allowsCustomDesign: parsed.data.allowsCustomDesign,
       requiresCustomDesign: parsed.data.requiresCustomDesign,
       designGuidelines: parsed.data.designGuidelines || null,
@@ -94,6 +101,7 @@ export async function updateStandProduct(
       type: parsed.data.type,
       priceCents: Math.round(parsed.data.priceDollars * 100),
       sortOrder: parsed.data.sortOrder,
+      hasCardInsert: parsed.data.hasCardInsert,
       allowsCustomDesign: parsed.data.allowsCustomDesign,
       requiresCustomDesign: parsed.data.requiresCustomDesign,
       designGuidelines: parsed.data.designGuidelines || null,

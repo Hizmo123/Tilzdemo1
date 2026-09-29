@@ -21,6 +21,8 @@ const schema = z.object({
   // against this regardless, so an empty/tampered value can't bypass that.
   designImageUrl: z.string().url().optional().or(z.literal("")),
   designFileName: z.string().max(200).optional().or(z.literal("")),
+  cardTemplate: z.enum(["DARK", "LIGHT"]),
+  cardHeadlineMode: z.enum(["TILLZ_DEFAULT", "VENUE_NAME"]),
 });
 
 export async function orderStands(
@@ -44,6 +46,8 @@ export async function orderStands(
     shippingPostcode: formData.get("shippingPostcode"),
     designImageUrl: formData.get("designImageUrl") ?? "",
     designFileName: formData.get("designFileName") ?? "",
+    cardTemplate: formData.get("cardTemplate") ?? "DARK",
+    cardHeadlineMode: formData.get("cardHeadlineMode") ?? "TILLZ_DEFAULT",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
