@@ -4,6 +4,7 @@ import { getEntitlements } from "@/lib/entitlements";
 import { themeVars } from "@/lib/theme";
 import { patternBackgroundStyle } from "@/lib/menu-style";
 import { MenuDisplay } from "@/app/v/[token]/menu-display";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -137,7 +138,7 @@ export default async function PublicMenuPage({
             <p className="mt-10 text-center text-[11px] text-muted">
               Powered by{" "}
               <a href="/" target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-ink">
-                Tillz
+                {BRAND.name}
               </a>
             </p>
           )}

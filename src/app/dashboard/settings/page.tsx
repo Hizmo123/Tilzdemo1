@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
 import { roleCan, type Permission } from "@/lib/rbac";
+import { BRAND } from "@/lib/brand";
 
 const CARDS: {
   href: string;
@@ -51,7 +52,7 @@ const CARDS: {
   {
     href: "/dashboard/billing",
     label: "Billing",
-    description: "Your Tillz plan and payment method.",
+    description: `Your ${BRAND.name} plan and payment method.`,
     perm: "settings:manage",
   },
   {

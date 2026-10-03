@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 import { AuthPanelArt } from "./panel-art";
 
 // Split layout: a brand panel on the left (desktop), the form on the right.
@@ -12,7 +13,7 @@ export default function AuthLayout({
       {/* Brand panel */}
       <div className="hidden lg:flex flex-col justify-between bg-ink text-surface p-12 relative overflow-hidden">
         <Link href="/" className="relative font-display text-2xl font-semibold tracking-tight">
-          Tillz
+          {BRAND.name}
         </Link>
 
         <div className="relative grid gap-12 xl:grid-cols-[1fr_auto] xl:items-end">
@@ -49,7 +50,7 @@ export default function AuthLayout({
           href="/"
           className="lg:hidden font-display text-2xl font-semibold tracking-tight mb-8"
         >
-          Tillz
+          {BRAND.name}
         </Link>
         <div className="w-full max-w-sm">{children}</div>
       </main>

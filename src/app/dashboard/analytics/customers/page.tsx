@@ -8,6 +8,7 @@ import { AnalyticsTabs } from "@/components/dashboard/analytics-tabs";
 import { DateRangePicker } from "@/components/dashboard/date-range-picker";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { HistoryWindowNote } from "@/components/dashboard/history-window-note";
+import { BRAND } from "@/lib/brand";
 
 export default async function CustomerAnalyticsPage({
   searchParams,
@@ -56,7 +57,7 @@ export default async function CustomerAnalyticsPage({
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">Customers</h1>
         <p className="text-muted mt-1 max-w-2xl">
-          Tillz doesn&apos;t have customer accounts — guests are anonymous QR
+          {BRAND.name} doesn&apos;t have customer accounts — guests are anonymous QR
           sessions. What&apos;s below is table visits, and real repeat-visit
           tracking for anyone who&apos;s left a phone number on a bill.
         </p>

@@ -5,6 +5,7 @@ import { getFulfilmentOrder } from "@/lib/admin/queries";
 import { standQrPng } from "@/lib/qr";
 import { renderStandCardPdf } from "@/lib/stand-card-template";
 import { createZip, type ZipEntry } from "@/lib/zip";
+import { BRAND } from "@/lib/brand";
 
 // A route handler, not a server action, for the same reason every other
 // file-download in this app (CSV export, table QR download) is one — a
@@ -71,7 +72,7 @@ export async function GET(
   }
 
   const palette = order.cardTemplate === "LIGHT" ? "light" : "dark";
-  const headlineText = order.cardHeadlineMode === "VENUE_NAME" ? order.restaurant.name : "TILLZ";
+  const headlineText = order.cardHeadlineMode === "VENUE_NAME" ? order.restaurant.name : BRAND.wordmark;
 
   const pack = await PDFDocument.create();
   for (const item of mintedItems) {

@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { listSquareLocations, setSquareLocation, disconnectSquare } from "./actions";
 import { buttonClasses } from "@/components/ui/button-classes";
+import { BRAND } from "@/lib/brand";
 
 type Connection = {
   merchantName: string | null;
@@ -39,7 +40,7 @@ export function SquareCard({
           <p className="text-sm text-muted mt-0.5">
             {connection
               ? "Connected — this venue's Square account."
-              : "Connect this venue's Square account to Tillz."}
+              : `Connect this venue's Square account to ${BRAND.name}.`}
           </p>
         </div>
         {connection && (

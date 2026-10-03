@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
-export const metadata = { title: "Privacy Policy — Tillz" };
+export const metadata = { title: `Privacy Policy — ${BRAND.name}` };
 
 // The "what we collect / where / how long" section below is factual — it
 // describes what the system actually does, not aspirational copy — so it
@@ -12,7 +13,7 @@ export default function PrivacyPage() {
     <main className="min-h-dvh bg-paper text-ink">
       <div className="max-w-2xl mx-auto px-5 sm:px-8 py-12">
         <Link href="/" className="text-sm text-muted hover:text-ink">
-          ← Tillz
+          ← {BRAND.name}
         </Link>
         <h1 className="font-display text-3xl font-semibold tracking-tight mt-4 mb-1">
           Privacy Policy
@@ -21,11 +22,11 @@ export default function PrivacyPage() {
 
         <div className="rounded-[var(--radius-card)] border border-warn/40 bg-warn-soft text-warn p-4 text-sm mb-8">
           <strong>TODO: review by a lawyer.</strong> The data inventory below
-          reflects what Tillz actually stores today. The surrounding legal
+          reflects what {BRAND.name} actually stores today. The surrounding legal
           framing (your rights, our obligations, how disputes are handled) is
           a structural placeholder and must not be treated as final until
           reviewed for the Australian Privacy Act and any other jurisdiction
-          Tillz operates in.
+          {" "}{BRAND.name} operates in.
         </div>
 
         <div className="space-y-6 text-sm text-ink-soft leading-relaxed">
@@ -55,7 +56,7 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong className="text-ink">Payments:</strong> card details
-                never reach Tillz's servers. TODO once live processors are
+                never reach {BRAND.name}'s servers. TODO once live processors are
                 connected: confirm this statement still holds for both Stripe
                 (Payment Element, tokenised client-side) and Square (Web
                 Payments SDK, tokenised client-side) — it's the intended
@@ -67,7 +68,7 @@ export default function PrivacyPage() {
           <Section title="How long we keep it">
             <p className="mb-2">
               A paid bill is a tax invoice. Australian tax law requires
-              businesses to keep records like this for five years, so Tillz
+              businesses to keep records like this for five years, so {BRAND.name}
               retains bill, payment and receipt data — including any name,
               phone or email attached to it — for at least that long on the
               Venue's behalf, even if the Venue later asks for their account
@@ -80,7 +81,7 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="Where it's stored">
-            Tillz's database and file storage run on Supabase, hosted in
+            {BRAND.name}'s database and file storage run on Supabase, hosted in
             Australia (ap-southeast-2). TODO: confirm and state this precisely
             once infrastructure is finalised, including any subprocessor
             (email, payment providers) that sees a slice of this data to do

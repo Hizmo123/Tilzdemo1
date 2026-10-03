@@ -13,6 +13,7 @@ import { audit } from "@/lib/audit";
 import { canCreateTable, getEntitlements } from "@/lib/entitlements";
 import { activateStandBySerial } from "@/lib/stands";
 import { isFullyStaffedMode } from "@/lib/onboarding-options";
+import { BRAND } from "@/lib/brand";
 
 export type TableActionState = { error?: string };
 
@@ -194,7 +195,7 @@ export async function resolveScannedStandCode(
     if (stand) return { serial: stand.serial };
   }
 
-  return { error: "That doesn't look like a Tillz stand code. Try again or type the serial." };
+  return { error: `That doesn't look like a ${BRAND.name} stand code. Try again or type the serial.` };
 }
 
 export async function regenerateQr(tableId: string): Promise<TableActionState> {

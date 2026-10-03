@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { resolveStand } from "@/lib/stands";
+import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function StandPage({
       <main className="min-h-dvh bg-paper flex items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
           <h1 className="font-display text-xl font-semibold tracking-tight">
-            This Tillz stand isn&apos;t set up yet
+            This {BRAND.name} stand isn&apos;t set up yet
           </h1>
           <p className="text-sm text-muted mt-2">
             Please ask a staff member for help.

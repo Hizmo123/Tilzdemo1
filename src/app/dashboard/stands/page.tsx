@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getActiveLocation } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { OrderStandsForm } from "./order-stands-form";
+import { BRAND } from "@/lib/brand";
 
 export default async function StandsPage() {
   const ctx = await getActiveLocation();
@@ -10,7 +11,7 @@ export default async function StandsPage() {
     return (
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight mb-1">
-          Order Tillz stands
+          Order {BRAND.name} stands
         </h1>
         <p className="text-muted">
           Create your restaurant first from the{" "}
@@ -51,7 +52,7 @@ export default async function StandsPage() {
     <div className="space-y-8">
       <div>
         <h1 className="font-display text-3xl font-semibold tracking-tight">
-          Order Tillz stands
+          Order {BRAND.name} stands
         </h1>
         <p className="text-muted mt-1">
           Physical QR stands for your tables, shipped to you.

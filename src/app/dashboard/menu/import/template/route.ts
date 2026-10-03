@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthz } from "@/lib/auth";
 import { menuImportTemplateCsv } from "@/lib/menu-import";
+import { BRAND } from "@/lib/brand";
 
 export async function GET() {
   const authz = await getAuthz();
@@ -11,7 +12,7 @@ export async function GET() {
   return new NextResponse(menuImportTemplateCsv(), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="tillz-menu-import-template.csv"`,
+      "Content-Disposition": `attachment; filename="${BRAND.slug}-menu-import-template.csv"`,
     },
   });
 }

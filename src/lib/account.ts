@@ -4,6 +4,7 @@ import { sendEmail } from "@/lib/email";
 import { revoke } from "@/lib/square/oauth";
 import { deleteOrganizationFiles } from "@/lib/account-storage";
 import { ACCOUNT_RETENTION_YEARS, purgeEligibleFrom } from "@/lib/account-retention";
+import { BRAND } from "@/lib/brand";
 
 // Everything about an organization worth handing back on a data-export
 // request: its venues, floor plan, menu and staff list. Deliberately excludes
@@ -98,7 +99,7 @@ export async function executeAccountDeletion(
     return { error: "This account has already been deleted." };
   }
   if (org.deactivatedAt) {
-    return { error: "This account is suspended, so it can't be deleted from here. Contact Tillz support." };
+    return { error: `This account is suspended, so it can't be deleted from here. Contact ${BRAND.name} support.` };
   }
 
   const now = new Date();
@@ -227,9 +228,9 @@ async function sendAccountClosedEmail(to: string, orgName: string, retainedUntil
   const years = ACCOUNT_RETENTION_YEARS;
   const result = await sendEmail({
     to,
-    subject: `${orgName} has been closed on Tillz`,
+    subject: `${orgName} has been closed on ${BRAND.name}`,
     text: [
-      `The Tillz account for ${orgName} has been permanently closed.`,
+      `The ${BRAND.name} account for ${orgName} has been permanently closed.`,
       "",
       "What happened straight away:",
       "- Nobody on your team can sign in any more, including staff PIN logins.",
@@ -239,10 +240,10 @@ async function sendAccountClosedEmail(to: string, orgName: string, retainedUntil
       "",
       `What we keep: records of payments and refunds, and the bills and orders they belong to, are kept privately for ${years} years (until ${until}) because Australian tax law requires it. You can't access them, and we don't use them for anything else. After that date they're permanently deleted.`,
       "",
-      "This can't be undone. If you didn't do this, contact Tillz support straight away.",
+      `This can't be undone. If you didn't do this, contact ${BRAND.name} support straight away.`,
     ].join("\n"),
     html: `
-      <p>The Tillz account for <strong>${escapeHtml(orgName)}</strong> has been permanently closed.</p>
+      <p>The ${BRAND.name} account for <strong>${escapeHtml(orgName)}</strong> has been permanently closed.</p>
       <p><strong>What happened straight away</strong></p>
       <ul>
         <li>Nobody on your team can sign in any more, including staff PIN logins.</li>
@@ -251,7 +252,7 @@ async function sendAccountClosedEmail(to: string, orgName: string, retainedUntil
         <li>Your menu, images, uploaded files, staff accounts and branding were deleted.</li>
       </ul>
       <p><strong>What we keep</strong><br/>Records of payments and refunds, and the bills and orders they belong to, are kept privately for ${years} years (until ${until}) because Australian tax law requires it. You can't access them, and we don't use them for anything else. After that date they're permanently deleted.</p>
-      <p style="color:#888;font-size:13px">This can't be undone. If you didn't do this, contact Tillz support straight away.</p>
+      <p style="color:#888;font-size:13px">This can't be undone. If you didn't do this, contact ${BRAND.name} support straight away.</p>
     `,
   });
   // The account is already closed by now — a failed email is logged, never

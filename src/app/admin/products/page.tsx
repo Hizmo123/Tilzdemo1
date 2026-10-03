@@ -5,6 +5,7 @@ import { createStandProduct, updateStandProduct } from "./actions";
 import { ProductForm } from "./product-form";
 import { ProductImageUploader } from "./image-uploader";
 import { ActiveToggle } from "./active-toggle";
+import { BRAND } from "@/lib/brand";
 
 export default async function ProductsPage() {
   await requirePlatformAdmin();
@@ -18,7 +19,7 @@ export default async function ProductsPage() {
           Stand products
         </h1>
         <p className="text-muted mt-1">
-          The catalog venues pick from on their "Order Tillz stands" screen.
+          The catalog venues pick from on their "Order {BRAND.name} stands" screen.
         </p>
       </div>
 

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "../(auth)/actions";
 import { NavSections, type NavSection } from "./nav-sections";
 import type { TrialStatus } from "@/lib/plan-subscription";
+import { BRAND } from "@/lib/brand";
 
 // Mobile top bar + slide-over drawer. The desktop sidebar is hidden below `md`,
 // so without this a phone has no way to reach Tables/Orders/Team/etc. The nav
@@ -66,7 +67,7 @@ export function MobileNav({
             <line x1="3" y1="12" x2="21" y2="12" />
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
-          <span className="font-display text-lg font-semibold">Tillz</span>
+          <span className="font-display text-lg font-semibold">{BRAND.name}</span>
         </button>
         <span className="text-xs text-muted truncate max-w-[45%]">
           {restaurantName}
@@ -87,7 +88,7 @@ export function MobileNav({
             <div className="px-5 py-5 border-b border-line flex items-center justify-between">
               <div className="min-w-0">
                 <span className="font-display text-lg font-semibold tracking-tight">
-                  Tillz
+                  {BRAND.name}
                 </span>
                 <p className="text-xs text-muted mt-0.5 truncate">
                   {restaurantName}

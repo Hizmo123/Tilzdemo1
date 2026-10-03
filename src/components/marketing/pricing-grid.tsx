@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { PlanCardGrid, PlanCardShell, PlanFeaturesReveal, usePlanExpansion } from "@/components/ui/expandable-plan-card";
 
 // The tier we lead with. Growth is the plan a venue going live across the
-// whole floor actually lands on — no table cap, no "Powered by Tillz" on
+// whole floor actually lands on — no table cap, no "Powered by Tap-to-It" on
 // their ordering page — so it's the one we mark "Most popular". Basic is the
 // on-ramp, Pro is for groups.
 const RECOMMENDED_TIER: PlanDef["tier"] = "GROWTH";

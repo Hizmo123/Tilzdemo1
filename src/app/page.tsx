@@ -4,6 +4,7 @@ import { MarketingNav } from "@/components/marketing/nav";
 import { Reveal, RevealGroup, RevealItem } from "@/components/marketing/reveal";
 import { SplitCheck } from "@/components/marketing/split-check";
 import { PricingGrid } from "@/components/marketing/pricing-grid";
+import { BRAND } from "@/lib/brand";
 
 // Public marketing site. Honest scope: it only names what the product actually
 // does today (order, split, pay, staff terminal, kitchen) — no POS/loyalty
@@ -241,7 +242,7 @@ function Footer() {
   return (
     <footer className="border-t border-line">
       <div className={`${CONTAINER} py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-muted`}>
-        <span className="font-display font-semibold text-ink">Tillz</span>
+        <span className="font-display font-semibold text-ink">{BRAND.name}</span>
         <span>QR ordering, splitting and payments for Australian venues.</span>
         <span className="flex items-center gap-4">
           <Link href="/staff" className="hover:text-ink">

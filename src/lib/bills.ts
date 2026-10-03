@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from "crypto";
 import { Prisma, type TenderType, type BillStatus, type PaymentStatus, type RefundStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { BRAND } from "@/lib/brand";
 import { getPaymentProvider } from "@/lib/payments";
 import { notifyRestaurant } from "@/lib/realtime";
 import { formatCents } from "@/lib/money";
@@ -339,7 +340,7 @@ export async function addItemsToBill(
   // period) — checked first, and deliberately worded around "not taking
   // orders" rather than exposing the venue's plan tier to a customer.
   if (!resolved.visit.planAllowsOrdering) {
-    return { error: "This venue isn't taking orders through Tillz right now." };
+    return { error: `This venue isn't taking orders through ${BRAND.name} right now.` };
   }
   // Lapsed-subscription grace period (spec B4): existing service, viewing
   // and paying an already-open bill all keep working — this is the ONE place

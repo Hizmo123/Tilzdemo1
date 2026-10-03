@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ReplayTourButton } from "@/components/tour/replay-tour-button";
+import { BRAND } from "@/lib/brand";
 
 type Item = { q: string; a: React.ReactNode };
 type Category = { title: string; items: Item[] };
@@ -176,7 +177,7 @@ export default function HelpPage() {
           Help
         </h1>
         <p className="text-muted mt-1">
-          How to use every part of Tillz. Can&apos;t find what you need?{" "}
+          How to use every part of {BRAND.name}. Can&apos;t find what you need?{" "}
           <Link href="/support" className="text-pine hover:underline">
             Contact support
           </Link>

@@ -12,6 +12,7 @@ import {
   uploadOnboardingImage,
 } from "./actions";
 import { defaultCardStyle } from "@/lib/menu-style";
+import { BRAND } from "@/lib/brand";
 import {
   defaultOnboardingAnswers,
   planAllowsOrdering,
@@ -193,7 +194,7 @@ export function OnboardingWizard({
       // Connect's product IS "orders + payments go to your Square" — force
       // both on regardless of what a previously-chosen tier's custom
       // toggles left them at, and lock the Payments step to the Square
-      // path so it never silently offers the Tillz-payments alternative.
+      // path so it never silently offers the Tap-to-It-payments alternative.
       update({
         plan,
         paymentPath: "square",
@@ -252,7 +253,7 @@ export function OnboardingWizard({
       if (!square) {
         return squareMandatory
           ? "Connect your Square account to continue — required on the Connect plan."
-          : "Connect your Square account, or choose Tillz payments to continue.";
+          : `Connect your Square account, or choose ${BRAND.name} payments to continue.`;
       }
       if (!square.locationId) return "Choose which Square location this venue is.";
     }
@@ -404,7 +405,7 @@ export function OnboardingWizard({
             )}
 
             {stepId === "experience" && (
-              <StepFrame title="What should Tillz do for you?" subtitle="Pick the closest match — every setting stays editable later.">
+              <StepFrame title={`What should ${BRAND.name} do for you?`} subtitle="Pick the closest match — every setting stays editable later.">
                 <ExperienceModePicker
                   mode={answers.experienceMode}
                   settings={{
@@ -432,7 +433,7 @@ export function OnboardingWizard({
                 subtitle={
                   squareMandatory
                     ? "Connect runs entirely on your own Square account — this step is required to finish setting up."
-                    : "Connect the Square account you already use, or run on Tillz's own payment flow. You can change this later in Settings → Integrations."
+                    : `Connect the Square account you already use, or run on ${BRAND.name}'s own payment flow. You can change this later in Settings → Integrations.`
                 }
               >
                 <PaymentsStep
@@ -492,7 +493,7 @@ export function OnboardingWizard({
                   <ChoiceCard
                     selected={answers.qrStandSourcing === "ordered_from_tillz"}
                     onClick={() => update({ qrStandSourcing: "ordered_from_tillz" })}
-                    title="Order pre-made stands from Tillz"
+                    title={`Order pre-made stands from ${BRAND.name}`}
                     desc="Ready-made stand-mounted QR codes, shipped to you."
                   />
                 </div>
@@ -507,7 +508,7 @@ export function OnboardingWizard({
                 {answers.qrStandSourcing === "ordered_from_tillz" && (
                   <div className="rounded-[var(--radius-md)] bg-surface-2/60 px-3.5 py-3 text-sm text-ink-soft space-y-1.5">
                     <p>Once your venue is set up:</p>
-                    <p>1. Go to Menu &amp; Hardware → Order Tillz stands.</p>
+                    <p>1. Go to Menu &amp; Hardware → Order {BRAND.name} stands.</p>
                     <p>2. Pick a product and how many tables need one.</p>
                     <p>3. We&apos;ll ship them to you — no design or printing needed.</p>
                   </div>
@@ -661,7 +662,7 @@ export function OnboardingWizard({
             )}
 
             {stepId === "alerts" && (
-              <StepFrame title="How should your team hear about new orders?" subtitle="Only what Tillz actually does today.">
+              <StepFrame title="How should your team hear about new orders?" subtitle={`Only what ${BRAND.name} actually does today.`}>
                 <NotificationsPicker kitchenChime={answers.kitchenChime} onKitchenChimeChange={(kitchenChime) => update({ kitchenChime })} />
               </StepFrame>
             )}

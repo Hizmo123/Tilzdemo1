@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { SPRING } from "@/components/ui/motion";
 import { GoogleSignInButton } from "../google-sign-in-button";
 import { FormError } from "../form-error";
+import { BRAND } from "@/lib/brand";
 
 const initial: AuthState = {};
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -85,7 +86,7 @@ export default function SignupPage() {
       </form>
 
       <p className="text-xs text-muted mt-4 text-center">
-        By creating an account you agree to Tillz&apos;s{" "}
+        By creating an account you agree to {BRAND.name}&apos;s{" "}
         <Link href="/terms" className="hover:text-ink underline underline-offset-2">
           Terms
         </Link>{" "}

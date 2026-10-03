@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
-export const metadata = { title: "Terms of Service — Tillz" };
+export const metadata = { title: `Terms of Service — ${BRAND.name}` };
 
 // Structural placeholder, not binding legal text. Every substantive clause
 // below is a TODO for a lawyer to draft properly — this exists so the page,
@@ -11,7 +12,7 @@ export default function TermsPage() {
     <main className="min-h-dvh bg-paper text-ink">
       <div className="max-w-2xl mx-auto px-5 sm:px-8 py-12">
         <Link href="/" className="text-sm text-muted hover:text-ink">
-          ← Tillz
+          ← {BRAND.name}
         </Link>
         <h1 className="font-display text-3xl font-semibold tracking-tight mt-4 mb-1">
           Terms of Service
@@ -20,19 +21,19 @@ export default function TermsPage() {
 
         <div className="rounded-[var(--radius-card)] border border-warn/40 bg-warn-soft text-warn p-4 text-sm mb-8">
           <strong>TODO: review by a lawyer.</strong> Everything below is a
-          structural placeholder describing what a Terms of Service for Tillz
+          structural placeholder describing what a Terms of Service for {BRAND.name}
           needs to cover, written from the product as it actually works today.
           It is not binding legal text and must not be treated as final until
           reviewed and approved by a qualified lawyer for the jurisdictions
-          Tillz operates in.
+          {" "}{BRAND.name} operates in.
         </div>
 
         <div className="space-y-6 text-sm text-ink-soft leading-relaxed">
-          <Section title="1. What Tillz is">
-            Tillz is a QR-ordering, bill-splitting and payment platform used
+          <Section title={`1. What ${BRAND.name} is`}>
+            {BRAND.name} is a QR-ordering, bill-splitting and payment platform used
             by hospitality venues ("Venues") and their customers ("Guests").
             <br />
-            TODO: define the parties precisely — Tillz (the operator), the
+            TODO: define the parties precisely — {BRAND.name} (the operator), the
             Venue (the merchant of record for food/drink sold), and the Guest.
           </Section>
           <Section title="2. Accounts">
@@ -42,10 +43,10 @@ export default function TermsPage() {
             termination.
           </Section>
           <Section title="3. Payments and fees">
-            TODO: Tillz is a technology provider; the Venue is the merchant of
-            record for orders paid through Tillz. Describe the platform fee
+            TODO: {BRAND.name} is a technology provider; the Venue is the merchant of
+            record for orders paid through {BRAND.name}. Describe the platform fee
             structure, when card surcharges apply, refund handling, and that
-            Tillz does not hold Venue funds when using a direct-to-venue
+            {" "}{BRAND.name} does not hold Venue funds when using a direct-to-venue
             payment processor (Stripe Connect / Square).
           </Section>
           <Section title="4. Subscription billing">
@@ -78,7 +79,7 @@ export default function TermsPage() {
             TODO: how Venues and Guests are notified of material changes.
           </Section>
           <Section title="9. Governing law">
-            TODO: Tillz is built for Australian venues — confirm governing
+            TODO: {BRAND.name} is built for Australian venues — confirm governing
             law and jurisdiction with a lawyer.
           </Section>
         </div>

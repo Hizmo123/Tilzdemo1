@@ -6,6 +6,7 @@ import type { TableActionState } from "../actions";
 import { Label, Input, FormMessage } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { StandScanner } from "./stand-scanner";
+import { BRAND } from "@/lib/brand";
 
 const initial: TableActionState = {};
 
@@ -80,7 +81,7 @@ export function ActivateStandForm({ tableId }: { tableId: string }) {
           </svg>
         </span>
         <span>
-          <span className="block text-sm font-medium">Activate a Tillz stand</span>
+          <span className="block text-sm font-medium">Activate a {BRAND.name} stand</span>
           <span className="block text-xs text-muted">Scan or type its serial to put it on this table.</span>
         </span>
       </button>

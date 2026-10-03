@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { BRAND } from "@/lib/brand";
 
 const SESSION_KEY_PREFIX = "tillz_intro_shown_";
 
@@ -9,7 +10,7 @@ const SESSION_KEY_PREFIX = "tillz_intro_shown_";
 // are animated.
 //   0.0        solid white cover is on screen, no transform, fully opaque
 //   0.0 – 1.1  a soft grey wave band sweeps down ACROSS the white (decor)
-//   0.4 – 2.0  mark + "Powered by Tillz" fade/rise in, hold, fade out
+//   0.4 – 2.0  mark + "Powered by Tap-to-It" fade/rise in, hold, fade out
 //   2.0 – 3.0  the cover itself slides down and off, revealing the page
 const TOTAL = 3;
 const EXIT_AT = 2 / TOTAL; // 0.667
@@ -131,7 +132,7 @@ export function BrandIntro({ token }: { token: string }) {
                 <TillzMark className="w-8 h-8" />
                 <p className="flex items-baseline gap-1.5">
                   <span className="text-[10px] uppercase tracking-[0.25em] opacity-70">Powered by</span>
-                  <span className="font-display text-base font-medium tracking-tight">Tillz</span>
+                  <span className="font-display text-base font-medium tracking-tight">{BRAND.name}</span>
                 </p>
               </div>
             </motion.div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { LinkButton } from "@/components/ui/button";
+import { BRAND } from "@/lib/brand";
 
 // Marketing header. Transparent over the hero; once the page has scrolled
 // it picks up the frosted "glass" treatment and a resting shadow so it
@@ -26,7 +27,7 @@ export function MarketingNav() {
     >
       <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
         <Link href="/" className="font-display text-xl font-semibold tracking-tight">
-          Tillz
+          {BRAND.name}
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
           <Link

@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
-export const metadata = { title: "Support — Tillz" };
+export const metadata = { title: `Support — ${BRAND.name}` };
 
 // Contact details come from env so nothing fake ships by default — same
 // pattern as Resend elsewhere (see .env.example): unset means "not
@@ -20,7 +21,7 @@ export default function SupportPage() {
           Support
         </h1>
         <p className="text-muted mb-8">
-          For venue owners, staff and guests using Tillz.
+          For venue owners, staff and guests using {BRAND.name}.
         </p>
 
         {configured ? (
@@ -59,7 +60,7 @@ export default function SupportPage() {
           <Section title="Service is down right now, mid-service">
             This is the one that can't wait for a ticket queue. TODO: a real
             on-call/escalation path (a monitored number, a status page) once
-            Tillz has paying venues depending on it — until then, the contact
+            {BRAND.name} has paying venues depending on it — until then, the contact
             details above are the only channel, and there's no guaranteed
             response time.
           </Section>

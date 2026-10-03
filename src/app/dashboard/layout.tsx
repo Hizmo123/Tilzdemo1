@@ -12,6 +12,7 @@ import { MobileNav } from "./mobile-nav";
 import { NavSections } from "./nav-sections";
 import { TourProvider } from "@/components/tour/tour-provider";
 import { markDashboardTourComplete } from "./tour-actions";
+import { BRAND } from "@/lib/brand";
 
 // Each nav item declares the permission needed to see it. Overview and Bills are
 // visible to every role (all roles have bills:view). This only hides controls —
@@ -33,7 +34,7 @@ const navSections: NavSection[] = [
     label: "Menu & hardware",
     items: [
       { label: "Menu", href: "/dashboard/menu", perm: "menu:availability" },
-      { label: "Order Tillz stands", href: "/dashboard/stands", perm: "tables:manage" },
+      { label: `Order ${BRAND.name} stands`, href: "/dashboard/stands", perm: "tables:manage" },
     ],
   },
   {
@@ -186,7 +187,7 @@ export default async function DashboardLayout({
           <p className="text-muted text-sm mt-2">
             {deleted
               ? "This account was permanently deleted and can't be recovered."
-              : "This account has been deactivated. Contact Tillz support to have it reactivated."}
+              : `This account has been deactivated. Contact ${BRAND.name} support to have it reactivated.`}
           </p>
           <form action={signOut} className="mt-6">
             <button
@@ -275,7 +276,7 @@ export default async function DashboardLayout({
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-line bg-surface sticky top-0 h-dvh">
         <div className="px-5 py-5 border-b border-line">
           <span className="font-display text-lg font-semibold tracking-tight">
-            Tillz
+            {BRAND.name}
           </span>
           <p className="text-xs text-muted mt-0.5 truncate">
             {restaurant?.name ?? "No restaurant yet"}

@@ -99,7 +99,7 @@ describe("addItemsToBill checks planAllowsOrdering", () => {
 
     const res = await addItemsToBill("tok-1", [{ menuItemId: "m1", quantity: 1 }]);
 
-    expect(res).toEqual({ error: "This venue isn't taking orders through Tillz right now." });
+    expect(res).toEqual({ error: "This venue isn't taking orders through Tap-to-It right now." });
     expect(JSON.stringify(res)).not.toMatch(/lite/i);
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

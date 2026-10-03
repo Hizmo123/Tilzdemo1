@@ -8,6 +8,7 @@ import type { ExperienceModeKey, SplitMethod } from "@/lib/onboarding-options";
 import { VenueTypePicker } from "@/components/venue-setup/venue-type-picker";
 import { ExperienceModePicker } from "@/components/venue-setup/experience-mode-picker";
 import { SplitMethodsPicker } from "@/components/venue-setup/split-methods-picker";
+import { BRAND } from "@/lib/brand";
 
 type Initial = {
   venueType: string;
@@ -75,7 +76,7 @@ export function VenueSetupForm({ initial }: { initial: Initial }) {
 
       <section className="rounded-[var(--radius-card)] border border-line bg-surface p-6 space-y-3">
         <h2 className="font-display text-lg font-semibold tracking-tight">
-          What should Tillz do for you?
+          What should {BRAND.name} do for you?
         </h2>
         <ExperienceModePicker
           mode={experienceMode}

@@ -103,7 +103,7 @@ describe("executeAccountDeletion — guards", () => {
   it("refuses a suspended account with a support pointer, and writes nothing", async () => {
     results["organization.findUnique"] = { ...ORG, deactivatedAt: new Date(), planStatus: "suspended" };
     const res = await executeAccountDeletion("org_1", "o@x.com");
-    expect(res).toMatchObject({ error: expect.stringMatching(/suspended.*Tillz support/) });
+    expect(res).toMatchObject({ error: expect.stringMatching(/suspended.*Tap-to-It support/) });
     expect(calls).toEqual(["organization.findUnique"]);
   });
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
+import { BRAND } from "@/lib/brand";
 
 // Every /admin page renders through this layout, but the layout alone is
 // NOT the security boundary — see src/lib/platform-admin.ts. Every
@@ -18,7 +19,7 @@ export default async function AdminLayout({
       <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-line bg-surface sticky top-0 h-dvh">
         <div className="px-5 py-5 border-b border-line">
           <span className="font-display text-lg font-semibold tracking-tight">
-            Tillz admin
+            {BRAND.name} admin
           </span>
           <p className="text-xs text-muted mt-0.5">Platform console</p>
         </div>
