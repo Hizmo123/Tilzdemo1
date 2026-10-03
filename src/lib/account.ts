@@ -99,7 +99,7 @@ export async function executeAccountDeletion(
     return { error: "This account has already been deleted." };
   }
   if (org.deactivatedAt) {
-    return { error: "This account is suspended, so it can't be deleted from here. Contact Tillz support." };
+    return { error: `This account is suspended, so it can't be deleted from here. Contact ${BRAND.name} support.` };
   }
 
   const now = new Date();
