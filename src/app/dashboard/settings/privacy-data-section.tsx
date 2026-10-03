@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ACCOUNT_RETENTION_YEARS } from "@/lib/account-retention";
+import { BRAND } from "@/lib/brand";
 import { deleteAccountAction } from "./privacy-actions";
 
 // idle -> warn (what will happen) -> confirm (type the name) -> final (last
@@ -61,7 +62,7 @@ export function PrivacyDataSection({
       <div>
         <h2 className="font-display text-lg font-semibold tracking-tight">Your data</h2>
         <p className="text-sm text-muted mt-1">
-          Export what Tillz holds about your venue, or close your account.
+          Export what {BRAND.name} holds about your venue, or close your account.
         </p>
       </div>
 

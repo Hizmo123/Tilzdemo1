@@ -7,6 +7,7 @@ import {
 } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
+import { BRAND } from "@/lib/brand";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,7 +35,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Tillz — Order, split and pay from the table",
+  title: `${BRAND.name} — Order, split and pay from the table`,
   description:
     "QR ordering, bill-splitting and payments for Australian restaurants.",
 };

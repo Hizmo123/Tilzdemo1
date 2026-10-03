@@ -5,6 +5,7 @@ import { LayoutGroup } from "motion/react";
 import { orderStands, type StandOrderActionState } from "./actions";
 import { uploadStandOrderDesign } from "./design-actions";
 import { formatCents } from "@/lib/money";
+import { BRAND } from "@/lib/brand";
 import { CardPreview, type CardPalette } from "./card-preview";
 import { StepShell, type StepStatus } from "./steps/step-shell";
 import { ProductStep } from "./steps/product-step";
@@ -230,9 +231,9 @@ export function OrderStandsForm({
   const stepSummaries: Record<StepKey, string> = {
     product: selectedProduct ? `${selectedProduct.title} · ${formatCents(selectedProduct.priceCents)} each` : "",
     card: `${cardTemplate === "dark" ? "Dark" : "Light"} template · ${
-      cardHeadlineMode === "VENUE_NAME" ? "Your venue name" : "Tillz branding"
+      cardHeadlineMode === "VENUE_NAME" ? "Your venue name" : `${BRAND.name} branding`
     }`,
-    artwork: design ? design.fileName : "Tillz design",
+    artwork: design ? design.fileName : `${BRAND.name} design`,
     tables: `${checked.size} table${checked.size === 1 ? "" : "s"}`,
     shipping: [shipping.name, `${shipping.suburb} ${shipping.state} ${shipping.postcode}`.trim()].filter(Boolean).join(", "),
   };

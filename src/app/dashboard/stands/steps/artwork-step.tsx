@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import type { ProductRow, StagedDesign } from "./types";
+import { BRAND } from "@/lib/brand";
 
 const MIME_LABELS: Record<string, string> = {
   "image/png": "PNG",
@@ -36,7 +37,7 @@ export function ArtworkStep({
         <p>
           {product.requiresCustomDesign
             ? "This product is printed with your own artwork — upload it to continue."
-            : "Optional — replace the Tillz card design with your own artwork."}
+            : `Optional — replace the ${BRAND.name} card design with your own artwork.`}
         </p>
         {product.designGuidelines && <p className="whitespace-pre-line">{product.designGuidelines}</p>}
         <p className="text-xs">
@@ -88,7 +89,7 @@ export function ArtworkStep({
         ) : (
           !product.requiresCustomDesign && (
             <Button type="button" variant="secondary" onClick={onSkip}>
-              Skip — use the Tillz design
+              Skip — use the {BRAND.name} design
             </Button>
           )
         )}

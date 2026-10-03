@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
-export const metadata = { title: "Privacy Policy — Tillz" };
+export const metadata = { title: `Privacy Policy — ${BRAND.name}` };
 
 // The "what we collect / where / how long" section below is factual — it
 // describes what the system actually does, not aspirational copy — so it

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { BRAND } from "@/lib/brand";
 
 // Generic entry point for "where do I sign in as staff" — staff login is
 // per-venue (/staff/[slug]), so there's no single link that works for every
@@ -26,7 +27,7 @@ export default function StaffEntryPage() {
     <main className="min-h-dvh bg-paper flex items-center justify-center px-6 py-10">
       <div className="w-full max-w-sm text-center">
         <Link href="/" className="text-sm text-muted hover:text-ink inline-block mb-4">
-          ← Tillz
+          ← {BRAND.name}
         </Link>
         <p className="text-sm font-medium text-pine">Staff sign in</p>
         <h1 className="font-display text-2xl font-semibold tracking-tight mt-0.5">

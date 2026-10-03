@@ -18,6 +18,7 @@ import { AnimatedMoney } from "@/components/ui/animated-number";
 import { celebrate } from "@/components/ui/confetti";
 import { fadeUp, pop, stagger, SPRING_PRESS, easeOut, haptic } from "@/components/ui/motion";
 import { formatCents } from "@/lib/money";
+import { BRAND } from "@/lib/brand";
 import { themeVars, resolveAccent, onAccent } from "@/lib/theme";
 import { patternBackgroundStyle } from "@/lib/menu-style";
 
@@ -600,7 +601,7 @@ export function CustomerExperience({
               <p className="mt-3 text-center text-[11px] text-muted">
                 Powered by{" "}
                 <a href="/" target="_blank" rel="noopener noreferrer" className="font-semibold hover:text-ink">
-                  Tillz
+                  {BRAND.name}
                 </a>
               </p>
             )}

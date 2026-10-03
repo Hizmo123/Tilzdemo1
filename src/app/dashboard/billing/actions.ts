@@ -6,6 +6,7 @@ import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { mockSubscriptionData } from "@/lib/plan-subscription";
+import { BRAND } from "@/lib/brand";
 
 export type BillingState = { error?: string; ok?: boolean };
 
@@ -83,7 +84,7 @@ export async function setConnectBrandingHidden(hidden: boolean): Promise<Billing
   const org = authz.membership?.organization;
   if (!org) return { error: "Create your restaurant first." };
   if (org.plan !== "CONNECT")
-    return { error: "Removing Tillz branding this way is only available on the Connect plan." };
+    return { error: `Removing ${BRAND.name} branding this way is only available on the Connect plan.` };
 
   // TODO(stripe): once real billing lands, this is where enabling adds a
   // $9/mo line item to the org's (nonexistent, under CONNECT) subscription

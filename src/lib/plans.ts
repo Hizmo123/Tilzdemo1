@@ -1,5 +1,6 @@
 import type { PlanTier } from "@prisma/client";
 import { entitlementsForTier, connectFeePercentLabel } from "@/lib/entitlements-core";
+import { BRAND } from "@/lib/brand";
 
 // The one string every Connect pricing snippet across marketing, venue
 // setup and billing renders — "1.5% of the order subtotal, excluding
@@ -42,7 +43,7 @@ export const PLANS: PlanDef[] = [
     features: [
       "Full menu with photos, prices and dietary badges",
       "One QR/NFC code for every table",
-      "\"Powered by Tillz\" shown on your menu page",
+      `"${BRAND.poweredBy}" shown on your menu page`,
     ],
   },
   {
@@ -55,7 +56,7 @@ export const PLANS: PlanDef[] = [
       "Full ordering, kitchen screen and bill splitting",
       "Up to 25 tables, 2 kitchen stations",
       "Last 14 days of analytics",
-      "\"Powered by Tillz\" shown on your ordering page",
+      `"${BRAND.poweredBy}" shown on your ordering page`,
     ],
   },
   {
@@ -67,7 +68,7 @@ export const PLANS: PlanDef[] = [
     features: [
       "Everything in Basic",
       "Unlimited tables and kitchen stations",
-      "Tillz branding removed",
+      `${BRAND.name} branding removed`,
       "Full analytics history",
     ],
   },
@@ -93,9 +94,9 @@ export const PLANS: PlanDef[] = [
       "Orders + payments settle to your own Square account",
       "Orders appear on your Square kitchen/POS",
       "No monthly fee — pay only as you sell",
-      "\"Powered by Tillz\" shown on your ordering page",
+      `"${BRAND.poweredBy}" shown on your ordering page`,
       "Addon: Connect Plus — full cross-venue dashboard",
-      "Addon: remove \"Powered by Tillz\" branding",
+      `Addon: remove "${BRAND.poweredBy}" branding`,
     ],
   },
 ];
@@ -120,7 +121,7 @@ export function planPriceLabel(p: PlanDef): string {
   return centsToPriceLabel(p.priceCents);
 }
 
-// Price for one physical Tillz stand, ordered from the dashboard (spec: the
+// Price for one physical Tap-to-It stand, ordered from the dashboard (spec: the
 // order/fulfilment addendum). Flat, regardless of plan tier or quantity.
 export const STAND_UNIT_PRICE_CENTS = 2900;
 
@@ -200,7 +201,7 @@ export function getFullPlanSpec(tier: PlanTier): PlanSpecLine[] {
     {
       label: "Branding",
       value: ent.showTillzBranding
-        ? '"Powered by Tillz" shown on your ordering page'
+        ? `"${BRAND.poweredBy}" shown on your ordering page`
         : "Removed — fully your own brand",
     },
     {
@@ -224,8 +225,8 @@ export function getFullPlanSpec(tier: PlanTier): PlanSpecLine[] {
     });
 
     lines.push({
-      label: 'Addon: remove "Powered by Tillz"',
-      value: `${centsToPriceLabel(CONNECT_BRANDING_REMOVAL_PRICE_CENTS)}/mo — hides the Tillz mark from your ordering page`,
+      label: `Addon: remove "${BRAND.poweredBy}"`,
+      value: `${centsToPriceLabel(CONNECT_BRANDING_REMOVAL_PRICE_CENTS)}/mo — hides the ${BRAND.name} mark from your ordering page`,
     });
   }
 

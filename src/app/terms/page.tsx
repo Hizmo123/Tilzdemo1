@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { BRAND } from "@/lib/brand";
 
-export const metadata = { title: "Terms of Service — Tillz" };
+export const metadata = { title: `Terms of Service — ${BRAND.name}` };
 
 // Structural placeholder, not binding legal text. Every substantive clause
 // below is a TODO for a lawyer to draft properly — this exists so the page,

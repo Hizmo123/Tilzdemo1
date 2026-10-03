@@ -15,6 +15,7 @@ import {
   reuseOrgSquareConnection,
 } from "../actions";
 import type { SquareResult } from "../square-result";
+import { BRAND } from "@/lib/brand";
 
 const ERROR_COPY: Record<string, string> = {
   state_mismatch: "That connection attempt expired or didn't match — please try again.",
@@ -158,7 +159,7 @@ export function PaymentsStep({
       {mandatory ? (
         <p className="text-sm text-ink-soft rounded-[var(--radius-card)] border border-line bg-surface-2/60 px-4 py-3">
           The Connect plan runs on your own Square account — there&apos;s no separate
-          Tillz payment option here. Card fees are Square&apos;s; Tillz&apos;s own
+          {" "}{BRAND.name} payment option here. Card fees are Square&apos;s; {BRAND.name}&apos;s own
           share is the small per-order fee shown on the plan.
         </p>
       ) : (
@@ -173,8 +174,8 @@ export function PaymentsStep({
           <PathCard
             selected={path === "tillz"}
             onClick={() => update({ paymentPath: "tillz" })}
-            title="Use Tillz payments"
-            desc="No Square account needed. Test mode today — real card payments through Tillz are coming; you can switch to Square any time in Settings."
+            title={`Use ${BRAND.name} payments`}
+            desc={`No Square account needed. Test mode today — real card payments through ${BRAND.name} are coming; you can switch to Square any time in Settings.`}
             badge="Test mode"
             icon={<TillzMark />}
           />
@@ -193,7 +194,7 @@ export function PaymentsStep({
             {!square ? (
               <div className="rounded-[var(--radius-card)] border border-line bg-surface shadow-rest p-4">
                 <p className="text-sm text-ink-soft">
-                  You&apos;ll be taken to Square to sign in and approve Tillz, then brought straight back here.
+                  You&apos;ll be taken to Square to sign in and approve {BRAND.name}, then brought straight back here.
                 </p>
                 {squareResult?.status === "error" && (
                   <p role="alert" className="mt-3 rounded-[var(--radius-sm)] bg-danger-soft text-danger px-3.5 py-2.5 text-sm">

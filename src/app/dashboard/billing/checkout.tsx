@@ -13,6 +13,7 @@ import {
   centsToPriceLabel,
 } from "@/lib/plans";
 import { formatCents } from "@/lib/money";
+import { BRAND } from "@/lib/brand";
 import { isTrialableTier, TRIAL_DAYS, type TrialStatus } from "@/lib/plan-subscription";
 import { PlanCardGrid, PlanCardShell, PlanFeaturesReveal, usePlanExpansion } from "@/components/ui/expandable-plan-card";
 
@@ -223,8 +224,8 @@ function ConnectAddons({
       />
       <div className="border-t border-pine/20" />
       <AddonToggle
-        label='Remove "Powered by Tillz"'
-        description="Hides the Tillz mark from your customer ordering page."
+        label={`Remove "${BRAND.poweredBy}"`}
+        description={`Hides the ${BRAND.name} mark from your customer ordering page.`}
         priceLabel={`${centsToPriceLabel(CONNECT_BRANDING_REMOVAL_PRICE_CENTS)}/mo`}
         checked={connectBrandingHidden}
         onChange={(next) =>

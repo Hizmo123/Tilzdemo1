@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button-classes";
 import { ACCOUNT_RETENTION_YEARS } from "@/lib/account-retention";
+import { BRAND } from "@/lib/brand";
 
 // Where the deletion flow lands (privacy-data-section.tsx hard-navigates
 // here). Public and static on purpose: the visitor was just signed out and
@@ -26,7 +27,7 @@ export default function AccountClosedPage() {
         </div>
         <h1 className="font-display text-xl font-semibold tracking-tight">Your account has been closed</h1>
         <p className="text-sm text-muted mt-2">
-          Everything on your Tillz account has been closed and your subscription cancelled. We&apos;ve emailed you a
+          Everything on your {BRAND.name} account has been closed and your subscription cancelled. We&apos;ve emailed you a
           confirmation.
         </p>
         <p className="text-xs text-muted mt-3">
@@ -35,7 +36,7 @@ export default function AccountClosedPage() {
         </p>
         <div className="mt-6 flex flex-col gap-2.5">
           <Link href="/" className={buttonClasses("primary", "md", true)}>
-            Back to Tillz
+            Back to {BRAND.name}
           </Link>
           <Link href="/support" className={buttonClasses("secondary", "md", true)}>
             Contact support
