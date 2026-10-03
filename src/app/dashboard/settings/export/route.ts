@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthz } from "@/lib/auth";
 import { exportOrganizationData } from "@/lib/account";
+import { BRAND } from "@/lib/brand";
 
 export async function GET() {
   const authz = await getAuthz();
@@ -16,7 +17,7 @@ export async function GET() {
   return new NextResponse(json, {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="tillz-account-export-${new Date().toISOString().slice(0, 10)}.json"`,
+      "Content-Disposition": `attachment; filename="${BRAND.slug}-account-export-${new Date().toISOString().slice(0, 10)}.json"`,
     },
   });
 }

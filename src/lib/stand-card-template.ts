@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type RGB } from "pdf-lib";
+import { BRAND } from "@/lib/brand";
 
 // A6 print-ready stand card, shared by the owner-facing live preview
 // (dashboard/stands/card-preview.tsx renders the same layout in HTML/CSS)
@@ -39,9 +40,35 @@ const PALETTES: Record<"dark" | "light", Palette> = {
 
 export type CardOptions = {
   palette: "dark" | "light";
-  headlineText: string; // venue name OR "TILLZ"
+  headlineText: string; // venue name OR "TAP-TO-IT"
   qr: { png: Buffer } | null; // null = draw the dashed placeholder instead
 };
+
+// Headline auto-fit: start at the design size and shrink (never grow) until
+// the text fits within the trim width minus side margins, down to a floor
+// past which it'd be illegible. Font metrics scale linearly with size, so
+// one division gets the exact fitting size — no need to iterate/measure in a
+// loop. Shared with card-preview.tsx's CSS version (same inputs, same floor)
+// so the PDF and the live preview never disagree on where a headline wraps.
+export const HEADLINE_MAX_PT = 26;
+export const HEADLINE_MIN_PT = 14;
+export const HEADLINE_MARGIN_MM = 12;
+
+function fitHeadlineSize(
+  font: { widthOfTextAtSize(text: string, size: number): number },
+  text: string,
+  maxWidthPt: number,
+): number {
+  const widthAtMax = font.widthOfTextAtSize(text, HEADLINE_MAX_PT);
+  if (widthAtMax <= maxWidthPt) return HEADLINE_MAX_PT;
+  return Math.max(HEADLINE_MIN_PT, HEADLINE_MAX_PT * (maxWidthPt / widthAtMax));
+}
+
+// The underline was authored as an 18mm bar under "TILLZ" set at 26pt — i.e.
+// ~0.721x that string's rendered width, not a fixed span. Preserving that
+// ratio (rather than a fixed mm width) is what keeps it looking intentional
+// under a longer wordmark or venue name rather than comically short or wide.
+const UNDERLINE_TO_TEXT_RATIO = 0.7209577522466513;
 
 function hexToRgb(hex: string): RGB {
   const n = parseInt(hex.slice(1), 16);
@@ -100,14 +127,18 @@ export async function renderStandCardPdf(opts: CardOptions): Promise<Uint8Array>
   // ---- Background (fills the whole bled page, not just the trim) --------
   page.drawRectangle({ x: 0, y: 0, width: PAGE_WIDTH_PT, height: PAGE_HEIGHT_PT, color: bg });
 
-  // ---- Headline (venue name or "TILLZ") ----------------------------------
-  centerText(opts.headlineText, bold, 26, TRIM_HEIGHT_MM - 20, accent);
+  // ---- Headline (venue name or "TAP-TO-IT"), auto-fit to the trim width --
+  const maxHeadlineWidthPt = mm(TRIM_WIDTH_MM - HEADLINE_MARGIN_MM * 2);
+  const headlineSize = fitHeadlineSize(bold, opts.headlineText, maxHeadlineWidthPt);
+  centerText(opts.headlineText, bold, headlineSize, TRIM_HEIGHT_MM - 20, accent);
 
-  // ---- Underline, ±9mm from center, accent stroke set explicitly --------
+  // ---- Underline, width proportional to the rendered headline width -----
+  const headlineWidthPt = bold.widthOfTextAtSize(opts.headlineText, headlineSize);
+  const underlineHalfWidthMm = (headlineWidthPt * UNDERLINE_TO_TEXT_RATIO) / MM_TO_PT / 2;
   const underlineY = TRIM_HEIGHT_MM - 23;
   page.drawLine({
-    start: { x: tx(centerXMm - 9), y: ty(underlineY) },
-    end: { x: tx(centerXMm + 9), y: ty(underlineY) },
+    start: { x: tx(centerXMm - underlineHalfWidthMm), y: ty(underlineY) },
+    end: { x: tx(centerXMm + underlineHalfWidthMm), y: ty(underlineY) },
     thickness: 1.4,
     color: accent,
   });
@@ -227,7 +258,7 @@ export async function renderStandCardPdf(opts: CardOptions): Promise<Uint8Array>
   });
 
   // ---- Footer -------------------------------------------------------------
-  centerText("Powered by Tillz", regular, 6.5, 6, muted);
+  centerText(BRAND.poweredBy, regular, 6.5, 6, muted);
 
   // ---- Crop marks + dashed trim guide -------------------------------------
   drawCropMarksAndGuide(page, tx, ty, muted);

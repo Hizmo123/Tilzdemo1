@@ -1,5 +1,8 @@
 "use client";
 
+import { useLayoutEffect, useRef, useState } from "react";
+import { BRAND } from "@/lib/brand";
+
 // Live HTML/CSS approximation of the printed A6 stand card (see
 // src/lib/stand-card-template.ts for the actual print-ready PDF this
 // mirrors). The PDF's layout is baseline-based mm coordinates; CSS boxes
@@ -12,6 +15,17 @@ const TRIM_W = 105;
 const TRIM_H = 148;
 
 const pctX = (mm: number) => `${(mm / TRIM_W) * 100}%`;
+
+// Headline auto-fit, ported 1:1 from stand-card-template.ts's own fitting
+// logic (not imported — that file pulls in pdf-lib, which has no business
+// in this client bundle). HEADLINE_MIN_RATIO is the same 14pt-of-26pt floor
+// the PDF uses, expressed as a fraction so it applies whatever size the
+// cqw-based clamp below resolves to for this container. UNDERLINE_TO_TEXT_RATIO
+// is the same ~0.721 the PDF derives from "TILLZ" at 26pt vs its original
+// 18mm underline — keeping both renderers' underline-to-text proportion
+// identical is what the ratio is for, not the string it was measured from.
+const HEADLINE_MIN_RATIO = 14 / 26;
+const UNDERLINE_TO_TEXT_RATIO = 0.7209577522466513;
 
 const PALETTES = {
   dark: { bg: "#0B0F0D", ink: "#FFFFFF", muted: "#9CA89F", accent: "#22C55E" },
@@ -72,6 +86,43 @@ export function CardPreview({
 }) {
   const c = PALETTES[palette];
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const headlineRef = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ fontSizePx: number; underlineWidthPx: number } | null>(null);
+
+  // Shrink the headline (never grow it) until it fits within its padded
+  // wrapper — the wrapper's own `0 ${pctX(12)}` padding IS the trim's 12mm
+  // margin, so "fits the wrapper" and "fits trim width minus 12mm margins"
+  // are the same condition here. Re-measures on resize (the preview panel
+  // is responsive) and whenever the headline text itself changes.
+  useLayoutEffect(() => {
+    const wrapperEl = wrapperRef.current;
+    const headlineEl = headlineRef.current;
+    if (!wrapperEl || !headlineEl) return;
+
+    const recompute = () => {
+      headlineEl.style.fontSize = "";
+      const baseFontSizePx = parseFloat(getComputedStyle(headlineEl).fontSize);
+      const availableWidthPx = wrapperEl.clientWidth;
+      const naturalWidthPx = headlineEl.scrollWidth;
+      const minFontSizePx = baseFontSizePx * HEADLINE_MIN_RATIO;
+
+      let fontSizePx = baseFontSizePx;
+      let textWidthPx = naturalWidthPx;
+      if (naturalWidthPx > availableWidthPx && availableWidthPx > 0) {
+        fontSizePx = Math.max(minFontSizePx, baseFontSizePx * (availableWidthPx / naturalWidthPx));
+        headlineEl.style.fontSize = `${fontSizePx}px`;
+        textWidthPx = headlineEl.scrollWidth;
+      }
+      setFit({ fontSizePx, underlineWidthPx: textWidthPx * UNDERLINE_TO_TEXT_RATIO });
+    };
+
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(wrapperEl);
+    return () => ro.disconnect();
+  }, [headlineText, palette]);
+
   return (
     <div
       className="relative w-full overflow-hidden rounded-[var(--radius-md)] border border-line shadow-sm select-none flex flex-col items-center"
@@ -85,16 +136,18 @@ export function CardPreview({
           right after the headline's actual rendered height rather than
           guessing where it ends. */}
       <div
+        ref={wrapperRef}
         className="flex flex-col items-center text-center w-full"
-        style={{ marginTop: "9%", padding: "0 8%" }}
+        style={{ marginTop: "9%", padding: `0 ${pctX(12)}` }}
       >
         <div
+          ref={headlineRef}
           className="font-display font-bold"
           style={{
             color: c.accent,
-            fontSize: "clamp(10px, 8.2cqw, 22px)",
+            fontSize: fit ? `${fit.fontSizePx}px` : "clamp(10px, 8.2cqw, 22px)",
             lineHeight: 1.15,
-            overflowWrap: "break-word",
+            whiteSpace: "nowrap",
           }}
         >
           {headlineText}
@@ -102,7 +155,7 @@ export function CardPreview({
         <div
           style={{
             marginTop: "3%",
-            width: pctX(18),
+            width: fit ? `${fit.underlineWidthPx}px` : pctX(18),
             height: 1.5,
             background: c.accent,
             flexShrink: 0,
@@ -202,7 +255,7 @@ export function CardPreview({
           fontSize: "clamp(5px, 2.1cqw, 7px)",
         }}
       >
-        Powered by Tillz
+        {BRAND.poweredBy}
       </div>
     </div>
   );

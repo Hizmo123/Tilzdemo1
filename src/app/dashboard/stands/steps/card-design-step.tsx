@@ -2,6 +2,7 @@
 
 import { Label } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
+import { BRAND } from "@/lib/brand";
 import { CardPreview, type CardPalette } from "../card-preview";
 
 export type HeadlineMode = "TILLZ_DEFAULT" | "VENUE_NAME";
@@ -58,7 +59,7 @@ export function CardDesignStep({
               <HeadlineOption
                 checked={headlineMode === "TILLZ_DEFAULT"}
                 onSelect={() => onHeadlineMode("TILLZ_DEFAULT")}
-                label="Keep Tillz branding"
+                label={`Keep ${BRAND.name} branding`}
               />
               <HeadlineOption
                 checked={headlineMode === "VENUE_NAME"}

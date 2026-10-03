@@ -84,7 +84,7 @@ export function OrderStandsForm({
 
   const selectedProduct = products.find((p) => p.id === productId) ?? null;
   const steps = stepsFor(selectedProduct);
-  const headlineText = cardHeadlineMode === "VENUE_NAME" ? restaurantName : "TILLZ";
+  const headlineText = cardHeadlineMode === "VENUE_NAME" ? restaurantName : BRAND.wordmark;
   const totalCents = selectedProduct ? selectedProduct.priceCents * checked.size : 0;
 
   function isComplete(key: StepKey, product: ProductRow | null = selectedProduct): boolean {
