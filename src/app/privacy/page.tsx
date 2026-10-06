@@ -327,9 +327,14 @@ export default function PrivacyPage() {
                 which venue a multi-venue account is viewing.
               </li>
               <li>
-                <strong className="text-ink">A table session token</strong> in a Guest's
-                browser that ties their phone to their table's bill for the duration of
-                their visit.
+                <strong className="text-ink">Square connection cookies</strong>, lasting 10
+                minutes, used only while a Venue is connecting its Square account, to keep
+                the connection request secure.
+              </li>
+              <li>
+                <strong className="text-ink">A plan selection cookie</strong>, lasting up to
+                one hour, that remembers the plan chosen during sign-up until the account is
+                confirmed.
               </li>
             </ul>
             <p className="mt-2">
