@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND } from "@/lib/brand";
+import { BrandMark, Wordmark } from "@/components/brand/marks";
 import { AuthPanelArt } from "./panel-art";
 
 // Split layout: a brand panel on the left (desktop), the form on the right.
@@ -12,8 +12,9 @@ export default function AuthLayout({
     <div className="min-h-dvh grid lg:grid-cols-2">
       {/* Brand panel */}
       <div className="hidden lg:flex flex-col justify-between bg-ink text-surface p-12 relative overflow-hidden">
-        <Link href="/" className="relative font-display text-2xl font-semibold tracking-tight">
-          {BRAND.name}
+        <Link href="/" className="relative flex items-center gap-2">
+          <BrandMark size={32} className="text-pine" />
+          <Wordmark className="text-2xl text-surface" />
         </Link>
 
         <div className="relative grid gap-12 xl:grid-cols-[1fr_auto] xl:items-end">
@@ -46,11 +47,9 @@ export default function AuthLayout({
 
       {/* Form side */}
       <main className="flex flex-col items-center justify-center px-6 py-10">
-        <Link
-          href="/"
-          className="lg:hidden font-display text-2xl font-semibold tracking-tight mb-8"
-        >
-          {BRAND.name}
+        <Link href="/" className="lg:hidden flex items-center gap-2 mb-8">
+          <BrandMark size={32} className="text-pine" />
+          <Wordmark className="text-2xl" />
         </Link>
         <div className="w-full max-w-sm">{children}</div>
       </main>

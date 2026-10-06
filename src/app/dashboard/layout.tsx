@@ -13,6 +13,7 @@ import { NavSections } from "./nav-sections";
 import { TourProvider } from "@/components/tour/tour-provider";
 import { markDashboardTourComplete } from "./tour-actions";
 import { BRAND } from "@/lib/brand";
+import { BrandMark, Wordmark } from "@/components/brand/marks";
 
 // Each nav item declares the permission needed to see it. Overview and Bills are
 // visible to every role (all roles have bills:view). This only hides controls —
@@ -275,8 +276,9 @@ export default async function DashboardLayout({
     <div className="min-h-dvh flex">
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-line bg-surface sticky top-0 h-dvh">
         <div className="px-5 py-5 border-b border-line">
-          <span className="font-display text-lg font-semibold tracking-tight">
-            {BRAND.name}
+          <span className="flex items-center gap-1.5">
+            <BrandMark size={22} className="text-pine" />
+            <Wordmark className="text-lg" />
           </span>
           <p className="text-xs text-muted mt-0.5 truncate">
             {restaurant?.name ?? "No restaurant yet"}
