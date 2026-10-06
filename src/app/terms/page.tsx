@@ -456,8 +456,8 @@ export default function TermsPage() {
                 email address on your account. You can send notices to us at{" "}
                 <a href={`mailto:${LEGAL.supportEmail}`} className="text-pine hover:underline">
                   {LEGAL.supportEmail}
-                </a>{" "}
-                or by post to {LEGAL.address}.
+                </a>
+                .
               </li>
               <li>
                 <strong className="text-ink">Assignment.</strong> You may not transfer your
@@ -482,8 +482,6 @@ export default function TermsPage() {
               {LEGAL.entityName}
               <br />
               ABN {LEGAL.abn}
-              <br />
-              {LEGAL.address}
               <br />
               <a href={`mailto:${LEGAL.supportEmail}`} className="text-pine hover:underline">
                 {LEGAL.supportEmail}

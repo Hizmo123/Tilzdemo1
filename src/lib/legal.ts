@@ -1,6 +1,8 @@
 // Single source of truth for the identity facts the Terms and Privacy pages
 // cite. Nothing else in the codebase should hardcode the legal entity, ABN,
-// address or effective dates. Brand name and domain come from BRAND.
+// or effective dates. Brand name and domain come from BRAND. No postal
+// address is published — notices and requests are handled by email only
+// (supportEmail / privacyEmail below).
 
 import { BRAND } from "@/lib/brand";
 
@@ -12,17 +14,13 @@ export const LEGAL = {
   abn: "93 236 439 291",
   tradingName: BRAND.name,
 
-  // Postal address for notices under the Terms and privacy requests. Must be a
-  // real, monitored address. REPLACE before publishing.
-  address: "55 Batt Street Sefton, NSW, Australia",
-
   // Monitored inboxes (set up email routing before publishing).
   supportEmail: BRAND.supportEmail,
   privacyEmail: BRAND.privacyEmail,
 
   // Bump these whenever the substantive text changes. ISO dates.
-  termsEffective: "2026-10-07",
-  privacyEffective: "2026-10-07",
+  termsEffective: "2026-10-06",
+  privacyEffective: "2026-10-06",
 
   // Where the database and file storage live. Confirm against the Supabase
   // project's region setting before publishing.

@@ -382,8 +382,8 @@ export default function PrivacyPage() {
               us at{" "}
               <a href={`mailto:${LEGAL.privacyEmail}`} className="text-pine hover:underline">
                 {LEGAL.privacyEmail}
-              </a>{" "}
-              or by post to {LEGAL.address}. We will acknowledge your complaint within 7
+              </a>
+              . We will acknowledge your complaint within 7
               days, investigate it, and respond within 30 days. If you are not satisfied
               with our response you can complain to the Office of the Australian
               Information Commissioner at{" "}
@@ -424,8 +424,6 @@ export default function PrivacyPage() {
               {LEGAL.entityName}
               <br />
               ABN {LEGAL.abn}
-              <br />
-              {LEGAL.address}
               <br />
               <a href={`mailto:${LEGAL.privacyEmail}`} className="text-pine hover:underline">
                 {LEGAL.privacyEmail}
