@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { resolveStand } from "@/lib/stands";
+import { parseEntrySource } from "@/lib/entry-source";
 import { BRAND } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
@@ -14,14 +15,22 @@ export const dynamic = "force-dynamic";
 // looks like it could take an order.
 export default async function StandPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ qrToken: string }>;
+  searchParams: Promise<{ src?: string | string[] }>;
 }) {
   const { qrToken } = await params;
-  const result = await resolveStand(qrToken);
+  const [result, sp] = await Promise.all([resolveStand(qrToken), searchParams]);
 
   if (result.ok) {
-    redirect(result.redirectTo);
+    // NFC tags are written as /s/<qrToken>?src=nfc (see lib/entry-source.ts)
+    // — forwarded, normalised, onto the /v/<token> redirect target so the
+    // arrival animation there knows which one this was. Always appended
+    // explicitly (never left to default silently) so /v/<token> never has
+    // to re-derive "no src = qr" on its own.
+    const entrySource = parseEntrySource(sp.src);
+    redirect(`${result.redirectTo}?src=${entrySource}`);
   }
 
   if (result.reason === "not_setup") {

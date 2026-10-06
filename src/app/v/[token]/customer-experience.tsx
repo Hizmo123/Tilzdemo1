@@ -9,6 +9,8 @@ import { PaySheet, type Mode as PayMode } from "./pay-sheet";
 import { EmailReceiptForm } from "@/components/receipt/email-receipt-form";
 import { CallStaff } from "./call-staff";
 import { BrandIntro } from "./brand-intro";
+import { ArrivalAnimation } from "./arrival-animation";
+import type { EntrySource } from "@/lib/entry-source";
 import { MenuDisplay } from "./menu-display";
 import { MenuOrderer, type OrderCategory } from "@/components/order/menu-orderer";
 import { OrderTracker } from "@/components/order/order-tracker";
@@ -49,6 +51,7 @@ type View = "home" | "menu" | "bill";
 
 export function CustomerExperience({
   token,
+  entrySource,
   restaurantId,
   restaurantName,
   locationName,
@@ -94,6 +97,7 @@ export function CustomerExperience({
   bill,
 }: {
   token: string;
+  entrySource: EntrySource;
   restaurantId: string;
   restaurantName: string;
   locationName: string;
@@ -408,6 +412,7 @@ export function CustomerExperience({
             with the landing, so Menu -> Back remounts it but the session
             guard keeps it from replaying. */}
         <BrandIntro token={token} />
+        <ArrivalAnimation token={token} entrySource={entrySource} />
         <motion.div variants={stagger(0.07, 0.05)} initial="hidden" animate="show" className="max-w-md md:max-w-lg mx-auto pb-10">
           {/* Hero: full-bleed cover (or the brand gradient), venue identity
               overlapping its bottom edge, table as a badge. */}

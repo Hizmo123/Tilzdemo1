@@ -145,7 +145,7 @@ export function TapRippleAnimation({ size = 64, className = "" }: { size?: numbe
           strokeWidth="3.5"
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: [0, i === 0 ? 0.8 : 0.4, 0], scale: [0.5, 1, 1.15] }}
-          transition={{ duration: 0.9, delay: i * 0.12, ease: "easeOut" }}
+          transition={{ duration: 0.7, delay: i * 0.15, ease: "easeOut" }}
           style={{ transformOrigin: "32px 32px" }}
         />
       ))}
