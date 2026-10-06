@@ -7,8 +7,9 @@ import TermsPage from "@/app/terms/page";
 import PrivacyPage from "@/app/privacy/page";
 
 // Guard tests for the real Terms/Privacy install (replacing the old
-// placeholder pages). Deliberately does NOT assert on LEGAL.address — the
-// task that installed these pages explicitly said not to.
+// placeholder pages). LEGAL no longer has an address field — notices and
+// requests are email-only (see legal.ts) — so there's nothing to assert
+// there any more.
 describe("legal pages — install guard", () => {
   it("LEGAL.abn is the real ABN", () => {
     expect(LEGAL.abn).toBe("93 236 439 291");
