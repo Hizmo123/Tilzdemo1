@@ -11,6 +11,7 @@ import { CallStaff } from "./call-staff";
 import { BrandIntro } from "./brand-intro";
 import { ArrivalAnimation } from "./arrival-animation";
 import type { EntrySource } from "@/lib/entry-source";
+import { DoneAnimation } from "@/components/brand/marks";
 import { MenuDisplay } from "./menu-display";
 import { MenuOrderer, type OrderCategory } from "@/components/order/menu-orderer";
 import { OrderTracker } from "@/components/order/order-tracker";
@@ -253,23 +254,24 @@ export function CustomerExperience({
           animate="show"
           className="max-w-sm mx-auto px-5 pt-10 pb-10 min-h-dvh flex flex-col justify-center"
         >
-          <motion.div
-            variants={pop}
-            className={`w-20 h-20 rounded-pill flex items-center justify-center mx-auto ${
-              strictHold ? "bg-warn-soft text-warn" : "bg-pine text-on-accent shadow-accent"
-            }`}
-          >
-            {strictHold ? (
+          {strictHold ? (
+            <motion.div
+              variants={pop}
+              className="w-20 h-20 rounded-pill flex items-center justify-center mx-auto bg-warn-soft text-warn"
+            >
               <svg viewBox="0 0 24 24" className="w-9 h-9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="5" y="11" width="14" height="10" rx="2" />
                 <path d="M8 11V8a4 4 0 0 1 8 0v3" />
               </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <motion.path d="M5 12.5l4.5 4.5L19 7" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, delay: 0.15, ease: "easeOut" }} />
-              </svg>
-            )}
-          </motion.div>
+            </motion.div>
+          ) : (
+            // Order actually sent (not just "payment required") — the shared
+            // paid/submitted mark (see marks.tsx), same one PaidScreen uses
+            // below, so every "done" moment in this app draws the same way.
+            <motion.div variants={pop} className="mx-auto w-fit text-pine">
+              <DoneAnimation size={80} />
+            </motion.div>
+          )}
           <motion.h1 variants={fadeUp} className="font-display text-display-sm font-semibold text-center mt-5">
             {strictHold ? "Payment required" : "Order sent to the kitchen"}
           </motion.h1>
@@ -856,10 +858,13 @@ function PaidScreen({
               />
             </svg>
           )}
-          <div className={`absolute inset-2 rounded-pill flex items-center justify-center text-on-accent ${paid.fullyPaid ? "bg-pine shadow-accent inset-0" : "bg-pine"}`}>
-            <svg viewBox="0 0 24 24" className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <motion.path d="M5 12.5l4.5 4.5L19 7" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, delay: 0.2, ease: "easeOut" }} />
-            </svg>
+          {/* The shared paid/submitted mark (see marks.tsx) — same one the
+              order-placed screen uses above. The outer progress ring (drawn
+              separately, above) is real information (how much of the bill
+              is covered so far), not decoration, so it stays untouched;
+              only the inner "done" circle is the mark. */}
+          <div className={`absolute flex items-center justify-center text-pine ${paid.fullyPaid ? "inset-0" : "inset-2"}`}>
+            <DoneAnimation size={paid.fullyPaid ? 96 : 80} />
           </div>
         </motion.div>
 
