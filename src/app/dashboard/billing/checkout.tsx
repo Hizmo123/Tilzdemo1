@@ -202,6 +202,18 @@ export function Billing({
       {currentPlan === "CONNECT" && active && (
         <ConnectAddons connectPlusEnabled={connectPlusEnabled} connectBrandingHidden={connectBrandingHidden} />
       )}
+
+      <p className="text-xs text-muted text-center">
+        Switching plans is subject to our{" "}
+        <Link href="/terms" className="hover:text-ink underline underline-offset-2">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="hover:text-ink underline underline-offset-2">
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </div>
   );
 }
