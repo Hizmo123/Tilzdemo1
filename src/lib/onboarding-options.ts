@@ -232,11 +232,13 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     language: "en",
     restaurantName: "",
     venueType: "cafe",
-    // BASIC, not LITE: a draft saved before the plan step existed already
+    // GROWTH, not LITE: a draft saved before the plan step existed already
     // answered the experience step under the assumption that ordering was
-    // available, and Lite would silently strip that. Basic is the cheapest
-    // tier that keeps those answers coherent.
-    plan: "BASIC",
+    // available, and Lite would silently strip that. Growth is the cheapest
+    // PUBLIC tier that keeps those answers coherent — Basic still exists
+    // (grandfathered) but is hidden from every picker, so it must never be
+    // a default a new signup can land on without explicitly choosing it.
+    plan: "GROWTH",
     paymentPath: "tillz",
     experienceMode: "order_and_pay",
     ...EXPERIENCE_MODES.order_and_pay.settings,
@@ -266,3 +268,44 @@ export function defaultOnboardingAnswers(): OnboardingAnswers {
     qrStandSourcing: null,
   };
 }
+
+// Picking a plan can change what the later steps even mean: a tier with no
+// ordering fixes the experience step to the digital-menu preset; Connect
+// forces both ordering toggles on and locks payments to Square (its whole
+// model IS a Square connection — see planRequiresSquare); coming back onto
+// an ordering tier from a menu-only one restores the normal order-and-pay
+// default so the experience step isn't silently stuck on menu-only. One
+// function so the wizard's PlanPicker selection and a plan arriving
+// pre-chosen (the pricing page's "pay as you sell" strip, via the intended-
+// plan cookie below) produce IDENTICAL answers — neither path hand-rolls
+// its own partial version of these side effects.
+export function applyPlanChoice(a: OnboardingAnswers, plan: PlanTier): OnboardingAnswers {
+  const ordering = planAllowsOrdering(plan);
+  if (!ordering) {
+    return { ...a, plan, experienceMode: "digital_menu", ...EXPERIENCE_MODES.digital_menu.settings };
+  }
+  if (planRequiresSquare(plan)) {
+    return {
+      ...a,
+      plan,
+      paymentPath: "square",
+      experienceMode: a.experienceMode === "digital_menu" ? "order_and_pay" : a.experienceMode,
+      customerOrdering: true,
+      customerPayment: true,
+    };
+  }
+  if (a.experienceMode === "digital_menu" && !planAllowsOrdering(a.plan)) {
+    return { ...a, plan, experienceMode: "order_and_pay", ...EXPERIENCE_MODES.order_and_pay.settings };
+  }
+  return { ...a, plan };
+}
+
+// One-shot signal from the marketing pricing page's "pay as you sell" strip
+// ("Start free with Square") through signup and email confirmation to the
+// first load of /onboarding — a plain query param can't survive that gap
+// (the Supabase confirmation link is a separate page load with its own
+// URL), so signUp() sets this cookie instead and the onboarding page reads
+// + clears it once. Holds a PlanTier string ("CONNECT" today; kept generic
+// in case another plan ever wants the same deep-link treatment) rather than
+// a boolean, so the reader doesn't have to hardcode which tier it means.
+export const INTENDED_PLAN_COOKIE = "intended_plan";

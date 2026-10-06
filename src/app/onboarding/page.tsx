@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import type { PlanTier } from "@prisma/client";
 import { getTenantContext } from "@/lib/auth";
 import { getOnboardingDraft } from "@/lib/onboarding-draft";
 import { getPendingSquareSummary } from "@/lib/square/pending";
+import { INTENDED_PLAN_COOKIE } from "@/lib/onboarding-options";
 import { OnboardingWizard } from "./onboarding-wizard";
 import { parseSquareResult } from "./square-result";
 
@@ -24,15 +27,22 @@ export default async function OnboardingPage({
   const { user, membership } = await getTenantContext();
   if (membership) redirect("/dashboard");
 
-  const [draft, pendingSquare, sp] = await Promise.all([
+  const [draft, pendingSquare, sp, jar] = await Promise.all([
     getOnboardingDraft(user.id),
     getPendingSquareSummary(user.id),
     searchParams,
+    cookies(),
   ]);
+
+  // The pricing page's "pay as you sell" intent, if any — read-only here (a
+  // Server Component render can't mutate cookies). OnboardingWizard clears
+  // it itself, once, after mount (see actions.ts's clearIntendedPlan).
+  const initialPlan = jar.get(INTENDED_PLAN_COOKIE)?.value as PlanTier | undefined;
 
   return (
     <OnboardingWizard
       initialDraft={draft}
+      initialPlan={initialPlan}
       initialSquare={pendingSquare}
       squareResult={parseSquareResult(sp)}
       returnTo="/onboarding"

@@ -10,7 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { PlanTier } from "@prisma/client";
-import { PLANS } from "@/lib/plans";
+import { ALL_PLANS } from "@/lib/plans";
 import { audit } from "@/lib/audit";
 
 export type AccountActionResult = { ok: true } | { error: string };
@@ -118,7 +118,7 @@ export async function adminChangePlan(
   adminUserId: string,
   adminEmail: string,
 ): Promise<AccountActionResult> {
-  const validTiers = PLANS.map((p) => p.tier);
+  const validTiers = ALL_PLANS.map((p) => p.tier);
   if (!validTiers.includes(tier as PlanTier)) {
     return { error: "That isn't a valid plan." };
   }

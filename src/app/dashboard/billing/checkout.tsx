@@ -7,6 +7,7 @@ import type { PlanTier } from "@prisma/client";
 import { subscribe, cancelSubscription, setConnectPlusEnabled, setConnectBrandingHidden } from "./actions";
 import {
   PLANS,
+  planByTier,
   CONNECT_PLUS_PRICE_CENTS,
   CONNECT_BRANDING_REMOVAL_PRICE_CENTS,
   CONNECT_FEE_BLURB,
@@ -45,6 +46,17 @@ export function Billing({
 
   const active = planStatus === "active";
 
+  // Grandfathered orgs (Basic/Connect — hidden from every picker, see
+  // lib/plans.ts's ALL_PLANS/PLANS split) see their own plan plus an
+  // upgrade path to Growth/Pro, not Lite (downgrading to Lite is the
+  // separate "Cancel and return to Lite" link above) and not every public
+  // tier (a Basic org has no business seeing a Connect card or vice versa).
+  // Everyone else just gets the 3 public plans, same as always.
+  const isGrandfathered = currentPlan === "BASIC" || currentPlan === "CONNECT";
+  const visiblePlans = isGrandfathered
+    ? [planByTier(currentPlan), ...PLANS.filter((p) => p.tier !== "LITE")]
+    : PLANS;
+
   return (
     <div className="space-y-6">
       <div className="rounded-[var(--radius-sm)] bg-warn-soft text-warn text-xs px-3 py-2">
@@ -54,7 +66,7 @@ export function Billing({
       <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
         <p className="text-sm text-muted">Current plan</p>
         <p className="font-display text-2xl font-semibold tracking-tight mt-1">
-          {PLANS.find((p) => p.tier === currentPlan)?.name ?? "Lite"}
+          {planByTier(currentPlan).name}
           {active && currentPlan !== "LITE" && (
             <span className="text-sm font-normal text-pine-deep"> · active</span>
           )}
@@ -87,13 +99,12 @@ export function Billing({
         )}
       </div>
 
-      {/* Rendered straight from PLANS, on the same shared PlanCardGrid the
-          marketing pricing section uses (components/ui/expandable-plan-
-          card.tsx) so both handle the 5 tiers identically — equal-height
-          rows, 3-then-2 from lg up, all 5 in one row only once there's
-          genuinely room for it. */}
+      {/* visiblePlans is the 3 public plans, OR (grandfathered orgs only)
+          the org's own hidden-tier card plus Growth/Pro — see above. Same
+          shared PlanCardGrid the marketing pricing section uses
+          (components/ui/expandable-plan-card.tsx) either way. */}
       <PlanCardGrid>
-        {PLANS.map((p) => {
+        {visiblePlans.map((p) => {
           const isCurrent = p.tier === currentPlan && active;
           const connect = p.tier === "CONNECT";
           // Connect's button can't be the same instant subscribe() every

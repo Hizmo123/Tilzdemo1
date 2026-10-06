@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { entitlementsForTier, CONNECT_APP_FEE_BPS, connectFeePercentLabel } from "@/lib/entitlements-core";
-import { PLANS, CONNECT_FEE_BLURB, getFullPlanSpec } from "@/lib/plans";
+import { ALL_PLANS, CONNECT_FEE_BLURB, getFullPlanSpec } from "@/lib/plans";
 
 // Regression test for the copy/code drift this task fixed: the Connect
 // commission was changed to 1.5% by the owner, but TIER_LIMITS.CONNECT.
@@ -35,7 +35,10 @@ describe("Connect commission has one source of truth", () => {
   });
 
   it("the pricing catalog's Connect cadence copy is derived from the same blurb, and states 1.5% not 2%", () => {
-    const connectPlan = PLANS.find((p) => p.tier === "CONNECT")!;
+    // Connect is grandfathered/hidden from public pricing (see
+    // plans-public-catalog.test.ts) — its PlanDef still lives in ALL_PLANS,
+    // backing the dashboard Billing grid for an existing Connect org.
+    const connectPlan = ALL_PLANS.find((p) => p.tier === "CONNECT")!;
     expect(connectPlan.cadence).toBe(`free + ${CONNECT_FEE_BLURB}`);
     expect(connectPlan.cadence).toContain("1.5% of the order subtotal, excluding tips");
     expect(connectPlan.cadence).not.toContain("2%");

@@ -18,11 +18,14 @@ export const CONNECT_FEE_BLURB = `${connectFeePercentLabel()} of the order subto
 // end to end today; real Stripe Billing replaces the checkout behind the
 // same PLANS/planByTier surface, not the catalog itself.
 //
-// 4-tier model (see lib/entitlements.ts for the enforced rules this copy
-// describes): LITE is deliberately menu-only, no live ordering at all —
-// unlike the old 3-tier model, restricting the core loop on the entry tier
-// is now an intentional part of the product, not something this module's
-// "never disable what works" rule would flag back.
+// 3-tier public model (see lib/entitlements.ts for the enforced rules this
+// copy describes): LITE is deliberately menu-only, no live ordering at all.
+// BASIC and CONNECT are grandfathered — hidden here below (`hidden: true`),
+// never offered to a new signup or shown on public pricing, but their
+// TIER_LIMITS entry in entitlements-core.ts is untouched, so an existing org
+// on either tier keeps working exactly as before (see ALL_PLANS/PLANS split
+// below for why their PlanDef still has to exist, not just their
+// entitlements).
 export type PlanDef = {
   tier: PlanTier;
   name: string;
@@ -31,9 +34,17 @@ export type PlanDef = {
   blurb: string;
   features: string[];
   perVenue?: boolean;
+  // true = grandfathered only: never shown on public pricing or any
+  // new-signup/upgrade picker. The tier itself keeps working — this flag
+  // only controls where its PlanDef is offered, not its entitlements.
+  hidden?: boolean;
 };
 
-export const PLANS: PlanDef[] = [
+// The full catalog, including grandfathered tiers — this is what a
+// grandfathered org's current-plan display, the admin plan-assignment tool,
+// and admin MRR-by-tier reporting all need (none of those are "public
+// pricing" or a "new signup/upgrade picker", so they stay on the full list).
+export const ALL_PLANS: PlanDef[] = [
   {
     tier: "LITE",
     name: "Lite",
@@ -52,6 +63,7 @@ export const PLANS: PlanDef[] = [
     priceCents: 4900,
     cadence: "per month",
     blurb: "One venue, live ordering for smaller floors.",
+    hidden: true,
     features: [
       "Full ordering, kitchen screen and bill splitting",
       "Up to 25 tables, 2 kitchen stations",
@@ -62,14 +74,14 @@ export const PLANS: PlanDef[] = [
   {
     tier: "GROWTH",
     name: "Growth",
-    priceCents: 9900,
+    priceCents: 7900,
     cadence: "per month",
     blurb: "One venue, unlimited tables, your own brand.",
     features: [
-      "Everything in Basic",
+      "Full ordering, kitchen screen and bill splitting",
       "Unlimited tables and kitchen stations",
-      `${BRAND.name} branding removed`,
       "Full analytics history",
+      `${BRAND.name} branding removed`,
     ],
   },
   {
@@ -90,6 +102,7 @@ export const PLANS: PlanDef[] = [
     priceCents: 0,
     cadence: `free + ${CONNECT_FEE_BLURB}`,
     blurb: "Connect your own Square — free monthly, a small fee per order.",
+    hidden: true,
     features: [
       "Orders + payments settle to your own Square account",
       "Orders appear on your Square kitchen/POS",
@@ -101,8 +114,22 @@ export const PLANS: PlanDef[] = [
   },
 ];
 
+// Public catalog — what the marketing pricing page and every new-signup /
+// upgrade picker render. Exactly LITE, GROWTH, PRO today; Connect is reached
+// separately through the "pay as you sell" strip's own Square-first flow,
+// never as a card in this list (see pricing-grid.tsx / plan-picker.tsx).
+export const PLANS: PlanDef[] = ALL_PLANS.filter((p) => !p.hidden);
+
+// "Pay as you sell" — not a plan card (Connect's PlanDef above still backs
+// the dashboard Billing grid for an existing Connect org, and the Square-
+// first picker strip derives its own copy from CONNECT_FEE_BLURB directly),
+// just the one shared sentence both the marketing strip and the onboarding
+// plan step's Connect CTA render so they can't say different things about
+// the same per-order fee.
+export const PAY_AS_YOU_SELL_BLURB = `Free monthly. ${CONNECT_FEE_BLURB} on your own Square. Cancel any time.`;
+
 export function planByTier(tier: PlanTier): PlanDef {
-  return PLANS.find((p) => p.tier === tier) ?? PLANS[0];
+  return ALL_PLANS.find((p) => p.tier === tier) ?? ALL_PLANS[0];
 }
 
 // Whole-dollar "$49" or "$4.99" (AUD), no cents when unnecessary. Shared by

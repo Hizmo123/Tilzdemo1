@@ -7,6 +7,16 @@ import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { mockSubscriptionData } from "@/lib/plan-subscription";
 import { BRAND } from "@/lib/brand";
+import { PLANS } from "@/lib/plans";
+
+// Hidden (grandfathered) tiers an org can only ever ALREADY be on, never
+// newly switch to — Basic outright, Connect everywhere except its own
+// Square-first flow (dashboard/billing/checkout.tsx's "Connect Square to
+// switch" button, which only renders once squareConnected is true and only
+// then calls subscribe("CONNECT")). This is the server-side half of "removed
+// from every picker": the UI not offering a hidden tier is cosmetic on its
+// own — this is what actually stops a POST crafted outside the UI.
+const PUBLIC_TIERS = new Set(PLANS.map((p) => p.tier));
 
 export type BillingState = { error?: string; ok?: boolean };
 
@@ -22,6 +32,22 @@ export async function subscribe(tier: PlanTier): Promise<BillingState> {
     return { error: "Only an owner or admin can manage billing." };
   const org = authz.membership?.organization;
   if (!org) return { error: "Create your restaurant first." };
+
+  if (!PUBLIC_TIERS.has(tier) && tier !== org.plan) {
+    // Connect's one exception: reachable through its own Square-first flow
+    // (checkout.tsx only ever calls subscribe("CONNECT") once squareConnected
+    // is true — see needsSquareFirst there), never as a bare picker choice.
+    const restaurant = org.restaurants[0];
+    const squareConnection =
+      tier === "CONNECT" && restaurant
+        ? await prisma.squareConnection.findUnique({
+            where: { restaurantId: restaurant.id },
+            select: { revokedAt: true },
+          })
+        : null;
+    const squareConnected = !!squareConnection && !squareConnection.revokedAt;
+    if (!squareConnected) return { error: "That plan isn't available." };
+  }
 
   const data = mockSubscriptionData(tier, org.hasUsedTrial);
 

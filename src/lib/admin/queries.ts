@@ -10,7 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { PlanTier } from "@prisma/client";
-import { PLANS, planByTier } from "@/lib/plans";
+import { ALL_PLANS, planByTier } from "@/lib/plans";
 import { entitlementsForTier } from "@/lib/entitlements";
 
 // ---- Platform overview -------------------------------------------------------
@@ -73,7 +73,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
     mrrByTierMap.set(org.plan, bucket);
   }
 
-  const mrrByTier = PLANS.filter((p) => p.tier !== "LITE").map((p) => ({
+  const mrrByTier = ALL_PLANS.filter((p) => p.tier !== "LITE").map((p) => ({
     tier: p.tier,
     orgs: mrrByTierMap.get(p.tier)?.orgs ?? 0,
     mrrCents: mrrByTierMap.get(p.tier)?.mrrCents ?? 0,

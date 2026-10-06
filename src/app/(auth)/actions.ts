@@ -2,10 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { appBaseUrl } from "@/lib/urls";
 import { resolvePostLoginPath } from "@/lib/auth";
+import { INTENDED_PLAN_COOKIE } from "@/lib/onboarding-options";
 
 const credentials = z.object({
   email: z.string().email("Enter a valid email address."),
@@ -76,6 +78,19 @@ export async function signUp(
   // different shape depending on the project's confirm-email setting.
   if (data.user && data.user.identities?.length === 0) {
     return { error: "That email already has an account.", accountExists: true };
+  }
+
+  // The pricing page's "pay as you sell" strip links here with ?plan=connect
+  // (see signup/page.tsx), threaded into the form as a hidden field so this
+  // one commit point sets it — a query param alone can't survive the email
+  // confirmation round trip that follows. /onboarding reads + clears this
+  // once (see onboarding-options.ts's INTENDED_PLAN_COOKIE doc comment).
+  if (formData.get("plan") === "connect") {
+    (await cookies()).set(INTENDED_PLAN_COOKIE, "CONNECT", {
+      maxAge: 60 * 60,
+      httpOnly: true,
+      path: "/",
+    });
   }
 
   // No session means email confirmation is on — show the "check your inbox"
