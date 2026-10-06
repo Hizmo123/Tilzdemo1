@@ -702,6 +702,18 @@ export function OnboardingWizard({
             )}
           </Button>
         </div>
+
+        <p className="mt-4 text-center text-xs text-muted">
+          By continuing you agree to {BRAND.name}&apos;s{" "}
+          <Link href="/terms" className="hover:text-ink underline underline-offset-2">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="hover:text-ink underline underline-offset-2">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     </main>
   );

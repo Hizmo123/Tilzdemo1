@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { AnimatedMoney } from "@/components/ui/animated-number";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormMessage } from "@/components/ui/field";
@@ -138,6 +139,19 @@ function PlaceOrderButton({ totalCents, blocker, compact = false }: { totalCents
       {blocker && (
         <p className={`text-xs text-muted mt-1.5 ${compact ? "text-right" : "text-center"}`} aria-live="polite">
           {blocker}
+        </p>
+      )}
+      {!compact && (
+        <p className="text-xs text-muted mt-1.5 text-center">
+          By placing this order you agree to our{" "}
+          <Link href="/terms" className="hover:text-ink underline underline-offset-2">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="hover:text-ink underline underline-offset-2">
+            Privacy Policy
+          </Link>
+          .
         </p>
       )}
     </div>
