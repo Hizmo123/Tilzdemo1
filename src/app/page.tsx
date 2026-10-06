@@ -165,11 +165,11 @@ function Pricing() {
         </p>
       </Reveal>
       {/* Rendered straight from PLANS so this page can't drift from the
-          catalogue the billing flow uses. 5 tiers now (Connect added) —
-          wraps 3-then-2 from lg up, all 5 in one row only once there's
-          genuinely room for it, rather than forcing a horizontal scroll.
-          Client component: the "Full features" expand/squeeze interaction
-          needs state — see components/marketing/pricing-grid.tsx. */}
+          catalogue the billing flow uses — the 3 public tiers (Lite/Growth/
+          Pro), plus a "pay as you sell" strip for Connect underneath (not a
+          4th card; see PayAsYouSellStrip in pricing-grid.tsx). Client
+          component: the "Full features" expand/squeeze interaction needs
+          state. */}
       <PricingGrid />
       <p className="mt-6 text-sm text-muted max-w-2xl">
         Prices in AUD, excluding GST. Live payments are processed by a licensed

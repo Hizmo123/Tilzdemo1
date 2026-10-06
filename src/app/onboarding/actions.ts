@@ -37,6 +37,7 @@ import {
   PLAN_TIER_VALUES,
   EXPERIENCE_MODES,
   isFullyStaffedMode,
+  INTENDED_PLAN_COOKIE,
   type OnboardingAnswers,
   type OnboardingDraftPayload,
 } from "@/lib/onboarding-options";
@@ -57,8 +58,9 @@ const schema = z.object({
   restaurantName: z.string().trim().min(2, "Enter your venue's name.").max(80),
   venueType: z.enum(VENUE_TYPES.map((v) => v.value) as [string, ...string[]]),
   // Defaults, not required: a draft saved before these steps existed must
-  // still complete (see defaultOnboardingAnswers for why BASIC).
-  plan: z.enum(PLAN_TIER_VALUES).default("BASIC"),
+  // still complete (see defaultOnboardingAnswers for why GROWTH, not LITE
+  // or the now-hidden BASIC).
+  plan: z.enum(PLAN_TIER_VALUES).default("GROWTH"),
   paymentPath: z.enum(["square", "tillz"]).default("tillz"),
   experienceMode: z.string().min(1).max(40),
   customerOrdering: z.boolean(),
@@ -154,6 +156,16 @@ export async function saveOnboardingDraft(
     update: { answers: payload as unknown as Prisma.InputJsonValue },
   });
   return { ok: true };
+}
+
+// Deletes INTENDED_PLAN_COOKIE once the wizard has actually applied it to
+// its initial state (see onboarding-wizard.tsx's mount effect). A Server
+// Component render (app/onboarding/page.tsx, which reads it) can't mutate
+// cookies itself — Next only allows that from a Server Action or Route
+// Handler — so the one-shot clear has to happen here, after the client has
+// mounted, instead.
+export async function clearIntendedPlan(): Promise<void> {
+  (await cookies()).delete(INTENDED_PLAN_COOKIE);
 }
 
 // Uploads a venue image (logo or cover/hero photo) before any Restaurant

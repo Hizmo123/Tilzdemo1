@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePlatformAdmin } from "@/lib/platform-admin";
 import { getOrgDetail } from "@/lib/admin/queries";
-import { planByTier, PLANS } from "@/lib/plans";
+import { planByTier, ALL_PLANS } from "@/lib/plans";
 import { SuspendButton } from "@/components/admin/suspend-button";
 import { ReactivateButton } from "@/components/admin/reactivate-button";
 import { ChangePlanForm } from "@/components/admin/change-plan-form";
@@ -95,7 +95,7 @@ export default async function AdminOrgDetailPage({
               <ChangePlanForm
                 orgId={org.id}
                 currentTier={org.plan}
-                tiers={PLANS.map((p) => ({ tier: p.tier, name: p.name }))}
+                tiers={ALL_PLANS.map((p) => ({ tier: p.tier, name: p.name }))}
               />
             </div>
           </div>

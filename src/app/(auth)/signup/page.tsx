@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { motion } from "motion/react";
 import { signUp, resendConfirmation, type AuthState } from "../actions";
@@ -16,6 +17,8 @@ const initial: AuthState = {};
 const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function SignupPage() {
+  const searchParams = useSearchParams();
+  const plan = searchParams.get("plan");
   const [state, action] = useActionState(signUp, initial);
   // Lets "Wrong email? Edit it" return to the form pre-filled, without
   // waiting for a new server action call to clear state.confirmEmail.
@@ -51,6 +54,7 @@ export default function SignupPage() {
       </div>
 
       <form action={action} className="space-y-4">
+        {plan === "connect" && <input type="hidden" name="plan" value="connect" />}
         <div>
           <Label htmlFor="email">Email</Label>
           <Input

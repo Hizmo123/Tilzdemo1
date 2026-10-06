@@ -10,6 +10,7 @@ import {
   completeOnboardingForExistingOrg,
   saveOnboardingDraft,
   uploadOnboardingImage,
+  clearIntendedPlan,
 } from "./actions";
 import { defaultCardStyle } from "@/lib/menu-style";
 import { BRAND } from "@/lib/brand";
@@ -17,8 +18,8 @@ import {
   defaultOnboardingAnswers,
   planAllowsOrdering,
   planRequiresSquare,
+  applyPlanChoice,
   isFullyStaffedMode,
-  EXPERIENCE_MODES,
   type OnboardingAnswers,
   type OnboardingDraftPayload,
   type ExperienceModeKey,
@@ -135,6 +136,7 @@ export function OnboardingWizard({
   initialDraft,
   organizationId,
   fixedPlan,
+  initialPlan,
   initialSquare,
   existingOrgSquare,
   squareResult,
@@ -149,6 +151,12 @@ export function OnboardingWizard({
   organizationId?: string;
   // The existing org's tier, in that same flow — replaces the plan step.
   fixedPlan?: PlanTier;
+  // The pricing page's "pay as you sell" strip, carried here via
+  // INTENDED_PLAN_COOKIE (see onboarding-options.ts and app/onboarding/
+  // page.tsx, which reads + clears it before this ever mounts). Only
+  // applied when there's no draft to resume — a returning user's in-progress
+  // answers always win over a stale first-touch intent.
+  initialPlan?: PlanTier;
   // Square connected mid-wizard (PendingSquareConnection), if any — set by
   // the page from the server; kept in state here as the Payments step
   // changes it (location pick, disconnect).
@@ -166,17 +174,31 @@ export function OnboardingWizard({
   const router = useRouter();
   const [step, setStep] = useState(initialDraft?.step ?? 0);
   const [dir, setDir] = useState<1 | -1>(1);
-  const [answers, setAnswers] = useState<OnboardingAnswers>({
+  const [answers, setAnswers] = useState<OnboardingAnswers>(() => {
     // Every key has a default, so a draft saved before a step existed (plan,
     // payments, cover, …) resumes with sensible values instead of undefined.
-    ...defaultOnboardingAnswers(),
-    ...(initialDraft?.answers ?? {}),
+    const base: OnboardingAnswers = {
+      ...defaultOnboardingAnswers(),
+      ...(initialDraft?.answers ?? {}),
+    };
+    return initialPlan && !initialDraft ? applyPlanChoice(base, initialPlan) : base;
   });
   const [square, setSquare] = useState<PendingSquareSummary | null>(initialSquare);
   const [pending, setPending] = useState(false);
   const [created, setCreated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ checklist: ChecklistItem[] } | null>(null);
+
+  // One-shot: once initialPlan has been folded into the initial answers
+  // above, the cookie that carried it has done its job — clear it so a
+  // later, unrelated onboarding attempt on the same browser never silently
+  // inherits a stale plan choice.
+  useEffect(() => {
+    if (initialPlan) clearIntendedPlan();
+    // Only ever once, on mount — initialPlan is a server-read prop, not
+    // something that changes across this component's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function update(patch: Partial<OnboardingAnswers>) {
     setAnswers((a) => ({ ...a, ...patch }));
@@ -187,26 +209,7 @@ export function OnboardingWizard({
   // back OFF Lite restores the wizard's normal order-and-pay default so the
   // experience step isn't silently stuck on menu-only.
   function choosePlan(plan: PlanTier) {
-    const ordering = planAllowsOrdering(plan);
-    if (!ordering) {
-      update({ plan, experienceMode: "digital_menu", ...EXPERIENCE_MODES.digital_menu.settings });
-    } else if (planRequiresSquare(plan)) {
-      // Connect's product IS "orders + payments go to your Square" — force
-      // both on regardless of what a previously-chosen tier's custom
-      // toggles left them at, and lock the Payments step to the Square
-      // path so it never silently offers the Tap-to-It-payments alternative.
-      update({
-        plan,
-        paymentPath: "square",
-        experienceMode: answers.experienceMode === "digital_menu" ? "order_and_pay" : answers.experienceMode,
-        customerOrdering: true,
-        customerPayment: true,
-      });
-    } else if (answers.experienceMode === "digital_menu" && !planAllowsOrdering(answers.plan)) {
-      update({ plan, experienceMode: "order_and_pay", ...EXPERIENCE_MODES.order_and_pay.settings });
-    } else {
-      update({ plan });
-    }
+    setAnswers((a) => applyPlanChoice(a, plan));
   }
 
   const steps = useMemo(() => activeSteps(answers, fixedPlan), [answers, fixedPlan]);

@@ -8,8 +8,9 @@ import { DUR, EASE_OUT } from "./motion";
 
 // One reusable "Full features" expand interaction, shared by the marketing
 // pricing section (components/marketing/pricing-grid.tsx) and the dashboard
-// Billing grid (app/dashboard/billing/checkout.tsx) — both render PLANS as
-// a grid of cards, so the interaction lives here once rather than twice.
+// Billing grid (app/dashboard/billing/checkout.tsx) — both render a plan
+// catalog as a grid of cards (3 today, in both places), so the interaction
+// lives here once rather than twice.
 //
 // Three pieces a caller composes around its OWN card chrome (border,
 // elevation, price, feature list, CTA — none of that is touched):
@@ -45,7 +46,7 @@ export function usePlanExpansion() {
 export function PlanCardGrid({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return (
     <LayoutGroup>
-      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5 auto-rows-fr gap-4 ${className}`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr gap-4 ${className}`}>
         {children}
       </div>
     </LayoutGroup>
