@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 // All of Tap-to-It's icon marks, as inline SVG React components, in one
@@ -14,6 +15,12 @@ type MarkProps = {
   size?: number;
   className?: string;
   title?: string;
+  // Escape hatch for pages where `currentColor` would pick up the wrong
+  // thing — e.g. /v/[token]'s customer pages remap --color-pine to the
+  // VENUE's own accent (lib/theme.ts), so a mark that must stay Tap-to-It's
+  // own brand colour regardless of venue theme needs an explicit style
+  // override rather than a `text-pine` className there.
+  style?: CSSProperties;
 };
 
 function a11yProps(title?: string) {
@@ -24,9 +31,9 @@ function a11yProps(title?: string) {
 // sweeping off its crossbar — "T + signal", the tap-to-order read. The
 // static mark (no animation) — see TapRippleMark/ScanFrameMark for the
 // arrival-animation states and DoneMark for the paid/submitted state.
-export function BrandMark({ size = 64, className = "", title }: MarkProps) {
+export function BrandMark({ size = 64, className = "", title, style }: MarkProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} {...a11yProps(title)}>
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} style={style} {...a11yProps(title)}>
       <rect width="64" height="64" rx="16" fill="currentColor" />
       <rect x="14" y="15" width="28" height="8" rx="3" fill="#fff" />
       <rect x="24" y="15" width="8" height="34" rx="3" fill="#fff" />
@@ -54,9 +61,9 @@ export const TillzMark = BrandMark;
 // dot, once, on arrival. The STATIC rendering (no `animate` prop) used
 // wherever the mark appears without the arrival animation — see
 // src/components/brand/arrival-animation.tsx for the animated version.
-export function TapRippleMark({ size = 64, className = "", title }: MarkProps) {
+export function TapRippleMark({ size = 64, className = "", title, style }: MarkProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} {...a11yProps(title)}>
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} style={style} {...a11yProps(title)}>
       <rect width="64" height="64" rx="16" fill="currentColor" />
       <circle cx="32" cy="32" r="6" fill="#fff" />
       <circle cx="32" cy="32" r="13" fill="none" stroke="#fff" strokeWidth="3.5" opacity="0.8" />
@@ -67,9 +74,9 @@ export function TapRippleMark({ size = 64, className = "", title }: MarkProps) {
 
 // State B — QR scan: four corner brackets (a viewfinder) around a filled
 // dot. Static rendering; see arrival-animation.tsx for the draw-in version.
-export function ScanFrameMark({ size = 64, className = "", title }: MarkProps) {
+export function ScanFrameMark({ size = 64, className = "", title, style }: MarkProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} {...a11yProps(title)}>
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} style={style} {...a11yProps(title)}>
       <rect width="64" height="64" rx="16" fill="currentColor" />
       <path
         d="M13 25V19a6 6 0 0 1 6-6h6M39 13h6a6 6 0 0 1 6 6v6M51 39v6a6 6 0 0 1-6 6h-6M25 51h-6a6 6 0 0 1-6-6v-6"
@@ -87,9 +94,9 @@ export function ScanFrameMark({ size = 64, className = "", title }: MarkProps) {
 // State D — paid/submitted: a filled disc with a drawn-in checkmark, inside
 // a faint outer ring. Static rendering; see DoneAnimation below for the
 // draw-in version used on the order-submitted/payment-success screens.
-export function DoneMark({ size = 64, className = "", title }: MarkProps) {
+export function DoneMark({ size = 64, className = "", title, style }: MarkProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} {...a11yProps(title)}>
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} style={style} {...a11yProps(title)}>
       <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4" />
       <circle cx="32" cy="32" r="25" fill="currentColor" />
       <path
@@ -126,12 +133,12 @@ export function Wordmark({ className = "" }: { className?: string }) {
 // for; callers control WHEN it mounts (see arrival-animation.tsx's
 // sessionStorage guard and the success screens' one-time render).
 
-export function TapRippleAnimation({ size = 64, className = "" }: { size?: number; className?: string }) {
+export function TapRippleAnimation({ size = 64, className = "", style }: { size?: number; className?: string; style?: CSSProperties }) {
   const reduced = useReducedMotion();
-  if (reduced) return <TapRippleMark size={size} className={className} />;
+  if (reduced) return <TapRippleMark size={size} className={className} style={style} />;
 
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} style={style} aria-hidden>
       <rect width="64" height="64" rx="16" fill="currentColor" />
       <circle cx="32" cy="32" r="6" fill="#fff" />
       {[13, 21].map((r, i) => (
@@ -153,12 +160,12 @@ export function TapRippleAnimation({ size = 64, className = "" }: { size?: numbe
   );
 }
 
-export function ScanFrameAnimation({ size = 64, className = "" }: { size?: number; className?: string }) {
+export function ScanFrameAnimation({ size = 64, className = "", style }: { size?: number; className?: string; style?: CSSProperties }) {
   const reduced = useReducedMotion();
-  if (reduced) return <ScanFrameMark size={size} className={className} />;
+  if (reduced) return <ScanFrameMark size={size} className={className} style={style} />;
 
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} style={style} aria-hidden>
       <rect width="64" height="64" rx="16" fill="currentColor" />
       <motion.path
         d="M13 25V19a6 6 0 0 1 6-6h6M39 13h6a6 6 0 0 1 6 6v6M51 39v6a6 6 0 0 1-6 6h-6M25 51h-6a6 6 0 0 1-6-6v-6"
@@ -184,12 +191,12 @@ export function ScanFrameAnimation({ size = 64, className = "" }: { size?: numbe
   );
 }
 
-export function DoneAnimation({ size = 64, className = "" }: { size?: number; className?: string }) {
+export function DoneAnimation({ size = 64, className = "", style }: { size?: number; className?: string; style?: CSSProperties }) {
   const reduced = useReducedMotion();
-  if (reduced) return <DoneMark size={size} className={className} />;
+  if (reduced) return <DoneMark size={size} className={className} style={style} />;
 
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} style={style} aria-hidden>
       <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.4" />
       <motion.circle
         cx="32"

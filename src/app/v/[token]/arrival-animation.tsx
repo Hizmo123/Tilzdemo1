@@ -17,9 +17,12 @@ const DURATION_MS = 900;
 // content) showing the tap/scan mark once on arrival — TapRippleMark for
 // src=nfc, ScanFrameMark for src=qr. Never delays or covers the menu: it's
 // an overlay ON TOP of already-rendering content, not a cover like
-// BrandIntro. Session-gated the same way BrandIntro is (own key, so the two
-// features can't interfere with each other's gating), so it plays once per
-// tab session per table token, never on in-app Menu/Back navigation.
+// BrandIntro. z-[65], ABOVE BrandIntro's z-[60] white cover — otherwise this
+// badge plays out its whole animation hidden behind that cover during the
+// first ~2s of a hard load and is never actually seen. Session-gated the
+// same way BrandIntro is (own key, so the two features can't interfere with
+// each other's gating), so it plays once per tab session per table token,
+// never on in-app Menu/Back navigation.
 export function ArrivalAnimation({ token, entrySource }: { token: string; entrySource: EntrySource }) {
   const reduced = useReducedMotion();
   const [show, setShow] = useState(false);
@@ -48,13 +51,17 @@ export function ArrivalAnimation({ token, entrySource }: { token: string; entryS
         <motion.div
           key="arrival"
           aria-hidden
-          className="fixed inset-x-0 top-5 z-[55] flex justify-center pointer-events-none"
+          className="fixed inset-x-0 top-5 z-[65] flex justify-center pointer-events-none"
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, transition: { duration: 0.2 } }}
           transition={{ duration: 0.25 }}
         >
-          <div className="text-pine drop-shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
+          {/* Fixed brand green, NOT text-pine — on this customer page
+              --color-pine is remapped to the VENUE's own accent (lib/
+              theme.ts's themeVars), and this moment is about Tap-to-It
+              recognising a tap/scan, not the venue's own branding. */}
+          <div style={{ color: "#0f5132" }} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
             {entrySource === "nfc" ? (
               <TapRippleAnimation size={56} />
             ) : (

@@ -130,7 +130,12 @@ export function BrandIntro({ token }: { token: string }) {
               }}
             >
               <div className="flex flex-col items-center gap-2.5 text-[color:var(--color-ink-soft)]">
-                <BrandMark size={32} className="text-pine" />
+                {/* Fixed brand green, NOT text-pine — on this customer page
+                    --color-pine is remapped to the VENUE's own accent (see
+                    lib/theme.ts's themeVars), and a "Powered by" mark has to
+                    stay Tap-to-It's own colour regardless of venue theme,
+                    same as the old hardcoded-colour mark this replaced. */}
+                <BrandMark size={32} style={{ color: "#0f5132" }} />
                 <p className="flex items-baseline gap-1.5">
                   <span className="text-[10px] uppercase tracking-[0.25em] opacity-70">Powered by</span>
                   <span className="font-display text-base font-medium tracking-tight">{BRAND.name}</span>
