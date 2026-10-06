@@ -4,6 +4,7 @@ import {
   getOpenBillWithOrders,
 } from "@/lib/bills";
 import { isOpenNow, isWithinWindow, parseHours } from "@/lib/hours";
+import { parseEntrySource } from "@/lib/entry-source";
 import { CustomerExperience } from "./customer-experience";
 
 // Public, no-auth landing reached by scanning a table QR. Resolves the opaque
@@ -53,10 +54,13 @@ function InvalidState({ reason }: { reason: string }) {
 
 export default async function VisitPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ src?: string | string[] }>;
 }) {
-  const { token } = await params;
+  const [{ token }, sp] = await Promise.all([params, searchParams]);
+  const entrySource = parseEntrySource(sp.src);
   const resolved = await resolveVisit(token);
 
   if (!resolved.ok) return <InvalidState reason={resolved.reason} />;
@@ -139,6 +143,7 @@ export default async function VisitPage({
   return (
     <CustomerExperience
       token={token}
+      entrySource={entrySource}
       restaurantId={visit.restaurantId}
       restaurantName={visit.restaurantName}
       locationName={visit.locationName}

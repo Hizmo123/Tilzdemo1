@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { BRAND } from "@/lib/brand";
+import { BrandMark } from "@/components/brand/marks";
 
 const SESSION_KEY_PREFIX = "tillz_intro_shown_";
 
@@ -114,10 +115,10 @@ export function BrandIntro({ token }: { token: string }) {
               </svg>
             </motion.div>
 
-            {/* Courtesy beat: the Tillz mark (its own fixed colours from
-                icon.svg — dark tile, green serif T) above a small, muted
-                wordmark. One composed unit, one fade/rise. Visible only
-                during the hold; gone before the cover starts to leave. */}
+            {/* Courtesy beat: BrandMark (brand-green tile, see marks.tsx)
+                above a small, muted "Powered by" line. One composed unit,
+                one fade/rise. Visible only during the hold; gone before the
+                cover starts to leave. */}
             <motion.div
               className="absolute inset-0 flex items-center justify-center"
               initial={{ opacity: 0, y: 6 }}
@@ -129,7 +130,12 @@ export function BrandIntro({ token }: { token: string }) {
               }}
             >
               <div className="flex flex-col items-center gap-2.5 text-[color:var(--color-ink-soft)]">
-                <TillzMark className="w-8 h-8" />
+                {/* Fixed brand green, NOT text-pine — on this customer page
+                    --color-pine is remapped to the VENUE's own accent (see
+                    lib/theme.ts's themeVars), and a "Powered by" mark has to
+                    stay Tap-to-It's own colour regardless of venue theme,
+                    same as the old hardcoded-colour mark this replaced. */}
+                <BrandMark size={32} style={{ color: "#0f5132" }} />
                 <p className="flex items-baseline gap-1.5">
                   <span className="text-[10px] uppercase tracking-[0.25em] opacity-70">Powered by</span>
                   <span className="font-display text-base font-medium tracking-tight">{BRAND.name}</span>
@@ -140,27 +146,5 @@ export function BrandIntro({ token }: { token: string }) {
         </motion.div>
       )}
     </AnimatePresence>
-  );
-}
-
-// Inline copy of src/app/icon.svg so it renders inside the overlay with no
-// network fetch and no chance of a late-arriving image. Colours are the
-// mark's own (not the venue's), by design.
-function TillzMark({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 512 512" className={className} aria-hidden>
-      <rect width="512" height="512" rx="112" fill="#14181c" />
-      <text
-        x="256"
-        y="356"
-        textAnchor="middle"
-        fontFamily="Georgia, 'Times New Roman', serif"
-        fontSize="300"
-        fontWeight="700"
-        fill="#2FB37A"
-      >
-        T
-      </text>
-    </svg>
   );
 }

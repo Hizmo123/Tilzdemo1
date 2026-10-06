@@ -4,8 +4,14 @@ import { useState } from "react";
 
 // Web NFC (writing tags from the browser) is Android-Chrome only — feature-
 // detected via NDEFReader. Everywhere else (iPhone, desktop) we show the manual
-// path: copy the table's URL and write it with a free NFC app. Either way the
-// data on the tag is identical to the table's QR — same URL, same destination.
+// path: copy the table's URL and write it with a free NFC app.
+//
+// The tag's URL is the table's QR link PLUS ?src=nfc (see lib/entry-source.ts)
+// — not identical to the plain QR code anymore. That query param is how the
+// landing page tells a tap from a scan (it drives the arrival animation and
+// survives the /s/<qrToken> stand redirect too, when a venue uses a printed
+// stand instead of this page's own QR). Anything without it reads as "qr",
+// so the printed QR code itself needs no change.
 interface NDEFReaderLike {
   write(message: unknown): Promise<void>;
 }
@@ -16,6 +22,7 @@ declare global {
 }
 
 export function NfcSection({ url }: { url: string }) {
+  const nfcUrl = `${url}?src=nfc`;
   const [copied, setCopied] = useState(false);
   const [writing, setWriting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -25,7 +32,7 @@ export function NfcSection({ url }: { url: string }) {
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(nfcUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -38,7 +45,7 @@ export function NfcSection({ url }: { url: string }) {
     setWriting(true);
     try {
       const ndef = new window.NDEFReader!();
-      await ndef.write({ records: [{ recordType: "url", data: url }] });
+      await ndef.write({ records: [{ recordType: "url", data: nfcUrl }] });
       setStatus("✓ Written! Tap the tag with a phone to test it.");
     } catch {
       setStatus("Couldn't write the tag. Hold it steady against the phone and try again.");
@@ -53,13 +60,14 @@ export function NfcSection({ url }: { url: string }) {
         NFC tag
       </h2>
       <p className="text-sm text-muted mb-4">
-        Put this table&apos;s address on an NFC tag so customers can tap instead of
-        scan. It&apos;s the same link as the QR code.
+        Put this address on an NFC tag so customers can tap instead of scan.
+        It&apos;s the same table as the QR code, with <code>?src=nfc</code> added
+        so we know it was a tap.
       </p>
 
       <div className="flex items-center gap-2 mb-4">
         <code className="flex-1 text-xs break-all bg-paper rounded-[var(--radius-xs)] px-2 py-1.5">
-          {url}
+          {nfcUrl}
         </code>
         <button
           onClick={copy}

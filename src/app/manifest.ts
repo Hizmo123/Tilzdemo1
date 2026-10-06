@@ -12,12 +12,20 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/",
     display: "standalone",
     background_color: "#f5f3ee",
-    theme_color: "#14181c",
+    // Matches the new BrandMark tile (src/app/icon.svg / icon.svg's own
+    // #0f5132) — was the old dark-tile mark's ink colour.
+    theme_color: "#0f5132",
     icons: [
       {
         src: "/icon.svg",
         sizes: "any",
         type: "image/svg+xml",
+        purpose: "any",
+      },
+      {
+        src: "/apple-icon.png",
+        sizes: "180x180",
+        type: "image/png",
         purpose: "any",
       },
     ],
