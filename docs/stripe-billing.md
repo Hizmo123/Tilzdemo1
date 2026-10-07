@@ -7,8 +7,8 @@ back to the stub (configured:false) and the existing mock-activate behaviour.
 ## One-time setup (test mode)
 
 1. Create a Stripe account (or use an existing one) and switch to **test mode**.
-2. Create three recurring Prices in AUD — Lite ($7.99/mo), Growth ($79/mo),
-   Pro ($149/mo) — plus one for the PRO extra-venue add-on ($49.99/mo). Do
+2. Create three recurring Prices in AUD — Lite ($7.99/mo), Growth ($79.99/mo),
+   Pro ($149.99/mo) — plus one for the PRO extra-venue add-on ($49.99/mo). Do
    **not** enable Stripe Tax / automatic tax on these — the prices are
    already GST-inclusive.
 3. Copy each Price id into `.env`:
