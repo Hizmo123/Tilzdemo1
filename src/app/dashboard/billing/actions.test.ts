@@ -9,7 +9,7 @@ vi.mock("@/lib/prisma", async () => {
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { subscribe, cancelSubscription } from "./actions";
+import { subscribe, cancelSubscription, manageBilling } from "./actions";
 import { prisma as prismaImport } from "@/lib/prisma";
 const prisma = prismaImport as any;
 
@@ -159,9 +159,9 @@ describe("subscribe() paid-plan gate", () => {
 });
 
 describe("cancelSubscription() paid-plan gate", () => {
-  const authz = (userId = "user-1") => ({
+  const authz = (userId = "user-1", org: Partial<{ plan: string; stripeSubscriptionId: string | null }> = {}) => ({
     can: () => true,
-    membership: { organization: { id: "org-1", plan: "GROWTH" } },
+    membership: { organization: { id: "org-1", plan: "GROWTH", stripeSubscriptionId: null, ...org } },
     user: { id: userId, email: "o@example.com" },
   });
 
@@ -191,5 +191,46 @@ describe("cancelSubscription() paid-plan gate", () => {
 
     expect(res).toEqual({ ok: true });
     expect(prisma.organization.update).toHaveBeenCalled();
+  });
+
+  it("flag on: an org with a REAL Stripe subscription is rejected — cancel through the portal instead", async () => {
+    vi.stubEnv("BILLING_ENABLED", "true");
+    getAuthz.mockResolvedValue(authz("user-1", { stripeSubscriptionId: "sub_1" }));
+
+    const res = await cancelSubscription();
+
+    expect(res.error).toMatch(/billing portal/i);
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+  });
+});
+
+// manageBilling() routes through the real billing provider (never mocked
+// here) — with no STRIPE_SECRET_KEY set in the test environment, that's
+// always the stub, so this also doubles as confirmation the stub's
+// "not configured" result surfaces as a real error, not a silent success.
+describe("manageBilling()", () => {
+  beforeEach(() => {
+    getAuthz.mockReset();
+  });
+
+  it("requires settings:manage", async () => {
+    getAuthz.mockResolvedValue({ can: () => false, membership: null, user: { id: "user-1" } });
+
+    const res = await manageBilling();
+
+    expect(res.error).toBeTruthy();
+  });
+
+  it("errors clearly when Stripe isn't configured, rather than a silent no-op", async () => {
+    getAuthz.mockResolvedValue({
+      can: () => true,
+      membership: { organization: { id: "org-1" } },
+      user: { id: "user-1", email: "o@example.com" },
+    });
+
+    const res = await manageBilling();
+
+    expect(res.ok).toBeUndefined();
+    expect(res.error).toMatch(/not configured|STRIPE_SECRET_KEY/i);
   });
 });

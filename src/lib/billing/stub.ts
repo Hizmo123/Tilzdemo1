@@ -7,6 +7,8 @@ import type {
   CheckoutSessionResult,
   PortalSessionResult,
   WebhookHandleResult,
+  SyncExtraVenueQuantityInput,
+  SyncExtraVenueQuantityResult,
 } from "./provider";
 
 const NOT_CONFIGURED = "Billing isn't configured yet — set STRIPE_SECRET_KEY to enable real checkout.";
@@ -40,5 +42,11 @@ export class StubBillingProvider implements BillingProvider {
   async handleWebhookEvent(_input: HandleWebhookEventInput): Promise<WebhookHandleResult> {
     if (!this.configured()) return { configured: false, error: NOT_CONFIGURED };
     return { configured: false, error: NOT_CONFIGURED };
+  }
+
+  async syncExtraVenueQuantity(_input: SyncExtraVenueQuantityInput): Promise<SyncExtraVenueQuantityResult> {
+    // No subscription to update under the mock model — the venue still gets
+    // created for free, exactly as before this provider existed.
+    return { configured: false };
   }
 }

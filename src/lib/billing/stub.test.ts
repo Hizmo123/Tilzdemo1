@@ -45,4 +45,9 @@ describe("StubBillingProvider", () => {
     });
     expect(result.configured).toBe(false);
   });
+
+  it("syncExtraVenueQuantity reports not configured — the mock model just creates the venue for free", async () => {
+    const result = await provider.syncExtraVenueQuantity({ organizationId: "org-1", quantity: 2 });
+    expect(result.configured).toBe(false);
+  });
 });

@@ -61,6 +61,7 @@ export default async function AddVenuePage({
       orgPlan={membership.organization.plan}
       requiresPayment={"requiresPayment" in check && check.requiresPayment === true}
       addonPriceLabel={"addonPriceLabel" in check ? check.addonPriceLabel : undefined}
+      hasStripeSubscription={!!membership.organization.stripeSubscriptionId}
       initialDraft={draft}
       initialSquare={pendingSquare}
       existingOrgSquare={existingOrgSquare}

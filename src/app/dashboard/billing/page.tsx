@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
 import { getTrialStatus } from "@/lib/plan-subscription";
 import { paidPlansOpen } from "@/lib/billing";
 import { Billing } from "./checkout";
@@ -57,8 +58,9 @@ export default async function BillingPage() {
           Billing
         </h1>
         <p className="text-muted mt-1">
-          Switch your plan to test how each tier behaves. Test mode — no card
-          required and no charge is made.
+          {env.stripeSecretKey()
+            ? "Manage your subscription — switch plans, update your card or view invoices."
+            : "Switch your plan to test how each tier behaves. Test mode — no card required and no charge is made."}
         </p>
       </div>
 
@@ -70,6 +72,10 @@ export default async function BillingPage() {
         connectBrandingHidden={org.connectBrandingHidden}
         trialStatus={getTrialStatus(org)}
         paidPlansOpen={paidPlansOpen(authz.user.id)}
+        hasStripeSubscription={!!org.stripeSubscriptionId}
+        stripeStatus={org.stripeStatus}
+        currentPeriodEnd={org.currentPeriodEnd}
+        cancelAtPeriodEnd={!!org.cancelAtPeriodEnd}
       />
     </div>
   );
