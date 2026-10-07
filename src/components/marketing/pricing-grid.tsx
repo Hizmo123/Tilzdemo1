@@ -2,7 +2,9 @@
 
 import { PLANS, planPriceLabel, PAY_AS_YOU_SELL_BLURB, type PlanDef } from "@/lib/plans";
 import { isTrialableTier, TRIAL_DAYS } from "@/lib/plan-subscription";
+import { BRAND } from "@/lib/brand";
 import { LinkButton } from "@/components/ui/button";
+import { buttonClasses } from "@/components/ui/button-classes";
 import { Card } from "@/components/ui/card";
 import { PlanCardGrid, PlanCardShell, PlanFeaturesReveal, usePlanExpansion } from "@/components/ui/expandable-plan-card";
 
@@ -15,7 +17,7 @@ const RECOMMENDED_TIER: PlanDef["tier"] = "GROWTH";
 // state) rendered from the marketing homepage's server component (Pricing()
 // in src/app/page.tsx), which keeps everything around it — the section
 // intro, the "Prices in AUD…" footnote — server-rendered.
-export function PricingGrid() {
+export function PricingGrid({ paidPlansOpen = true }: { paidPlansOpen?: boolean }) {
   const { expandedTier, toggle: toggleExpanded } = usePlanExpansion();
 
   return (
@@ -33,6 +35,7 @@ export function PricingGrid() {
               plan={plan}
               expanded={expandedTier === plan.tier}
               onToggleExpand={() => toggleExpanded(plan.tier)}
+              paidPlansOpen={paidPlansOpen}
             />
           </PlanCardShell>
         ))}
@@ -47,19 +50,18 @@ function PricingCard({
   plan,
   expanded,
   onToggleExpand,
+  paidPlansOpen,
 }: {
   plan: PlanDef;
   expanded: boolean;
   onToggleExpand: () => void;
+  paidPlansOpen: boolean;
 }) {
-  const free = plan.priceCents === 0;
   const recommended = plan.tier === RECOMMENDED_TIER;
   return (
     <Card
       elevation={recommended ? "raised" : "rest"}
-      className={`relative flex flex-col p-6 h-full ${
-        recommended ? "ring-2 ring-pine" : free ? "bg-surface-2/60" : ""
-      }`}
+      className={`relative flex flex-col p-6 h-full ${recommended ? "ring-2 ring-pine" : ""}`}
     >
       {recommended && (
         <span className="absolute -top-3 left-6 text-[11px] font-semibold uppercase tracking-wide bg-accent-gradient text-on-accent px-2.5 py-1 rounded-pill shadow-accent">
@@ -71,11 +73,10 @@ function PricingCard({
       <p className="mt-5 font-display text-display font-semibold">
         {planPriceLabel(plan)}
         {plan.cadence === "per month" && (
-          <span className="text-base text-muted font-normal font-sans tracking-normal"> /month</span>
+          <span className="text-base text-muted font-normal font-sans tracking-normal"> /month inc. GST</span>
         )}
       </p>
-      {plan.cadence === "free" && <p className="text-xs text-muted mt-1">No card needed</p>}
-      {isTrialableTier(plan.tier) && (
+      {paidPlansOpen && isTrialableTier(plan.tier) && (
         <p className="text-xs text-pine-deep font-medium mt-1">{TRIAL_DAYS}-day free trial</p>
       )}
       <ul className="mt-6 space-y-2.5 text-sm text-ink-soft flex-1">
@@ -88,10 +89,24 @@ function PricingCard({
           </li>
         ))}
       </ul>
-      <div className="mt-7">
-        <LinkButton href="/signup" variant={recommended ? "primary" : "secondary"} full>
-          {free ? "Start free" : `Choose ${plan.name}`}
-        </LinkButton>
+      <div className="mt-7 space-y-1.5">
+        {paidPlansOpen ? (
+          <LinkButton href="/signup" variant={recommended ? "primary" : "secondary"} full>
+            {`Choose ${plan.name}`}
+          </LinkButton>
+        ) : (
+          <>
+            <button type="button" disabled className={buttonClasses("secondary", "md", true, "opacity-60 cursor-not-allowed")}>
+              Opening soon
+            </button>
+            <a
+              href={`mailto:${BRAND.supportEmail}`}
+              className="block text-center text-xs text-pine hover:underline"
+            >
+              Email us for early access
+            </a>
+          </>
+        )}
       </div>
 
       <PlanFeaturesReveal tier={plan.tier} expanded={expanded} onToggle={onToggleExpand} />

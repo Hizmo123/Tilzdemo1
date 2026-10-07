@@ -25,6 +25,7 @@ export function Billing({
   connectPlusEnabled,
   connectBrandingHidden,
   trialStatus,
+  paidPlansOpen,
 }: {
   currentPlan: PlanTier;
   planStatus: string;
@@ -39,6 +40,10 @@ export function Billing({
   connectPlusEnabled: boolean;
   connectBrandingHidden: boolean;
   trialStatus: TrialStatus;
+  // false while LITE/GROWTH/PRO self-assignment is closed (see
+  // lib/billing/gate.ts) — switching to or cancelling back to one of those
+  // tiers is disabled with an "opening soon" message instead.
+  paidPlansOpen: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -76,7 +81,7 @@ export function Billing({
             Trial — {trialStatus.daysRemaining} day{trialStatus.daysRemaining === 1 ? "" : "s"} left
           </span>
         )}
-        {active && currentPlan !== "LITE" && (
+        {active && currentPlan !== "LITE" && paidPlansOpen && (
           <button
             onClick={() =>
               start(async () => {
@@ -112,6 +117,9 @@ export function Billing({
           // connection would label the org CONNECT with no way to actually
           // process an order. See handleConnectClick below.
           const needsSquareFirst = connect && !squareConnected && !isCurrent;
+          // CONNECT needs no gate (no subscription to self-assign); every
+          // other tier here is LITE/GROWTH/PRO, which do.
+          const gated = !connect && !paidPlansOpen && !isCurrent;
 
           function handleSubscribeClick() {
             start(async () => {
@@ -145,7 +153,7 @@ export function Billing({
                 {p.priceCents > 0 && (
                   <span className="text-sm text-muted font-normal">
                     {" "}
-                    /{p.perVenue ? "venue/mo" : "mo"}
+                    /{p.perVenue ? "venue/mo" : "mo"} inc. GST
                   </span>
                 )}
               </p>
@@ -154,7 +162,7 @@ export function Billing({
                   + {CONNECT_FEE_BLURB} — cancel any time
                 </p>
               )}
-              {isTrialableTier(p.tier) && (
+              {paidPlansOpen && isTrialableTier(p.tier) && (
                 <p className="text-xs text-pine-deep font-medium mt-1">
                   {TRIAL_DAYS}-day free trial
                 </p>
@@ -173,19 +181,29 @@ export function Billing({
                   Connect Square to switch
                 </Link>
               ) : (
-                <button
-                  disabled={isCurrent || pending}
-                  onClick={handleSubscribeClick}
-                  className={`mt-6 h-11 rounded-[var(--radius-md)] font-medium transition-colors duration-[var(--dur-fast)] ${
-                    isCurrent
-                      ? "bg-paper text-muted cursor-default"
-                      : p.tier === "GROWTH"
-                        ? "bg-pine text-white hover:bg-pine-deep"
-                        : "border border-line hover:border-ink/30"
-                  }`}
-                >
-                  {isCurrent ? "Current plan" : "Switch to this plan"}
-                </button>
+                <>
+                  <button
+                    disabled={isCurrent || gated || pending}
+                    onClick={handleSubscribeClick}
+                    className={`mt-6 h-11 rounded-[var(--radius-md)] font-medium transition-colors duration-[var(--dur-fast)] ${
+                      isCurrent || gated
+                        ? "bg-paper text-muted cursor-default"
+                        : p.tier === "GROWTH"
+                          ? "bg-pine text-white hover:bg-pine-deep"
+                          : "border border-line hover:border-ink/30"
+                    }`}
+                  >
+                    {isCurrent ? "Current plan" : gated ? "Opening soon" : "Switch to this plan"}
+                  </button>
+                  {gated && (
+                    <a
+                      href={`mailto:${BRAND.supportEmail}`}
+                      className="mt-1.5 block text-center text-xs text-pine hover:underline"
+                    >
+                      Email us for early access
+                    </a>
+                  )}
+                </>
               )}
 
               <PlanFeaturesReveal

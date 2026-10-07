@@ -14,6 +14,7 @@ import { sameEveryDayHours, weekdayWeekendHours } from "@/lib/hours";
 import { getSetupChecklist, type ChecklistItem } from "@/lib/setup-checklist";
 import { entitlementsForTier, getEntitlements, canCreateVenue, type Entitlements } from "@/lib/entitlements";
 import { mockSubscriptionData } from "@/lib/plan-subscription";
+import { paidPlansOpen, PAID_PLANS_CLOSED_MESSAGE, SELF_ASSIGNABLE_GATED_TIERS } from "@/lib/billing";
 import {
   attachPendingToRestaurant,
   discardPending,
@@ -524,6 +525,17 @@ export async function completeOnboarding(
 
   const parsed = schema.safeParse(answers);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  // Blocked outright for LITE/GROWTH/PRO (platform admins excepted) until
+  // paidPlansOpen() — see dashboard/billing/actions.ts#subscribe for the
+  // same gate on the other path that can assign one of these tiers. New
+  // signups default to CONNECT instead (see onboarding/page.tsx), so this
+  // should only ever actually fire for a draft started before the gate
+  // existed or a request crafted outside the UI.
+  if (SELF_ASSIGNABLE_GATED_TIERS.has(parsed.data.plan) && !paidPlansOpen(user.id)) {
+    return { error: PAID_PLANS_CLOSED_MESSAGE };
+  }
+
   const tier = entitlementsForTier(parsed.data.plan);
   const a = tier.ordering ? parsed.data : forceMenuOnly(parsed.data);
 

@@ -14,10 +14,11 @@ import type { PlanTier } from "@prisma/client";
 // hardcoded a second time.
 export const TRIAL_DAYS = 14;
 
-// Which tiers a free trial ever applies to. LITE is free forever (nothing
-// to trial); CONNECT has no subscription either — a flat per-order fee is
-// its only relationship with Tillz, not a monthly charge a trial could
-// defer.
+// Which tiers a free trial ever applies to. LITE is a paid subscription now
+// too, but deliberately stays off this list — it's the cheapest tier there
+// is, so there's nothing a trial would meaningfully defer; CONNECT has no
+// subscription either — a flat per-order fee is its only relationship with
+// Tillz, not a monthly charge a trial could defer.
 export const TRIALABLE_TIERS: readonly PlanTier[] = ["BASIC", "GROWTH", "PRO"];
 
 export function isTrialableTier(tier: PlanTier): boolean {

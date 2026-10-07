@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getTrialStatus } from "@/lib/plan-subscription";
+import { paidPlansOpen } from "@/lib/billing";
 import { Billing } from "./checkout";
 
 export default async function BillingPage() {
@@ -68,6 +69,7 @@ export default async function BillingPage() {
         connectPlusEnabled={org.connectPlusEnabled}
         connectBrandingHidden={org.connectBrandingHidden}
         trialStatus={getTrialStatus(org)}
+        paidPlansOpen={paidPlansOpen(authz.user.id)}
       />
     </div>
   );

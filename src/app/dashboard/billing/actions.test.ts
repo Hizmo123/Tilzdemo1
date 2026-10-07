@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const { getAuthz } = vi.hoisted(() => ({ getAuthz: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ getAuthz }));
@@ -9,7 +9,7 @@ vi.mock("@/lib/prisma", async () => {
 vi.mock("@/lib/audit", () => ({ audit: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { subscribe } from "./actions";
+import { subscribe, cancelSubscription } from "./actions";
 import { prisma as prismaImport } from "@/lib/prisma";
 const prisma = prismaImport as any;
 
@@ -31,6 +31,10 @@ describe("subscribe() tier allow-list", () => {
     getAuthz.mockReset();
     vi.mocked(prisma.organization.update).mockReset().mockResolvedValue({});
     vi.mocked(prisma.squareConnection.findUnique).mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it("a new (LITE) org trying to switch straight to BASIC is rejected", async () => {
@@ -80,12 +84,112 @@ describe("subscribe() tier allow-list", () => {
     expect(res).toEqual({ error: "That plan isn't available." });
   });
 
-  it("every public tier (LITE/GROWTH/PRO) is always allowed, no Square check performed", async () => {
+  it("every public tier (LITE/GROWTH/PRO) is allowed once paid plans are open, no Square check performed", async () => {
+    vi.stubEnv("BILLING_ENABLED", "true");
     getAuthz.mockResolvedValue(authz({ plan: "LITE" }));
 
     const res = await subscribe("GROWTH" as any);
 
     expect(res).toEqual({ ok: true });
     expect(prisma.squareConnection.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+// Regression tests for the billing-foundation gate: LITE/GROWTH/PRO are
+// real subscription prices now (Lite included), so subscribe() must not let
+// anyone grant themselves one for free before Stripe is actually wired up —
+// see src/lib/billing/gate.ts#paidPlansOpen.
+describe("subscribe() paid-plan gate", () => {
+  const authz = (org: Partial<{ plan: string; restaurants: { id: string }[]; hasUsedTrial: boolean }>, userId = "user-1") => ({
+    can: () => true,
+    membership: {
+      organization: { id: "org-1", hasUsedTrial: false, restaurants: [{ id: "rest-1" }], ...org },
+    },
+    user: { id: userId, email: "o@example.com" },
+  });
+
+  beforeEach(() => {
+    getAuthz.mockReset();
+    vi.mocked(prisma.organization.update).mockReset().mockResolvedValue({});
+    vi.mocked(prisma.squareConnection.findUnique).mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("flag off: LITE/GROWTH/PRO self-assignment is rejected", async () => {
+    getAuthz.mockResolvedValue(authz({ plan: "LITE" }));
+
+    for (const tier of ["LITE", "GROWTH", "PRO"] as const) {
+      const res = await subscribe(tier as any);
+      expect(res.error).toMatch(/opening soon|early access/i);
+    }
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+  });
+
+  it("flag off: a platform admin can still self-assign GROWTH", async () => {
+    vi.stubEnv("PLATFORM_ADMIN_USER_IDS", "admin-1");
+    getAuthz.mockResolvedValue(authz({ plan: "LITE" }, "admin-1"));
+
+    const res = await subscribe("GROWTH" as any);
+
+    expect(res).toEqual({ ok: true });
+    expect(prisma.organization.update).toHaveBeenCalled();
+  });
+
+  it("flag off: CONNECT is never gated (no subscription to self-assign)", async () => {
+    getAuthz.mockResolvedValue(authz({ plan: "GROWTH" }));
+    vi.mocked(prisma.squareConnection.findUnique).mockResolvedValue({ revokedAt: null });
+
+    const res = await subscribe("CONNECT" as any);
+
+    expect(res).toEqual({ ok: true });
+  });
+
+  it("flag on: routes through the billing provider, which falls back to the mock write since Stripe isn't configured", async () => {
+    vi.stubEnv("BILLING_ENABLED", "true");
+    getAuthz.mockResolvedValue(authz({ plan: "LITE" }));
+
+    const res = await subscribe("GROWTH" as any);
+
+    expect(res).toEqual({ ok: true });
+    expect(prisma.organization.update).toHaveBeenCalled();
+  });
+});
+
+describe("cancelSubscription() paid-plan gate", () => {
+  const authz = (userId = "user-1") => ({
+    can: () => true,
+    membership: { organization: { id: "org-1", plan: "GROWTH" } },
+    user: { id: userId, email: "o@example.com" },
+  });
+
+  beforeEach(() => {
+    getAuthz.mockReset();
+    vi.mocked(prisma.organization.update).mockReset().mockResolvedValue({});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("flag off: cancelling (downgrading to the now-paid Lite) is rejected", async () => {
+    getAuthz.mockResolvedValue(authz());
+
+    const res = await cancelSubscription();
+
+    expect(res.error).toMatch(/opening soon|early access/i);
+    expect(prisma.organization.update).not.toHaveBeenCalled();
+  });
+
+  it("flag on: cancelling succeeds", async () => {
+    vi.stubEnv("BILLING_ENABLED", "true");
+    getAuthz.mockResolvedValue(authz());
+
+    const res = await cancelSubscription();
+
+    expect(res).toEqual({ ok: true });
+    expect(prisma.organization.update).toHaveBeenCalled();
   });
 });

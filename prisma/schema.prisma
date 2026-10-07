@@ -154,6 +154,20 @@ model Organization {
   deactivatedByEmail           String?
   reactivationToken            String?   @unique
   reactivationTokenExpiresAt   DateTime?
+  // Stripe Billing — all nullable, all unwritten today. subscribe() still
+  // writes the mock mockSubscriptionData shape above (plan/planStatus/
+  // trialEndsAt/...); these columns exist so the real integration
+  // (src/lib/billing/) can start writing them without a second migration.
+  // stripeStatus mirrors Stripe's own subscription.status string ("trialing",
+  // "active", "past_due", "canceled", ...) rather than reusing planStatus,
+  // since the two will likely need to diverge once a real webhook drives this.
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  stripeStatus         String?
+  stripePriceId        String?
+  currentPeriodEnd     DateTime?
+  trialEnd             DateTime?
+  cancelAtPeriodEnd    Boolean?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   restaurants Restaurant[]
