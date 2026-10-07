@@ -317,6 +317,18 @@ model Restaurant {
   // Optional social/web links shown on the customer ordering page footer.
   instagramHandle  String?
   websiteUrl       String?
+  // The venue's "leave a review" link, shown to a guest on the paid/done
+  // screen. Unlike websiteUrl, this is never stored as typed — server
+  // validation (see dashboard/settings/venue/google-review-actions.ts)
+  // normalises a bare Place ID into the full search.google.com write-review
+  // URL and rejects anything whose hostname isn't a known Google one, so
+  // this column only ever holds a URL we've already checked, never
+  // arbitrary input. Null = not configured, no card shown.
+  googleReviewUrl  String?
+  // How many times a guest has tapped "Leave a Google review" on the paid
+  // screen, for this venue, all-time. Same simple counter-on-Restaurant
+  // pattern as orderSeq above — no event table, nothing per-guest stored.
+  googleReviewClicks Int @default(0)
   // Whether this venue uses Square today ("square" | "none" | null =
   // unanswered). Square is the only POS asked about — the only one with a
   // real integration on the roadmap (Delivery 1b). posProviderOther is

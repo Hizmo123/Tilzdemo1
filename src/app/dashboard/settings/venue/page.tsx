@@ -3,6 +3,7 @@ import { getAuthz } from "@/lib/auth";
 import { SettingsForm } from "../settings-form";
 import { buildSettingsInitial } from "../settings-initial";
 import { PublicMenuLink } from "@/components/dashboard/public-menu-link";
+import { GoogleReviewSection } from "./google-review-section";
 
 export default async function VenueDetailsPage() {
   const authz = await getAuthz();
@@ -30,6 +31,8 @@ export default async function VenueDetailsPage() {
       </div>
 
       <SettingsForm section="venue" initial={buildSettingsInitial(restaurant)} />
+
+      <GoogleReviewSection savedUrl={restaurant.googleReviewUrl} />
 
       <PublicMenuLink slug={restaurant.slug} />
     </div>
