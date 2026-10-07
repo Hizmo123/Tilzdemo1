@@ -17,7 +17,7 @@ export default async function StaffLoginsPage() {
         </h1>
         <p className="text-muted">
           Create your restaurant first from the{" "}
-          <Link href="/dashboard" className="text-pine hover:underline">
+          <Link href="/dashboard" prefetch={false} className="text-pine hover:underline">
             Overview
           </Link>{" "}
           page.
@@ -75,7 +75,7 @@ export default async function StaffLoginsPage() {
         <p className="text-muted mb-4">
           PIN logins for floor and kitchen staff. Managers who need full accounts
           go under{" "}
-          <Link href="/dashboard/staff" className="text-pine hover:underline">
+          <Link href="/dashboard/staff" prefetch={false} className="text-pine hover:underline">
             Members
           </Link>
           .

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { PlanTier } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/money";
@@ -28,7 +29,14 @@ import { EXTRA_VENUE_PRICE_CENTS } from "@/lib/plans";
 import { entitlementsForTier, entitlementsLabel, type Entitlements } from "@/lib/entitlements-core";
 export { entitlementsForTier, entitlementsLabel, type Entitlements };
 
-export async function getEntitlements(organizationId: string): Promise<Entitlements> {
+// cache()'d: this request-scoped memoization is why calling getEntitlements
+// from the dashboard layout AND from a page (and again from inside
+// getPublishReadiness below) doesn't cost 3-4 separate organization.
+// findUnique round trips — React dedupes by argument (organizationId) within
+// one request, so every call with the same id after the first just reuses
+// the in-flight/resolved promise. Nothing about the function's behaviour or
+// return value changes; nothing downstream needed to change either.
+export const getEntitlements = cache(async (organizationId: string): Promise<Entitlements> => {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: {
@@ -44,7 +52,7 @@ export async function getEntitlements(organizationId: string): Promise<Entitleme
     { lapsedAt: org.subscriptionLapsedAt },
     { connectPlusEnabled: org.connectPlusEnabled, connectBrandingHidden: org.connectBrandingHidden },
   );
-}
+});
 
 // Only blocks CREATING a table beyond the limit — never hides or disables
 // tables an organisation already has, even if a new/lower limit means
@@ -186,7 +194,9 @@ export async function canCreateVenue(organizationId: string): Promise<CreateVenu
 // TODO(stripe): once real billing lands, replace this body with an actual
 // subscription-status check against the payment provider — every caller
 // keeps working unchanged since they only ever see the boolean result.
-export async function isOrgSubscribed(organizationId: string): Promise<boolean> {
+// cache()'d for the same reason as getEntitlements — called standalone AND
+// from inside getPublishReadiness, which would otherwise be two queries.
+export const isOrgSubscribed = cache(async (organizationId: string): Promise<boolean> => {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { plan: true, planStatus: true, subscriptionLapsedAt: true },
@@ -196,7 +206,7 @@ export async function isOrgSubscribed(organizationId: string): Promise<boolean> 
 
   const ent = entitlementsForTier(org.plan, { lapsedAt: org.subscriptionLapsedAt });
   return !ent.orderingBlocked;
-}
+});
 
 export type PublishReadiness =
   | { ready: true }

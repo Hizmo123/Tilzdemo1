@@ -81,7 +81,7 @@ export default async function SettingsPage() {
         </h1>
         <p className="text-muted">
           Create your restaurant first from the{" "}
-          <Link href="/dashboard" className="text-pine hover:underline">
+          <Link href="/dashboard" prefetch={false} className="text-pine hover:underline">
             Overview
           </Link>{" "}
           page.

@@ -29,7 +29,7 @@ export default async function OrdersPage({
         </h1>
         <p className="text-muted">
           Create your restaurant first from the{" "}
-          <Link href="/dashboard" className="text-pine hover:underline">
+          <Link href="/dashboard" prefetch={false} className="text-pine hover:underline">
             Overview
           </Link>{" "}
           page.
@@ -51,7 +51,7 @@ export default async function OrdersPage({
 
   const restaurant = authz.membership.organization.restaurants[0];
   const sp = await searchParams;
-  const ent = restaurant ? await getEntitlements(authz.membership.organizationId) : null;
+  const ent = restaurant ? await getEntitlements(authz.membership!.organizationId) : null;
 
   // Same pattern Analytics uses for entitlements.analyticsWindowDays:
   // resolve the requested preset/custom range, then clamp it to the plan's
@@ -65,10 +65,7 @@ export default async function OrdersPage({
     : { resolved: requestedRange, clamped: false };
 
   const [orders, history] = restaurant
-    ? await Promise.all([
-        getKitchenOrders(restaurant.id),
-        getOrderHistory(restaurant.id, historyRange),
-      ])
+    ? await Promise.all([getKitchenOrders(restaurant.id), getOrderHistory(restaurant.id, historyRange)])
     : [[], []];
   const now = Date.now();
   const currency = restaurant?.currency ?? "AUD";

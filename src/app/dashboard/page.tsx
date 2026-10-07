@@ -99,7 +99,7 @@ export default async function DashboardHome() {
             no ordering. Keep it up to date here.
           </p>
           <Link
-            href="/dashboard/menu"
+            href="/dashboard/menu" prefetch={false}
             className={buttonClasses("primary", "sm")}
           >
             Edit menu
@@ -114,14 +114,23 @@ export default async function DashboardHome() {
   // "Today" resets at the restaurant's local midnight, not the server's.
   const startOfToday = startOfTodayInTz(restaurant.timezone);
 
-  // Filtering through the table -> location relation directly (rather than
-  // pre-fetching table ids and passing `{in: [...]}`) drops one full sequential
-  // round trip that used to block before any of these could even start.
-  const [paidToday, openBills, paidTablesCount, tables, openRequests, checklist] =
+  // Bill has direct restaurantId/locationId columns precisely so revenue
+  // queries like these don't have to go through the (now-optional) table
+  // relation to reach them — see the Bill schema comment and
+  // lib/analytics.ts/lib/invoices.ts, which already follow this. Filtering
+  // on `locationId` directly (not `table: { locationId }`) is what actually
+  // lets these hit Bill's own `@@index([locationId, status])` instead of
+  // joining through Table first for the same result.
+  //
+  // isOrgSubscribed/getPublishReadiness used to run in a SECOND, sequential
+  // Promise.all after this one even though neither depends on anything this
+  // batch produces (both only need restaurant.organizationId, already in
+  // hand) — merged into this one batch instead, cutting a full round trip.
+  const [paidToday, openBills, paidTablesCount, tables, openRequests, checklist, subscribed, readiness] =
     await Promise.all([
       prisma.bill.aggregate({
         where: {
-          table: { locationId: location.id },
+          locationId: location.id,
           status: "PAID",
           paidAt: { gte: startOfToday },
         },
@@ -130,13 +139,13 @@ export default async function DashboardHome() {
       }),
       prisma.bill.count({
         where: {
-          table: { locationId: location.id },
+          locationId: location.id,
           status: { in: ["OPEN", "PARTIALLY_PAID"] },
         },
       }),
       prisma.bill.count({
         where: {
-          table: { locationId: location.id },
+          locationId: location.id,
           status: "PAID",
           paidAt: { gte: startOfToday },
         },
@@ -144,11 +153,15 @@ export default async function DashboardHome() {
       prisma.table.findMany({
         where: { locationId: location.id },
         orderBy: [{ section: "asc" }, { createdAt: "asc" }],
-        include: {
+        select: {
+          id: true,
+          label: true,
+          active: true,
           bills: {
             where: { status: { in: ["OPEN", "PARTIALLY_PAID"] } },
             orderBy: { createdAt: "desc" },
             take: 1,
+            select: { totalCents: true, amountPaidCents: true },
           },
         },
       }),
@@ -157,20 +170,20 @@ export default async function DashboardHome() {
       // sync and naturally disappears for good once everything is genuinely
       // done — run alongside the stats above instead of after them.
       getSetupChecklist(restaurant),
+      // isOrgSubscribed alone still drives everything BUT PublishControl
+      // below (the mock-billing "active plan" check other callers want on
+      // its own); readiness additionally covers Connect's Square-connection
+      // precondition, which isOrgSubscribed deliberately doesn't fold in —
+      // see getPublishReadiness's doc comment. Both cache()'d (see
+      // lib/entitlements.ts), so readiness's own internal isOrgSubscribed/
+      // getEntitlements calls reuse these same two instead of re-querying.
+      isOrgSubscribed(restaurant.organizationId),
+      getPublishReadiness(restaurant.organizationId),
     ]);
 
   const salesToday = paidToday._sum.totalCents ?? 0;
   const ordersToday = paidToday._count;
   const checklistRemaining = checklist.filter((c) => !c.done);
-  // isOrgSubscribed alone still drives everything BUT PublishControl below
-  // (the mock-billing "active plan" check other callers want on its own);
-  // readiness additionally covers Connect's Square-connection precondition,
-  // which isOrgSubscribed deliberately doesn't fold in — see
-  // getPublishReadiness's doc comment.
-  const [subscribed, readiness] = await Promise.all([
-    isOrgSubscribed(restaurant.organizationId),
-    getPublishReadiness(restaurant.organizationId),
-  ]);
   const squareDisconnected = !readiness.ready && readiness.reason === "square_disconnected";
   // See dashboard/tables/page.tsx's matching comment — the same "lead with
   // the shared QR, don't hide any existing per-table codes" logic.
