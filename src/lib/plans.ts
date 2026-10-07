@@ -78,7 +78,7 @@ export const ALL_PLANS: PlanDef[] = [
   {
     tier: "GROWTH",
     name: "Growth",
-    priceCents: 7900,
+    priceCents: 7999,
     cadence: "per month",
     blurb: "One venue, unlimited tables, your own brand.",
     features: [
@@ -91,7 +91,7 @@ export const ALL_PLANS: PlanDef[] = [
   {
     tier: "PRO",
     name: "Pro",
-    priceCents: 14900,
+    priceCents: 14999,
     cadence: "per month",
     blurb: "Up to 3 venues from one dashboard, more as you grow.",
     features: [
