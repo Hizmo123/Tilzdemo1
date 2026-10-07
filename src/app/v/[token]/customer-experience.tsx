@@ -10,6 +10,7 @@ import { EmailReceiptForm } from "@/components/receipt/email-receipt-form";
 import { CallStaff } from "./call-staff";
 import { BrandIntro } from "./brand-intro";
 import { ArrivalAnimation } from "./arrival-animation";
+import { GoogleReviewCard } from "./google-review-card";
 import type { EntrySource } from "@/lib/entry-source";
 import { DoneAnimation } from "@/components/brand/marks";
 import { MenuDisplay } from "./menu-display";
@@ -90,6 +91,7 @@ export function CustomerExperience({
   squareAppId,
   squareLocationId,
   squareEnv,
+  googleReviewUrl,
   open,
   canOrder,
   canPay,
@@ -136,6 +138,7 @@ export function CustomerExperience({
   squareAppId: string | null;
   squareLocationId: string | null;
   squareEnv: string | null;
+  googleReviewUrl: string | null;
   open: boolean;
   canOrder: boolean;
   canPay: boolean;
@@ -377,6 +380,7 @@ export function CustomerExperience({
         token={token}
         test={!squareEnabled}
         accent={accent}
+        googleReviewUrl={googleReviewUrl}
         Shell={Shell}
         onBack={() => {
           setPaid(null);
@@ -809,6 +813,7 @@ function PaidScreen({
   token,
   test,
   accent,
+  googleReviewUrl,
   Shell,
   onBack,
 }: {
@@ -820,6 +825,7 @@ function PaidScreen({
   token: string;
   test: boolean;
   accent: string;
+  googleReviewUrl: string | null;
   Shell: (p: { children: React.ReactNode; live?: boolean }) => React.ReactElement;
   onBack: () => void;
 }) {
@@ -903,6 +909,10 @@ function PaidScreen({
           <motion.p variants={fadeUp} className="mt-6 text-[11px] uppercase tracking-wide text-warn bg-warn-soft rounded-[var(--radius-sm)] py-2">
             Test payment — no real money moved
           </motion.p>
+        )}
+
+        {googleReviewUrl && (
+          <GoogleReviewCard token={token} restaurantName={restaurantName} url={googleReviewUrl} />
         )}
 
         <motion.div variants={fadeUp} className="mt-6 space-y-2.5">

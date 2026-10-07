@@ -74,3 +74,19 @@ export async function emailMyReceipt(token: string, email: string) {
 
   return emailBillReceipt(bill.id, email);
 }
+
+// Fire-and-forget tap counter for the "Leave a Google review" button on the
+// paid screen — one Int column on Restaurant (googleReviewClicks), same
+// simple counter-on-model pattern as orderSeq. No per-guest row, no event
+// table: we only ever need "how many taps, all time," never who or when.
+// Token-scoped like every other customer action; re-resolves the visit
+// rather than trusting a restaurantId from the client.
+export async function clickGoogleReview(token: string) {
+  const resolved = await resolveVisit(token);
+  if (!resolved.ok) return;
+
+  await prisma.restaurant.update({
+    where: { id: resolved.visit.restaurantId },
+    data: { googleReviewClicks: { increment: 1 } },
+  });
+}

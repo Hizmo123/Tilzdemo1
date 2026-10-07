@@ -181,6 +181,7 @@ export default async function VisitPage({
       squareAppId={visit.squareAppId}
       squareLocationId={visit.squareLocationId}
       squareEnv={visit.squareEnv}
+      googleReviewUrl={visit.googleReviewUrl}
       open={open}
       canOrder={visit.customerOrdering && visit.planAllowsOrdering && open}
       canPay={visit.customerPayment}

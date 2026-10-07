@@ -97,6 +97,10 @@ export type ResolvedVisit = {
   squareAppId: string | null;
   squareLocationId: string | null;
   squareEnv: string | null;
+  // Null = venue hasn't configured one (see dashboard/settings/venue's
+  // GoogleReviewSection) — the paid screen shows no review card at all in
+  // that case, not an empty one.
+  googleReviewUrl: string | null;
 };
 
 // Resolves an opaque visit token to its table/restaurant, or an invalid reason.
@@ -200,6 +204,7 @@ export async function resolveVisit(
       squareAppId: paymentContext.mode === "square" ? paymentContext.squareAppId : null,
       squareLocationId: paymentContext.mode === "square" ? paymentContext.squareLocationId : null,
       squareEnv: paymentContext.mode === "square" ? paymentContext.squareEnv : null,
+      googleReviewUrl: r.googleReviewUrl,
     },
   };
 }

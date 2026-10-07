@@ -218,7 +218,10 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong className="text-ink">Google</strong>: if you choose to sign in with
-                Google.
+                Google. If a venue has set up a Google review link, the "Leave a Google
+                review" button on the paid screen opens Google in a new tab; any review you
+                leave there is handled by Google under its own terms and privacy policy, not
+                ours.
               </li>
               <li>
                 <strong className="text-ink">Australian Business Register</strong>: we send
