@@ -77,9 +77,9 @@ export default async function DashboardHome() {
 
         <div className="rounded-[var(--radius-card)] border border-pine/30 bg-pine-soft p-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="font-medium text-pine-deep">You&apos;re on the free Lite plan</p>
+            <p className="font-medium text-pine-deep">You&apos;re on the Lite plan</p>
             <p className="text-sm text-pine-deep/80">
-              Upgrade to Basic to take live orders and payments at your tables.
+              Upgrade to Growth to take live orders and payments at your tables.
             </p>
           </div>
           <Link

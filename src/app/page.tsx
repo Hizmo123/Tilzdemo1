@@ -5,6 +5,7 @@ import { Reveal, RevealGroup, RevealItem } from "@/components/marketing/reveal";
 import { SplitCheck } from "@/components/marketing/split-check";
 import { PricingGrid } from "@/components/marketing/pricing-grid";
 import { BrandMark, Wordmark } from "@/components/brand/marks";
+import { paidPlansOpen } from "@/lib/billing";
 
 // Public marketing site. Honest scope: it only names what the product actually
 // does today (order, split, pay, staff terminal, kitchen) — no POS/loyalty
@@ -155,13 +156,15 @@ function Positioning() {
 }
 
 function Pricing() {
+  const gated = !paidPlansOpen();
   return (
     <section id="pricing" className={`${CONTAINER} py-16 sm:py-20 scroll-mt-16`}>
       <Reveal>
         <h2 className="font-display text-display font-semibold">Simple pricing</h2>
         <p className="mt-3 text-ink-soft max-w-lg">
-          Start free with a digital menu while you set up. Move to a flat monthly
-          plan when you&apos;re ready for live ordering across the venue.
+          {gated
+            ? "Start free today with Pay as you sell on your own Square account. Subscription plans below are opening soon."
+            : "A flat monthly plan, or start free with Pay as you sell on your own Square account."}
         </p>
       </Reveal>
       {/* Rendered straight from PLANS so this page can't drift from the
@@ -170,11 +173,11 @@ function Pricing() {
           4th card; see PayAsYouSellStrip in pricing-grid.tsx). Client
           component: the "Full features" expand/squeeze interaction needs
           state. */}
-      <PricingGrid />
+      <PricingGrid paidPlansOpen={!gated} />
       <p className="mt-6 text-sm text-muted max-w-2xl">
-        Prices in AUD, excluding GST. Live payments are processed by a licensed
-        payment provider; a short verification is required before you can
-        accept real payments.
+        Subscription prices in AUD, inclusive of GST. Live payments are
+        processed by a licensed payment provider; a short verification is
+        required before you can accept real payments.
       </p>
     </section>
   );

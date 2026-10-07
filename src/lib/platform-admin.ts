@@ -42,6 +42,15 @@ export async function isPlatformAdmin(): Promise<boolean> {
   return allowlist().has(user.id);
 }
 
+// Same allow-list check as isPlatformAdmin, but synchronous and for a caller
+// that already has the acting user's id in hand (every tenant-scoped action
+// already calls getAuthz/requireUser for its own purposes) — so a second
+// supabase.auth.getUser() round trip isn't needed just to ask "is THIS user
+// also a platform admin". Used by src/lib/billing/gate.ts's admin bypass.
+export function isPlatformAdminId(userId: string): boolean {
+  return allowlist().has(userId);
+}
+
 // The real gate. Redirects to /dashboard — never a 403/404 that would confirm
 // /admin exists — for anyone not on the allowlist, including a signed-out
 // visitor. Call this first, before any cross-tenant read, in every /admin

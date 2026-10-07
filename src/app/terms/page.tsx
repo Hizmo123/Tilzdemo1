@@ -101,8 +101,8 @@ export default function TermsPage() {
               <li>
                 Paid subscription plans start with a 14-day free trial. You will not be
                 charged during the trial. At the end of the trial, your subscription starts
-                and the monthly fee is charged unless you have cancelled or moved to the
-                free plan before the trial ends.
+                and the monthly fee is charged unless you have cancelled before the trial
+                ends.
               </li>
               <li>
                 Subscriptions renew automatically each month until cancelled. You can cancel

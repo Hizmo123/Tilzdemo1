@@ -141,6 +141,7 @@ export function OnboardingWizard({
   existingOrgSquare,
   squareResult,
   returnTo,
+  paidPlansOpen = true,
 }: {
   initialDraft: OnboardingDraftPayload | null;
   // Set only by task G's "+ Add venue" flow (/venues/new) — when present,
@@ -170,6 +171,11 @@ export function OnboardingWizard({
   // lands back here. Consumed once, then stripped from the URL.
   squareResult: SquareResult | null;
   returnTo: "/onboarding" | "/venues/new";
+  // Whether LITE/GROWTH/PRO can be self-assigned right now (see
+  // lib/billing/gate.ts#paidPlansOpen) — only meaningful for the "plan" step,
+  // which never renders in the fixedPlan ("+ Add venue") flow, so that flow
+  // simply doesn't pass this and gets the harmless default.
+  paidPlansOpen?: boolean;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(initialDraft?.step ?? 0);
@@ -401,9 +407,13 @@ export function OnboardingWizard({
             {stepId === "plan" && (
               <StepFrame
                 title="Choose your plan"
-                subtitle="Start on Lite with a digital menu, or go live with ordering straight away. Test mode — no card needed, switch any time from Billing."
+                subtitle={
+                  paidPlansOpen
+                    ? "Start on Lite with a digital menu, or go live with ordering straight away. Test mode — no card needed, switch any time from Billing."
+                    : "Subscription plans aren't open yet — start free with Pay as you sell on your own Square account below."
+                }
               >
-                <PlanPicker value={answers.plan} onChange={choosePlan} />
+                <PlanPicker value={answers.plan} onChange={choosePlan} paidPlansOpen={paidPlansOpen} />
               </StepFrame>
             )}
 

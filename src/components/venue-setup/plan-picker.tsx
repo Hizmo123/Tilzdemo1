@@ -3,6 +3,7 @@
 import type { PlanTier } from "@prisma/client";
 import { motion } from "motion/react";
 import { PLANS, planPriceLabel, PAY_AS_YOU_SELL_BLURB } from "@/lib/plans";
+import { BRAND } from "@/lib/brand";
 import { SPRING_PRESS, SPRING } from "@/components/ui/motion";
 import { CHOICE_IDLE, CHOICE_SELECTED } from "./choice";
 
@@ -21,9 +22,15 @@ const RECOMMENDED: PlanTier = "GROWTH";
 export function PlanPicker({
   value,
   onChange,
+  paidPlansOpen = true,
 }: {
   value: PlanTier;
   onChange: (tier: PlanTier) => void;
+  // false while subscription self-assignment is closed (see
+  // lib/billing/gate.ts) — the 3 cards below become inert "Opening soon"
+  // placeholders instead of selectable radios; the Pay as you sell strip
+  // beneath them is never affected, since Connect needs no gate.
+  paidPlansOpen?: boolean;
 }) {
   return (
     <div className="space-y-3 pt-3">
@@ -37,16 +44,23 @@ export function PlanPicker({
               type="button"
               role="radio"
               aria-checked={selected}
-              onClick={() => onChange(p.tier)}
-              whileTap={{ scale: 0.98 }}
+              aria-disabled={!paidPlansOpen}
+              disabled={!paidPlansOpen}
+              onClick={() => paidPlansOpen && onChange(p.tier)}
+              whileTap={paidPlansOpen ? { scale: 0.98 } : undefined}
               transition={SPRING_PRESS}
               className={`relative text-left rounded-[var(--radius-card)] bg-surface border p-5 flex flex-col transition-[box-shadow,background-color,border-color] duration-[var(--dur-fast)] ${
-                selected ? CHOICE_SELECTED : CHOICE_IDLE
+                !paidPlansOpen ? "opacity-60 cursor-not-allowed" : selected ? CHOICE_SELECTED : CHOICE_IDLE
               }`}
             >
-              {recommended && (
+              {recommended && paidPlansOpen && (
                 <span className="absolute -top-3 left-5 text-[11px] font-semibold uppercase tracking-wide bg-accent-gradient text-on-accent px-2.5 py-1 rounded-pill shadow-accent">
                   Most popular
+                </span>
+              )}
+              {!paidPlansOpen && (
+                <span className="absolute -top-3 left-5 text-[11px] font-semibold uppercase tracking-wide bg-surface text-muted border border-line px-2.5 py-1 rounded-pill">
+                  Opening soon
                 </span>
               )}
 
@@ -55,30 +69,29 @@ export function PlanPicker({
                   <span className="block font-display text-display-sm font-semibold">{p.name}</span>
                   <span className="block text-sm text-muted mt-0.5 min-h-[40px]">{p.blurb}</span>
                 </span>
-                <span
-                  aria-hidden
-                  className={`shrink-0 mt-1 w-5 h-5 rounded-pill border-2 flex items-center justify-center transition-colors duration-[var(--dur-fast)] ${
-                    selected ? "border-pine bg-pine text-on-accent" : "border-line-strong"
-                  }`}
-                >
-                  {selected && (
-                    <motion.span
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={SPRING}
-                      className="w-2 h-2 rounded-pill bg-current"
-                    />
-                  )}
-                </span>
+                {paidPlansOpen && (
+                  <span
+                    aria-hidden
+                    className={`shrink-0 mt-1 w-5 h-5 rounded-pill border-2 flex items-center justify-center transition-colors duration-[var(--dur-fast)] ${
+                      selected ? "border-pine bg-pine text-on-accent" : "border-line-strong"
+                    }`}
+                  >
+                    {selected && (
+                      <motion.span
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={SPRING}
+                        className="w-2 h-2 rounded-pill bg-current"
+                      />
+                    )}
+                  </span>
+                )}
               </span>
 
               <span className="block mt-4 font-display text-display-sm font-semibold">
                 {planPriceLabel(p)}
                 {p.cadence === "per month" && (
-                  <span className="text-sm text-muted font-normal font-sans tracking-normal"> /month</span>
-                )}
-                {p.cadence === "free" && (
-                  <span className="text-sm text-muted font-normal font-sans tracking-normal"> · no card needed</span>
+                  <span className="text-sm text-muted font-normal font-sans tracking-normal"> /month inc. GST</span>
                 )}
               </span>
 
@@ -96,6 +109,16 @@ export function PlanPicker({
           );
         })}
       </div>
+
+      {!paidPlansOpen && (
+        <p className="text-xs text-muted px-1">
+          Subscription plans aren&apos;t open yet.{" "}
+          <a href={`mailto:${BRAND.supportEmail}`} className="text-pine hover:underline">
+            Email us for early access
+          </a>
+          .
+        </p>
+      )}
 
       <button
         type="button"

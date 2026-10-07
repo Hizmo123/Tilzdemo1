@@ -13,19 +13,23 @@ import { BRAND } from "@/lib/brand";
 // connectFeePercentLabel(); only the wording around it is a literal.
 export const CONNECT_FEE_BLURB = `${connectFeePercentLabel()} of the order subtotal, excluding tips`;
 
-// The subscription catalog (AUD, excluding GST). Prices are wired through the
-// mock billing flow so the whole signup -> choose plan -> pay journey works
-// end to end today; real Stripe Billing replaces the checkout behind the
-// same PLANS/planByTier surface, not the catalog itself.
+// The subscription catalog (AUD, inclusive of GST — see planPriceLabel's
+// callers, which append "inc. GST" next to every nonzero price). Prices are
+// wired through the mock billing flow so the whole signup -> choose plan ->
+// pay journey works end to end today; real Stripe Billing (src/lib/billing/)
+// replaces the checkout behind the same PLANS/planByTier surface, not the
+// catalog itself — and self-assigning any of these three is blocked by
+// paidPlansOpen() (src/lib/billing/gate.ts) until that lands.
 //
 // 3-tier public model (see lib/entitlements.ts for the enforced rules this
-// copy describes): LITE is deliberately menu-only, no live ordering at all.
-// BASIC and CONNECT are grandfathered — hidden here below (`hidden: true`),
-// never offered to a new signup or shown on public pricing, but their
-// TIER_LIMITS entry in entitlements-core.ts is untouched, so an existing org
-// on either tier keeps working exactly as before (see ALL_PLANS/PLANS split
-// below for why their PlanDef still has to exist, not just their
-// entitlements).
+// copy describes): LITE is deliberately menu-only, no live ordering at all —
+// now a paid tier itself ($7.99/mo), not a free one; Pay as you sell
+// (CONNECT) is the only remaining no-subscription path. BASIC and CONNECT
+// are grandfathered — hidden here below (`hidden: true`), never offered to a
+// new signup or shown on public pricing, but their TIER_LIMITS entry in
+// entitlements-core.ts is untouched, so an existing org on either tier keeps
+// working exactly as before (see ALL_PLANS/PLANS split below for why their
+// PlanDef still has to exist, not just their entitlements).
 export type PlanDef = {
   tier: PlanTier;
   name: string;
@@ -48,8 +52,8 @@ export const ALL_PLANS: PlanDef[] = [
   {
     tier: "LITE",
     name: "Lite",
-    priceCents: 0,
-    cadence: "free",
+    priceCents: 799,
+    cadence: "per month",
     blurb: "One venue, a view-only digital menu — no live ordering.",
     features: [
       "Full menu with photos, prices and dietary badges",
