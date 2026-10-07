@@ -19,6 +19,7 @@ export function AddVenueFlow({
   orgPlan,
   requiresPayment,
   addonPriceLabel,
+  hasStripeSubscription,
   initialDraft,
   initialSquare,
   existingOrgSquare,
@@ -29,6 +30,12 @@ export function AddVenueFlow({
   orgPlan: PlanTier;
   requiresPayment: boolean;
   addonPriceLabel?: string;
+  // True once this org has a real Stripe subscription — the confirmation
+  // copy below is only honestly "nothing is actually charged" while this
+  // is false (see lib/entitlements.ts#canCreateVenue and
+  // src/lib/billing/stripe-provider.ts#syncExtraVenueQuantity, which adds a
+  // real prorated line item the moment this is true).
+  hasStripeSubscription: boolean;
   initialDraft: OnboardingDraftPayload | null;
   initialSquare: PendingSquareSummary | null;
   // Task 5: an existing, live SquareConnection elsewhere in this org, if
@@ -53,7 +60,9 @@ export function AddVenueFlow({
             your subscription.
           </p>
           <p className="text-xs text-muted mt-2">
-            Billing is mock for now — nothing is actually charged.
+            {hasStripeSubscription
+              ? "This is added to your subscription as a prorated charge."
+              : "Billing is mock for now — nothing is actually charged."}
           </p>
           <div className="mt-5 flex items-center justify-center gap-2">
             <Button onClick={() => setConfirmed(true)}>Confirm — add venue</Button>

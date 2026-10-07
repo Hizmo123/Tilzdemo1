@@ -114,9 +114,8 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong className="text-ink">Billing information</strong>: your plan, billing
-                history and invoices. Subscription card payments are processed by our
-                payment provider, which stores your card details. We do not store your
-                full card number.
+                history and invoices. Subscription card payments are processed by Stripe,
+                which stores your card details. We do not store your full card number.
               </li>
               <li>
                 <strong className="text-ink">Square connection</strong> (Pay as you sell only):
@@ -213,8 +212,9 @@ export default function PrivacyPage() {
                 and processes data in the United States under its own privacy policy.
               </li>
               <li>
-                <strong className="text-ink">Our subscription payment provider</strong>:
-                receives Venue billing details to charge subscription fees.
+                <strong className="text-ink">Stripe</strong>: processes subscription payments
+                and stores your card details for that purpose. Stripe is based in the United
+                States and processes data there under its own privacy policy.
               </li>
               <li>
                 <strong className="text-ink">Google</strong>: if you choose to sign in with
@@ -249,9 +249,9 @@ export default function PrivacyPage() {
           <Section title="6. Overseas disclosure">
             <p>
               Our database and files are stored in Australia. Some providers listed above
-              (Resend, Square, Vercel's network and Google) process limited information in
-              the United States or other countries as part of delivering emails,
-              processing payments, serving pages or authenticating sign-in. Before
+              (Resend, Square, Stripe, Vercel's network and Google) process limited
+              information in the United States or other countries as part of delivering
+              emails, processing payments, serving pages or authenticating sign-in. Before
               disclosing personal information overseas we take reasonable steps to ensure
               the recipient handles it in a way consistent with the APPs, including by
               choosing providers with recognised security standards and contractual

@@ -14,7 +14,8 @@ import { sameEveryDayHours, weekdayWeekendHours } from "@/lib/hours";
 import { getSetupChecklist, type ChecklistItem } from "@/lib/setup-checklist";
 import { entitlementsForTier, getEntitlements, canCreateVenue, type Entitlements } from "@/lib/entitlements";
 import { mockSubscriptionData } from "@/lib/plan-subscription";
-import { paidPlansOpen, PAID_PLANS_CLOSED_MESSAGE, SELF_ASSIGNABLE_GATED_TIERS } from "@/lib/billing";
+import { getBillingProvider, paidPlansOpen, PAID_PLANS_CLOSED_MESSAGE, SELF_ASSIGNABLE_GATED_TIERS } from "@/lib/billing";
+import { appBaseUrl } from "@/lib/urls";
 import {
   attachPendingToRestaurant,
   discardPending,
@@ -49,7 +50,12 @@ import { CURRENCIES, TIMEZONES, THEMES } from "@/app/dashboard/settings/constant
 import { COUNTRIES } from "@/lib/countries";
 import { LANGUAGE_CODES } from "@/lib/languages";
 
-export type OnboardingState = { error?: string; ok?: boolean; checklist?: ChecklistItem[] };
+export type OnboardingState = {
+  error?: string;
+  ok?: boolean;
+  checklist?: ChecklistItem[];
+  redirectUrl?: string;
+};
 
 const timeString = z.string().regex(/^\d{1,2}:\d{2}$/, "Use HH:MM.");
 
@@ -658,6 +664,27 @@ export async function completeOnboarding(
   const checklist = await getSetupChecklist(restaurant);
 
   revalidatePath("/dashboard");
+
+  // The org was just created with the mock "active" shape above (so it
+  // works immediately even if the owner abandons the next step) — if
+  // Stripe is actually configured and this plan is one of the gated
+  // subscription tiers, also start a real Checkout Session now and send
+  // them there to put a card on file. Never blocks finishing onboarding:
+  // createCheckoutSession only returns configured:true once Stripe is
+  // genuinely wired up, so this is a no-op everywhere else.
+  if (SELF_ASSIGNABLE_GATED_TIERS.has(a.plan)) {
+    const billingUrl = `${appBaseUrl()}/dashboard/billing`;
+    const checkout = await getBillingProvider().createCheckoutSession({
+      organizationId,
+      tier: a.plan,
+      successUrl: billingUrl,
+      cancelUrl: billingUrl,
+    });
+    if (checkout.configured) {
+      return { ok: true, checklist, redirectUrl: checkout.url };
+    }
+  }
+
   return { ok: true, checklist };
 }
 
@@ -772,6 +799,19 @@ export async function completeOnboardingForExistingOrg(
       resourceType: "Restaurant",
       resourceId: restaurant.id,
       metadata: { ...square, via: "onboarding" },
+    });
+  }
+
+  // PRO's extra-venue addon: keeps the "Extra venue" subscription item's
+  // quantity in sync with the org's actual venue count past the 3
+  // included — a no-op under the mock model (no real subscription to
+  // update) or for any org that didn't just cross that threshold, same
+  // "nothing charged" behaviour as before this existed either way.
+  if ("requiresPayment" in check && check.requiresPayment) {
+    const venueCount = await prisma.restaurant.count({ where: { organizationId } });
+    await getBillingProvider().syncExtraVenueQuantity({
+      organizationId,
+      quantity: Math.max(0, venueCount - 3),
     });
   }
 

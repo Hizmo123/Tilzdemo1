@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { PlanTier } from "@prisma/client";
-import { subscribe, cancelSubscription, setConnectPlusEnabled, setConnectBrandingHidden } from "./actions";
+import { subscribe, cancelSubscription, manageBilling, setConnectPlusEnabled, setConnectBrandingHidden } from "./actions";
 import {
   PLANS,
   planByTier,
@@ -26,6 +26,10 @@ export function Billing({
   connectBrandingHidden,
   trialStatus,
   paidPlansOpen,
+  hasStripeSubscription,
+  stripeStatus,
+  currentPeriodEnd,
+  cancelAtPeriodEnd,
 }: {
   currentPlan: PlanTier;
   planStatus: string;
@@ -44,12 +48,34 @@ export function Billing({
   // lib/billing/gate.ts) — switching to or cancelling back to one of those
   // tiers is disabled with an "opening soon" message instead.
   paidPlansOpen: boolean;
+  // True once this org has gone through a real Stripe Checkout at least
+  // once (Organization.stripeSubscriptionId is set). Switches every plan
+  // card's button (and the standalone cancel link) over to the Billing
+  // Portal instead of a new mock/Checkout write — see manageBilling().
+  hasStripeSubscription: boolean;
+  // Stripe's own subscription.status string ("trialing"/"active"/
+  // "past_due"/"canceled"/...), synced by the webhook — null until there's
+  // ever been a real subscription. Only "past_due" changes what renders
+  // here (the payment-failed banner); every other status is covered by
+  // planStatus/trialStatus already.
+  stripeStatus: string | null;
+  currentPeriodEnd: Date | null;
+  cancelAtPeriodEnd: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const { expandedTier, toggle: toggleExpanded } = usePlanExpansion();
 
   const active = planStatus === "active";
+  const paymentFailed = stripeStatus === "past_due";
+
+  function redirectOrRefresh(res: { redirectUrl?: string }) {
+    if (res.redirectUrl) {
+      window.location.href = res.redirectUrl;
+    } else {
+      router.refresh();
+    }
+  }
 
   // Grandfathered orgs (Basic/Connect — hidden from every picker, see
   // lib/plans.ts's ALL_PLANS/PLANS split) see their own plan plus an
@@ -64,9 +90,20 @@ export function Billing({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[var(--radius-sm)] bg-warn-soft text-warn text-xs px-3 py-2">
-        Test mode — no card required and no real charge is made.
-      </div>
+      {!hasStripeSubscription && (
+        <div className="rounded-[var(--radius-sm)] bg-warn-soft text-warn text-xs px-3 py-2">
+          Test mode — no card required and no real charge is made.
+        </div>
+      )}
+
+      {paymentFailed && (
+        <div className="rounded-[var(--radius-sm)] bg-danger/10 text-danger text-sm px-3 py-2.5 flex items-center justify-between gap-3">
+          <span>
+            Your last payment failed. We&apos;ll keep retrying — update your card from the billing
+            portal to avoid losing access.
+          </span>
+        </div>
+      )}
 
       <div className="rounded-[var(--radius-card)] border border-line bg-surface p-5">
         <p className="text-sm text-muted">Current plan</p>
@@ -81,18 +118,41 @@ export function Billing({
             Trial — {trialStatus.daysRemaining} day{trialStatus.daysRemaining === 1 ? "" : "s"} left
           </span>
         )}
-        {active && currentPlan !== "LITE" && paidPlansOpen && (
+        {currentPeriodEnd && !trialStatus.inTrial && (
+          <p className="text-sm text-muted mt-2">
+            {cancelAtPeriodEnd ? "Ends on " : "Renews on "}
+            {currentPeriodEnd.toLocaleDateString("en-AU", { dateStyle: "medium" })}
+          </p>
+        )}
+        {hasStripeSubscription ? (
           <button
             onClick={() =>
               start(async () => {
-                await cancelSubscription();
-                router.refresh();
+                const res = await manageBilling();
+                redirectOrRefresh(res);
               })
             }
-            className="text-sm text-muted hover:text-danger mt-3"
+            disabled={pending}
+            className="text-sm text-pine hover:underline mt-3"
           >
-            Cancel and return to Lite
+            Manage billing
           </button>
+        ) : (
+          active &&
+          currentPlan !== "LITE" &&
+          paidPlansOpen && (
+            <button
+              onClick={() =>
+                start(async () => {
+                  await cancelSubscription();
+                  router.refresh();
+                })
+              }
+              className="text-sm text-muted hover:text-danger mt-3"
+            >
+              Cancel and return to Lite
+            </button>
+          )
         )}
         {active && (currentPlan === "PRO" || currentPlan === "CONNECT") && (
           <Link
@@ -117,14 +177,21 @@ export function Billing({
           // connection would label the org CONNECT with no way to actually
           // process an order. See handleConnectClick below.
           const needsSquareFirst = connect && !squareConnected && !isCurrent;
+          // An org with a real Stripe subscription switches plans through
+          // the portal (Stripe handles proration) — never a second
+          // Checkout Session. Only reachable for non-Connect, non-current
+          // cards; Connect still goes through its own Square-first path.
+          const managedByPortal = hasStripeSubscription && !connect && !isCurrent;
           // CONNECT needs no gate (no subscription to self-assign); every
-          // other tier here is LITE/GROWTH/PRO, which do.
-          const gated = !connect && !paidPlansOpen && !isCurrent;
+          // other tier here is LITE/GROWTH/PRO, which do. A managed-by-
+          // portal org is never gated — they already have a real
+          // subscription, so there's nothing left to "open".
+          const gated = !connect && !managedByPortal && !paidPlansOpen && !isCurrent;
 
           function handleSubscribeClick() {
             start(async () => {
-              await subscribe(p.tier);
-              router.refresh();
+              const res = managedByPortal ? await manageBilling() : await subscribe(p.tier);
+              redirectOrRefresh(res);
             });
           }
 
@@ -193,7 +260,13 @@ export function Billing({
                           : "border border-line hover:border-ink/30"
                     }`}
                   >
-                    {isCurrent ? "Current plan" : gated ? "Opening soon" : "Switch to this plan"}
+                    {isCurrent
+                      ? "Current plan"
+                      : gated
+                        ? "Opening soon"
+                        : managedByPortal
+                          ? "Manage billing"
+                          : "Switch to this plan"}
                   </button>
                   {gated && (
                     <a

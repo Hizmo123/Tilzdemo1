@@ -96,26 +96,29 @@ export default function TermsPage() {
             <ul className="list-disc pl-5 space-y-1.5">
               <li>
                 Subscription plans are billed monthly in advance in Australian dollars.
-                Prices shown are inclusive of GST.
+                Prices shown are inclusive of GST. Subscription payments are processed by
+                Stripe; your card details are held by Stripe, never by Tap-to-It.
               </li>
               <li>
-                Paid subscription plans start with a 14-day free trial. You will not be
-                charged during the trial. At the end of the trial, your subscription starts
-                and the monthly fee is charged unless you have cancelled before the trial
-                ends.
+                Growth and Pro start with a 14-day free trial — Lite does not. A payment
+                method is collected up front for every plan, including during a trial; you
+                will not be charged until the trial ends. At the end of the trial, your
+                subscription starts and the monthly fee is charged unless you have cancelled
+                before the trial ends.
               </li>
               <li>
                 Subscriptions renew automatically each month until cancelled. You can cancel
-                or change plan at any time from Billing in your dashboard. Cancellation
-                takes effect at the end of the current billing month; you keep access until
-                then. We do not refund part-months, except where the law requires it.
+                or change plan at any time from Billing in your dashboard. Cancellation takes
+                effect at the end of the current billing period; you keep access until then.
+                We do not refund part-periods, except where the law requires it.
               </li>
               <li>
                 If a subscription payment fails, we will notify you and keep your service
-                running during a grace period while we retry. If payment has not been
-                received when the grace period ends, live ordering is switched off until it
-                is. Guests with an open bill can still pay and receive a receipt. Your data
-                is not deleted because of a lapsed payment.
+                running while Stripe automatically retries the charge. If payment is still
+                not received after Stripe's retries are exhausted, your account moves to the
+                Pay as you sell (Connect) plan described below. Guests with an open bill can
+                still pay and receive a receipt. Your data is not deleted because of a lapsed
+                payment.
               </li>
               <li>
                 When you move to a lower plan, tables, kitchen stations and venues you have

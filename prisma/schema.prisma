@@ -161,8 +161,8 @@ model Organization {
   // stripeStatus mirrors Stripe's own subscription.status string ("trialing",
   // "active", "past_due", "canceled", ...) rather than reusing planStatus,
   // since the two will likely need to diverge once a real webhook drives this.
-  stripeCustomerId     String?
-  stripeSubscriptionId String?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
   stripeStatus         String?
   stripePriceId        String?
   currentPeriodEnd     DateTime?

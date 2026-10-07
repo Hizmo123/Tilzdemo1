@@ -38,6 +38,24 @@ export interface HandleWebhookEventInput {
   signature: string;
 }
 
+// Thrown by handleWebhookEvent specifically for a signature that fails
+// verification — distinct from "not configured" (503) so the webhook route
+// can return 400 instead, which is what tells Stripe (and anyone probing the
+// endpoint) the request itself was rejected, not that the feature is off.
+export class StripeSignatureError extends Error {}
+
+export type SyncExtraVenueQuantityResult = { configured: boolean };
+
+export interface SyncExtraVenueQuantityInput {
+  organizationId: string;
+  // Absolute count of venues beyond the 3 a PRO subscription includes —
+  // never a delta. The caller (lib/entitlements.ts#canCreateVenue's venue-
+  // creation path today; a future archive/delete-venue action later) always
+  // knows the org's current total venue count, so passing the target
+  // quantity directly keeps this idempotent regardless of call order.
+  quantity: number;
+}
+
 export interface BillingProvider {
   readonly name: string;
   // Starts a hosted Checkout Session for a new or changed subscription.
@@ -50,4 +68,10 @@ export interface BillingProvider {
   // src/app/api/stripe/webhook/route.ts for which events this will need to
   // handle once it's real.
   handleWebhookEvent(input: HandleWebhookEventInput): Promise<WebhookHandleResult>;
+  // Keeps a PRO org's "Extra venue" subscription item quantity in sync with
+  // its actual venue count past the 3 included. A no-op (configured:false,
+  // no error surfaced — this isn't user-facing) when there's no real
+  // subscription to update, which is the correct behaviour under the mock
+  // model: the venue is still created either way, for free, same as before.
+  syncExtraVenueQuantity(input: SyncExtraVenueQuantityInput): Promise<SyncExtraVenueQuantityResult>;
 }

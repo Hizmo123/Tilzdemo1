@@ -304,6 +304,14 @@ export function OnboardingWizard({
           setError(res.error);
           return;
         }
+        // A real Stripe Checkout Session is waiting — the venue already
+        // exists (and already works, on the mock-active shape), so this
+        // is "go add a card", not "go finish setting up". Checkout itself
+        // redirects back to the dashboard Billing page on success/cancel.
+        if (res.redirectUrl) {
+          window.location.href = res.redirectUrl;
+          return;
+        }
         setCreated(true);
         setTimeout(() => setResult({ checklist: res.checklist ?? [] }), CREATED_HOLD_MS);
       })

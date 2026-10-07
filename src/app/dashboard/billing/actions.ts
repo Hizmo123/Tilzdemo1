@@ -5,15 +5,16 @@ import type { PlanTier } from "@prisma/client";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
-import { mockSubscriptionData } from "@/lib/plan-subscription";
 import { BRAND } from "@/lib/brand";
 import { PLANS } from "@/lib/plans";
+import { appBaseUrl } from "@/lib/urls";
 import {
   getBillingProvider,
   paidPlansOpen,
   PAID_PLANS_CLOSED_MESSAGE,
   SELF_ASSIGNABLE_GATED_TIERS,
 } from "@/lib/billing";
+import { startSubscriptionOrMock } from "@/lib/billing/checkout-or-mock";
 
 // Hidden (grandfathered) tiers an org can only ever ALREADY be on, never
 // newly switch to — Basic outright, Connect everywhere except its own
@@ -24,14 +25,21 @@ import {
 // own — this is what actually stops a POST crafted outside the UI.
 const PUBLIC_TIERS = new Set(PLANS.map((p) => p.tier));
 
-export type BillingState = { error?: string; ok?: boolean };
+export type BillingState = { error?: string; ok?: boolean; redirectUrl?: string };
 
-// MOCK plan switcher — no card, no charge. Lets an owner move their org
-// between tiers to exercise entitlement/gating behaviour before real
-// billing exists. Blocked outright for LITE/GROWTH/PRO (platform admins
-// excepted) until paidPlansOpen() — see src/lib/billing/gate.ts — since
-// without that gate this function is how anyone could grant themselves a
-// subscription for free.
+// Starts a real Stripe subscription when Stripe is configured (redirects to
+// a Checkout Session), or falls back to the mock instant-activate write
+// when it isn't — see startSubscriptionOrMock. Blocked outright for
+// LITE/GROWTH/PRO (platform admins excepted) until paidPlansOpen() — see
+// src/lib/billing/gate.ts — since without that gate this is how anyone
+// could grant themselves a subscription for free under the mock model, or
+// (once Stripe is live) jump straight to a real Checkout Session before
+// paid plans are meant to be open at all.
+//
+// An org with an existing real Stripe subscription (stripeSubscriptionId
+// set) should go through manageBilling()'s portal instead — see
+// checkout.tsx, which only ever calls this for a tier the org doesn't
+// already have a live subscription for.
 export async function subscribe(tier: PlanTier): Promise<BillingState> {
   const authz = await getAuthz();
   if (!authz.can("settings:manage"))
@@ -59,27 +67,22 @@ export async function subscribe(tier: PlanTier): Promise<BillingState> {
     if (!squareConnected) return { error: "That plan isn't available." };
   }
 
-  // Routes through the billing provider interface first — once a real
-  // StripeBillingProvider replaces the stub, this is where a configured
-  // response starts sending the caller to a real Checkout Session instead of
-  // falling through to the instant mock write below. The stub always comes
-  // back not-configured today, so behaviour is unchanged until Stripe lands.
-  const provider = getBillingProvider();
-  const checkout = await provider.createCheckoutSession({
+  const billingUrl = `${appBaseUrl()}/dashboard/billing`;
+  const result = await startSubscriptionOrMock({
     organizationId: org.id,
     tier,
-    successUrl: "/dashboard/billing",
-    cancelUrl: "/dashboard/billing",
+    hasUsedTrial: org.hasUsedTrial,
+    successUrl: billingUrl,
+    cancelUrl: billingUrl,
   });
-  if (checkout.configured) {
-    return { ok: true };
-  }
 
-  const data = mockSubscriptionData(tier, org.hasUsedTrial);
+  if ("redirectUrl" in result) {
+    return { ok: true, redirectUrl: result.redirectUrl };
+  }
 
   await prisma.organization.update({
     where: { id: org.id },
-    data,
+    data: result.mockData,
   });
 
   await audit({
@@ -87,12 +90,34 @@ export async function subscribe(tier: PlanTier): Promise<BillingState> {
     actorUserId: authz.user.id,
     actorEmail: authz.user.email ?? "",
     action: "billing.subscribed",
-    metadata: { plan: tier, startedTrial: data.trialEndsAt instanceof Date },
+    metadata: { plan: tier, startedTrial: result.mockData.trialEndsAt instanceof Date },
   });
 
   revalidatePath("/dashboard/billing");
   revalidatePath("/dashboard");
   return { ok: true };
+}
+
+// Sends an org with a real Stripe subscription to the Billing Portal —
+// Stripe's own hosted UI for updating a card, switching plans or cancelling
+// (at period end, per the portal's own configuration), so this app never
+// has to build custom proration logic. Falls back to a clear error — not a
+// silent no-op — when the org has no Stripe customer yet (e.g. it's still
+// on a mock-activated or manually-assigned plan and has never actually
+// checked out).
+export async function manageBilling(): Promise<BillingState> {
+  const authz = await getAuthz();
+  if (!authz.can("settings:manage")) return { error: "Only an owner or admin can manage billing." };
+  const org = authz.membership?.organization;
+  if (!org) return { error: "Create your restaurant first." };
+
+  const portal = await getBillingProvider().createPortalSession({
+    organizationId: org.id,
+    returnUrl: `${appBaseUrl()}/dashboard/billing`,
+  });
+  if (!portal.configured) return { error: portal.error };
+
+  return { ok: true, redirectUrl: portal.url };
 }
 
 // ---- Connect-only mock addons (Connect Plus, branding removal) -------------
@@ -169,6 +194,16 @@ export async function cancelSubscription(): Promise<BillingState> {
   // paid-tier self-assignment as subscribe() and needs the same gate.
   if (!paidPlansOpen(authz.user.id)) {
     return { error: PAID_PLANS_CLOSED_MESSAGE };
+  }
+
+  // A REAL Stripe subscription must be cancelled through Stripe (the
+  // Billing Portal, via manageBilling()) so the actual charge stops —
+  // writing plan: "LITE" straight to our own DB here would leave Stripe
+  // still billing the org every month while our side thinks it's free.
+  // checkout.tsx only renders this button at all when there's no
+  // stripeSubscriptionId, but the real gate has to live here too.
+  if (org.stripeSubscriptionId) {
+    return { error: "Manage your subscription from the billing portal instead." };
   }
 
   // Returning to Lite stays planStatus "active" so isOrgSubscribed/publish

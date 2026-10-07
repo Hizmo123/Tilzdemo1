@@ -24,3 +24,17 @@ export function stripePriceForTier(tier: PlanTier): string | null {
 export function stripePriceForExtraVenue(): string | null {
   return env.stripePriceExtraVenue() ?? null;
 }
+
+// The reverse of stripePriceForTier — a webhook only ever has the Stripe
+// Price id a subscription item actually carries, never the tier name
+// directly, so syncing Organization.plan from a webhook has to go through
+// this. Returns null for a price that matches none of the 3 tiers (e.g. the
+// extra-venue price, or a price created for something else entirely) rather
+// than guessing — the caller decides what "unrecognised price" means.
+export function tierForStripePrice(priceId: string | null | undefined): PlanTier | null {
+  if (!priceId) return null;
+  if (priceId === env.stripePriceLite()) return "LITE";
+  if (priceId === env.stripePriceGrowth()) return "GROWTH";
+  if (priceId === env.stripePricePro()) return "PRO";
+  return null;
+}
