@@ -14,7 +14,7 @@ export default async function MenuImportPage() {
         </h1>
         <p className="text-muted">
           Create your restaurant first from the{" "}
-          <Link href="/dashboard" className="text-pine hover:underline">
+          <Link href="/dashboard" prefetch={false} className="text-pine hover:underline">
             Overview
           </Link>{" "}
           page.
@@ -37,7 +37,7 @@ export default async function MenuImportPage() {
   return (
     <div className="space-y-8 max-w-2xl">
       <div>
-        <Link href="/dashboard/menu" className="text-sm text-muted hover:text-ink">
+        <Link href="/dashboard/menu" prefetch={false} className="text-sm text-muted hover:text-ink">
           ← Menu
         </Link>
         <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">

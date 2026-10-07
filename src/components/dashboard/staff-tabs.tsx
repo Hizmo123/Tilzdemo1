@@ -25,6 +25,7 @@ export function StaffTabs({
         <Link
           key={t.href}
           href={t.href}
+          prefetch={false}
           className={`shrink-0 rounded-[var(--radius-sm)] px-3 py-1.5 transition-colors ${
             active === t.href
               ? "bg-ink text-surface"

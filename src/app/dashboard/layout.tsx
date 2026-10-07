@@ -210,7 +210,17 @@ export default async function DashboardLayout({
   // working through the grace period regardless of what this shows —
   // nothing in this layout blocks rendering `children`. Also drives the nav
   // filtering below (LITE hides everything tied to live service).
-  const entitlements = membership ? await getEntitlements(membership.organizationId) : null;
+  //
+  // Independent of each other (entitlements only needs organizationId,
+  // squareConnection only needs restaurant.id) — used to run sequentially,
+  // one full round trip apart for no reason; now fetched together and only
+  // combined afterward, once both are in hand.
+  const [entitlements, squareConnection] = await Promise.all([
+    membership ? getEntitlements(membership.organizationId) : Promise.resolve(null),
+    restaurant
+      ? prisma.squareConnection.findUnique({ where: { restaurantId: restaurant.id }, select: { id: true } })
+      : Promise.resolve(null),
+  ]);
   // Free-trial badge (see lib/plan-subscription.ts) — pure derivation from
   // the org's own plan/trialEndsAt, not part of Entitlements (that type is
   // capability-derivation only, not billing status). Shown in the sidebar
@@ -230,16 +240,10 @@ export default async function DashboardLayout({
   // independent of the plan tier). Inserted after buildVisibleSections
   // rather than declared statically in navSections since it depends on a
   // per-request DB check, unlike every other (permission-only) nav item.
-  if (restaurant) {
-    const squareConnection = await prisma.squareConnection.findUnique({
-      where: { restaurantId: restaurant.id },
-      select: { id: true },
-    });
-    if (squareConnection && (!role || roleCan(role, "menu:availability"))) {
-      const menuSection = visibleSections.find((s) => s.label === "Menu & hardware");
-      if (menuSection) {
-        menuSection.items.push({ label: "Square catalog", href: "/dashboard/menu/square", perm: null });
-      }
+  if (squareConnection && (!role || roleCan(role, "menu:availability"))) {
+    const menuSection = visibleSections.find((s) => s.label === "Menu & hardware");
+    if (menuSection) {
+      menuSection.items.push({ label: "Square catalog", href: "/dashboard/menu/square", perm: null });
     }
   }
 

@@ -29,7 +29,7 @@ export default async function OrderAnalyticsPage({
           ) : (
             <>
               Create your restaurant first from the{" "}
-              <Link href="/dashboard" className="text-pine hover:underline">
+              <Link href="/dashboard" prefetch={false} className="text-pine hover:underline">
                 Overview
               </Link>
               .

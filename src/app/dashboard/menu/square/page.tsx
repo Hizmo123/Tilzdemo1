@@ -34,7 +34,7 @@ export default async function SquareMenuPage() {
     return (
       <div className="space-y-4 max-w-lg">
         <div>
-          <Link href="/dashboard/menu" className="text-sm text-muted hover:text-ink">
+          <Link href="/dashboard/menu" prefetch={false} className="text-sm text-muted hover:text-ink">
             ← Menu
           </Link>
           <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">
@@ -82,7 +82,7 @@ export default async function SquareMenuPage() {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/dashboard/menu" className="text-sm text-muted hover:text-ink">
+        <Link href="/dashboard/menu" prefetch={false} className="text-sm text-muted hover:text-ink">
           ← Menu
         </Link>
         <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">

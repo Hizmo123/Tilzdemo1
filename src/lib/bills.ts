@@ -969,6 +969,18 @@ export async function advanceOrderStatus(
 // join, not a snapshot, since allergen warnings need to reflect today's menu
 // data, not whatever it was when the line was ordered (unlike price/name,
 // which are deliberately frozen).
+// Shared by the dashboard Orders page (its own tickets, items trimmed to
+// id/name/quantity/note) AND the staff kitchen board (kitchen-board-data.tsx
+// — needs more: menuItemId/station for grouping by prep station,
+// allergens/available for the ticket card). `select`ed to the UNION of both
+// callers' actual fields, not `include`'s "every column" default — same
+// rows, same shape both callers already read off, just not paying for
+// BillItem's/Bill's/Table's other ~15 unused columns per row anymore.
+// Capped at 300: active tickets are naturally self-limiting in normal
+// operation (nothing SUBMITTED/PREPARING/READY sits around once a venue is
+// keeping up), but an unbounded findMany here would have no ceiling at all
+// if a venue ever fell badly behind — this is a safety net, not a behaviour
+// change for any venue operating normally.
 export async function getKitchenOrders(restaurantId: string) {
   return prisma.order.findMany({
     where: {
@@ -976,12 +988,28 @@ export async function getKitchenOrders(restaurantId: string) {
       status: { in: ["SUBMITTED", "PREPARING", "READY"] },
     },
     orderBy: { createdAt: "asc" },
-    include: {
+    take: 300,
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      source: true,
+      isRefire: true,
+      note: true,
+      createdAt: true,
       items: {
         orderBy: { createdAt: "asc" },
-        include: { menuItem: { select: { allergens: true, available: true } } },
+        select: {
+          id: true,
+          menuItemId: true,
+          nameSnapshot: true,
+          quantity: true,
+          note: true,
+          station: true,
+          menuItem: { select: { allergens: true, available: true } },
+        },
       },
-      bill: { include: { table: true } },
+      bill: { select: { id: true, totalCents: true, amountPaidCents: true, table: { select: { label: true } } } },
     },
   });
 }
@@ -2488,9 +2516,17 @@ export async function getOrderHistory(
     where: { restaurantId, status: "SERVED", servedAt: { gte: from, lt: to } },
     orderBy: { servedAt: "desc" },
     take: limit,
-    include: {
-      items: { orderBy: { createdAt: "asc" } },
-      bill: { include: { table: true } },
+    select: {
+      id: true,
+      status: true,
+      source: true,
+      servedAt: true,
+      createdAt: true,
+      items: {
+        orderBy: { createdAt: "asc" },
+        select: { id: true, nameSnapshot: true, quantity: true, voided: true, lineTotalCents: true },
+      },
+      bill: { select: { table: { select: { label: true } } } },
     },
   });
 
