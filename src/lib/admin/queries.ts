@@ -10,23 +10,73 @@
 
 import { prisma } from "@/lib/prisma";
 import type { PlanTier } from "@prisma/client";
-import { ALL_PLANS, planByTier } from "@/lib/plans";
+import { ALL_PLANS, planByTier, EXTRA_VENUE_PRICE_CENTS } from "@/lib/plans";
 import { entitlementsForTier } from "@/lib/entitlements";
 
 // ---- Platform overview -------------------------------------------------------
 
 export type PlatformOverview = {
+  // Real, currently-being-charged revenue only — see the loop below: an org
+  // counts here ONLY with Organization.stripeStatus "active" (synced by
+  // src/lib/billing/stripe-provider.ts's webhook handler from Stripe's own
+  // subscription object). A paid-tier org that was assigned its plan some
+  // other way (the pre-Stripe mock model, an admin bypass, grandfathered
+  // BASIC with no Stripe price ever configured for it) has no real
+  // subscription and is never counted as paying, however its `plan` column
+  // reads — see subscriptions.noRealSubscription.
   mrrCents: number;
+  // LITE/GROWTH/PRO only — CONNECT has no subscription (its revenue is
+  // connectFeeRevenueCents below) and BASIC is grandfathered with no Stripe
+  // price ever configured for it, so it can never have a real subscription.
+  // PRO's bucket folds in its extra-venue add-on revenue (see
+  // extraVenueCents below) rather than breaking it out as a separate line,
+  // since Stripe bills it as one more item on the SAME subscription.
   mrrByTier: { tier: PlanTier; orgs: number; mrrCents: number }[];
-  subscriptions: { active: number; inGrace: number; lapsed: number; free: number };
+  // What every currently-trialing org would add to MRR once its trial
+  // converts (same priceCents + extra-venue math as active MRR) — kept
+  // separate because nothing has actually been charged yet; a trialing org
+  // contributes $0 to mrrCents itself.
+  trialPipelineCents: number;
+  // Tillz's own per-order application fee actually collected from Connect
+  // (pay-as-you-sell) orgs — summed from Payment.appFeeCents (set by
+  // computeAppFeeCents, lib/square/pay.ts, on every Square-connected
+  // charge). null — not 0 — when no such Payment row exists at all, so the
+  // UI can tell "zero collected" apart from "nothing to report yet".
+  connectFeeRevenueCents: number | null;
+  subscriptions: {
+    active: number;
+    trialing: number;
+    pastDue: number;
+    canceled: number;
+    // CONNECT: no subscription by design, never counted as a "lapsed" or
+    // "noRealSubscription" paid org even though stripeStatus is null for it.
+    connect: number;
+    // A paid tier (LITE/GROWTH/PRO/BASIC) with no real Stripe subscription —
+    // the exact case the old version of this function miscounted as paying
+    // revenue. Investigate these before trusting mrrCents against a Stripe
+    // dashboard total.
+    noRealSubscription: number;
+  };
   totals: { organisations: number; venues: number; published: number; unpublished: number };
   funnel: { signedUp: number; completedOnboarding: number; published: number; firstOrder: number };
-  // No per-extra-venue overage price exists anywhere in this codebase (see
-  // lib/entitlements.ts's venueLimit — it only ever BLOCKS creating past the
-  // limit, there's no add-on charge). Counted here for visibility rather
-  // than inventing a number for the MRR total.
+  // Orgs over THEIR TIER'S venue limit — for PRO specifically this is the
+  // normal, paid-for "extra venue" case (now priced into mrrCents/
+  // mrrByTier above via extraVenueCents, not a gap); for every other tier
+  // canCreateVenue hard-blocks creating past the limit, so a non-PRO org
+  // showing up here would mean something wrote around that gate, not a
+  // missing price.
   orgsOverVenueLimit: number;
 };
+
+// PRO's paid-per-venue addon past the 3 included (lib/entitlements.ts#
+// canCreateVenue, synced to a real Stripe subscription item by
+// src/lib/billing/stripe-provider.ts#syncExtraVenueQuantity) — billed on
+// the SAME subscription as the base PRO price, so its cost folds into
+// mrrByTier's PRO bucket rather than its own line.
+function extraVenueCents(plan: PlanTier, restaurantCount: number): number {
+  if (plan !== "PRO") return 0;
+  return Math.max(0, restaurantCount - 3) * EXTRA_VENUE_PRICE_CENTS;
+}
 
 export async function getPlatformOverview(): Promise<PlatformOverview> {
   const orgs = await prisma.organization.findMany({
@@ -34,6 +84,7 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
       id: true,
       plan: true,
       subscriptionLapsedAt: true,
+      stripeStatus: true,
       createdAt: true,
       _count: { select: { restaurants: true } },
     },
@@ -41,43 +92,70 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
 
   const mrrByTierMap = new Map<PlanTier, { orgs: number; mrrCents: number }>();
   let mrrCents = 0;
+  let trialPipelineCents = 0;
   let active = 0;
-  let inGrace = 0;
-  let lapsed = 0;
-  let free = 0;
+  let trialing = 0;
+  let pastDue = 0;
+  let canceled = 0;
+  let connect = 0;
+  let noRealSubscription = 0;
   let orgsOverVenueLimit = 0;
 
   for (const org of orgs) {
     const ent = entitlementsForTier(org.plan, { lapsedAt: org.subscriptionLapsedAt });
     if (ent.venueLimit !== null && org._count.restaurants > ent.venueLimit) orgsOverVenueLimit++;
 
-    if (org.plan === "LITE") {
-      free++;
+    // CONNECT has no subscription at all by design — its revenue is the
+    // per-order fee totalled separately below, never MRR.
+    if (org.plan === "CONNECT") {
+      connect++;
       continue;
     }
-    // A lapsed-and-past-grace subscription isn't paying right now — leave it
-    // out of MRR. In-grace still counts: the charge is presumed retried, not
-    // yet confirmed failed for good.
-    if (ent.orderingBlocked) {
-      lapsed++;
-      continue;
-    }
-    if (ent.lapsed) inGrace++;
-    else active++;
 
-    const price = planByTier(org.plan).priceCents;
-    mrrCents += price;
-    const bucket = mrrByTierMap.get(org.plan) ?? { orgs: 0, mrrCents: 0 };
-    bucket.orgs++;
-    bucket.mrrCents += price;
-    mrrByTierMap.set(org.plan, bucket);
+    const price = planByTier(org.plan).priceCents + extraVenueCents(org.plan, org._count.restaurants);
+
+    switch (org.stripeStatus) {
+      case "active": {
+        active++;
+        mrrCents += price;
+        const bucket = mrrByTierMap.get(org.plan) ?? { orgs: 0, mrrCents: 0 };
+        bucket.orgs++;
+        bucket.mrrCents += price;
+        mrrByTierMap.set(org.plan, bucket);
+        break;
+      }
+      case "trialing":
+        trialing++;
+        trialPipelineCents += price;
+        break;
+      case "past_due":
+        pastDue++;
+        break;
+      case "canceled":
+      case "unpaid":
+      case "incomplete_expired":
+        canceled++;
+        break;
+      default:
+        // null/undefined, or any other Stripe status this app doesn't
+        // treat as a confirmed subscription — never counted as revenue.
+        noRealSubscription++;
+        break;
+    }
   }
 
-  const mrrByTier = ALL_PLANS.filter((p) => p.tier !== "LITE").map((p) => ({
+  const mrrByTier = ALL_PLANS.filter((p) => p.tier !== "CONNECT" && p.tier !== "BASIC").map((p) => ({
     tier: p.tier,
     orgs: mrrByTierMap.get(p.tier)?.orgs ?? 0,
     mrrCents: mrrByTierMap.get(p.tier)?.mrrCents ?? 0,
   }));
+
+  const connectFeeAgg = await prisma.payment.aggregate({
+    _sum: { appFeeCents: true },
+    _count: { appFeeCents: true },
+    where: { status: "SUCCEEDED", appFeeCents: { not: null } },
+  });
+  const connectFeeRevenueCents = connectFeeAgg._count.appFeeCents > 0 ? connectFeeAgg._sum.appFeeCents ?? 0 : null;
 
   const [venues, publishedVenues, restaurantsWithOrders] = await Promise.all([
     prisma.restaurant.count(),
@@ -99,7 +177,9 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
   return {
     mrrCents,
     mrrByTier,
-    subscriptions: { active, inGrace, lapsed, free },
+    trialPipelineCents,
+    connectFeeRevenueCents,
+    subscriptions: { active, trialing, pastDue, canceled, connect, noRealSubscription },
     totals: {
       organisations: orgs.length,
       venues,

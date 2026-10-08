@@ -45,12 +45,23 @@ export default async function AdminHomePage() {
               sub={`${t.orgs} org${t.orgs === 1 ? "" : "s"}`}
             />
           ))}
+          <Stat
+            label="Trial pipeline"
+            value={formatCents(overview.trialPipelineCents)}
+            sub="Not yet charged — converts to MRR if the trial completes"
+          />
+          <Stat
+            label="Connect fee revenue"
+            value={overview.connectFeeRevenueCents === null ? "—" : formatCents(overview.connectFeeRevenueCents)}
+            sub={overview.connectFeeRevenueCents === null ? "No Connect charges yet" : "All time, 1.5% per order"}
+          />
         </div>
         {overview.orgsOverVenueLimit > 0 && (
           <p className="text-xs text-muted mt-2">
             {overview.orgsOverVenueLimit} org{overview.orgsOverVenueLimit === 1 ? "" : "s"} over
-            their plan&apos;s venue limit — no per-venue overage price is configured in this
-            codebase yet, so this isn&apos;t counted in MRR above.
+            their plan&apos;s venue limit. For Pro this is the normal paid add-on (already
+            counted in Pro MRR above); for any other tier it would mean something bypassed the
+            usual venue-creation gate.
           </p>
         )}
       </section>
@@ -59,9 +70,15 @@ export default async function AdminHomePage() {
         <h2 className="text-sm font-semibold text-muted mb-2">Subscriptions</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <Stat label="Active" value={String(overview.subscriptions.active)} />
-          <Stat label="In grace period" value={String(overview.subscriptions.inGrace)} />
-          <Stat label="Lapsed (blocked)" value={String(overview.subscriptions.lapsed)} />
-          <Stat label="Free tier" value={String(overview.subscriptions.free)} />
+          <Stat label="Trialing" value={String(overview.subscriptions.trialing)} />
+          <Stat label="Past due" value={String(overview.subscriptions.pastDue)} />
+          <Stat label="Canceled" value={String(overview.subscriptions.canceled)} />
+          <Stat label="Pay as you sell" value={String(overview.subscriptions.connect)} />
+          <Stat
+            label="No real subscription"
+            value={String(overview.subscriptions.noRealSubscription)}
+            sub="Paid tier, never checked out through Stripe"
+          />
         </div>
       </section>
 
