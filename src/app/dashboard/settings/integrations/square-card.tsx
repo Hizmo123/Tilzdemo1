@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { listSquareLocations, setSquareLocation, disconnectSquare } from "./actions";
 import { buttonClasses } from "@/components/ui/button-classes";
 import { BRAND } from "@/lib/brand";
@@ -23,12 +23,22 @@ export function SquareCard({
 }) {
   const [pending, start] = useTransition();
   const [locations, setLocations] = useState<{ id: string; name: string }[] | null>(null);
+  const [locationsLoading, setLocationsLoading] = useState(false);
   const [selected, setSelected] = useState(connection?.locationId ?? "");
 
-  useEffect(() => {
-    if (!connection) return;
-    listSquareLocations().then(setLocations).catch(() => setLocations([]));
-  }, [connection]);
+  // Fetched live against Square on every call (see listSquareLocations) —
+  // used to run unconditionally on every mount of this card, i.e. every
+  // visit to Settings → Integrations with Square connected, whether or not
+  // the location dropdown was ever opened. Now fetched once, lazily, the
+  // first time the dropdown is actually focused.
+  function ensureLocationsLoaded() {
+    if (locations !== null || locationsLoading) return;
+    setLocationsLoading(true);
+    listSquareLocations()
+      .then(setLocations)
+      .catch(() => setLocations([]))
+      .finally(() => setLocationsLoading(false));
+  }
 
   const environmentLabel = connection?.environment === "production" ? "Production" : "Sandbox";
 
@@ -80,7 +90,8 @@ export function SquareCard({
             <label className="text-sm text-muted block mb-1">Location</label>
             <select
               value={selected}
-              disabled={pending || locations === null}
+              disabled={pending || locationsLoading}
+              onFocus={ensureLocationsLoaded}
               onChange={(e) => {
                 const id = e.target.value;
                 setSelected(id);
@@ -91,7 +102,7 @@ export function SquareCard({
               className="w-full max-w-sm rounded-[var(--radius-md)] border border-line bg-surface px-3.5 py-2.5 focus:border-pine focus:outline-none"
             >
               <option value="" disabled>
-                {locations === null ? "Loading…" : "Choose a location"}
+                {locationsLoading ? "Loading…" : "Choose a location"}
               </option>
               {locations?.map((l) => (
                 <option key={l.id} value={l.id}>

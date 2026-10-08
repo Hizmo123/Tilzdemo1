@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   runImport,
@@ -44,10 +44,24 @@ export function SquareMappingClient({
   const [report, setReport] = useState<ImportReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState<SquareCatalogOption[] | null>(null);
+  const [optionsLoading, setOptionsLoading] = useState(false);
 
-  useEffect(() => {
-    listSquareCatalogOptions().then(setOptions).catch(() => setOptions([]));
-  }, []);
+  // Square's catalog is fetched live (listSquareCatalogOptions does no
+  // caching, by design — see its comment) and used to take ~several
+  // seconds on a real venue's catalog. This used to run unconditionally on
+  // every mount (every page view), paginating the WHOLE Square catalog just
+  // in case a dropdown got opened — most visits here are just checking
+  // import status and never touch a dropdown at all. Now it's fetched once,
+  // lazily, the first time any row's dropdown is actually focused — see
+  // ensureOptionsLoaded, shared across every row via this same state.
+  function ensureOptionsLoaded() {
+    if (options !== null || optionsLoading) return;
+    setOptionsLoading(true);
+    listSquareCatalogOptions()
+      .then(setOptions)
+      .catch(() => setOptions([]))
+      .finally(() => setOptionsLoading(false));
+  }
 
   function doImport() {
     setError(null);
@@ -130,7 +144,13 @@ export function SquareMappingClient({
           </thead>
           <tbody>
             {initialRows.map((row) => (
-              <ItemRow key={row.id} row={row} options={optionsFor()} optionsLoading={options === null} />
+              <ItemRow
+                key={row.id}
+                row={row}
+                options={optionsFor()}
+                optionsLoading={optionsLoading}
+                onOpenOptions={ensureOptionsLoaded}
+              />
             ))}
             {initialRows.length === 0 && (
               <tr>
@@ -150,10 +170,12 @@ function ItemRow({
   row,
   options,
   optionsLoading,
+  onOpenOptions,
 }: {
   row: Row;
   options: SquareCatalogOption[];
   optionsLoading: boolean;
+  onOpenOptions: () => void;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -188,6 +210,7 @@ function ItemRow({
         <select
           value={currentKey}
           disabled={pending || optionsLoading}
+          onFocus={onOpenOptions}
           onChange={(e) => onChange(e.target.value)}
           className="w-full max-w-xs rounded-[var(--radius-md)] border border-line bg-surface px-2.5 py-1.5 text-sm focus:border-pine focus:outline-none"
         >
