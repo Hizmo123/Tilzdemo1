@@ -19,6 +19,7 @@ import {
 import { parseHours } from "@/lib/hours";
 import { log } from "@/lib/log";
 import { normalizeAuPhone } from "@/lib/phone";
+import { normalizeToJpeg } from "@/lib/image-upload";
 // Constants live in a plain module — a "use server" file may only export async
 // functions, so exporting these arrays from here breaks them at runtime.
 import {
@@ -308,7 +309,6 @@ async function uploadVenueImage(
   const file = formData.get("file");
   if (!(file instanceof File)) return { error: "No image received." };
   if (file.size > 4 * 1024 * 1024) return { error: "Image is too large." };
-  if (!file.type.startsWith("image/")) return { error: "That isn't an image." };
 
   let supabase;
   try {
@@ -324,8 +324,11 @@ async function uploadVenueImage(
     return { error: "Couldn't prepare image storage. Please try again." };
   }
 
+  const normalized = await normalizeToJpeg(Buffer.from(await file.arrayBuffer()));
+  if (!normalized.ok) return { error: normalized.error };
+  const buffer = normalized.buffer;
+
   const path = `${restaurantId}/${kind}-${randomBytes(6).toString("hex")}.jpg`;
-  const buffer = Buffer.from(await file.arrayBuffer());
   const { error: upErr } = await supabase.storage
     .from(MENU_IMAGE_BUCKET)
     .upload(path, buffer, { contentType: "image/jpeg", upsert: true });

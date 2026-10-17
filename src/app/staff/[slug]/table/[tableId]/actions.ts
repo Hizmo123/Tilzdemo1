@@ -43,10 +43,16 @@ export async function staffAddItems(
   });
   if (!table) return { error: "Table not found." };
 
+  const ent = await getEntitlements(session.restaurant.organizationId);
+  // Lite is menu-only — no live ordering at all, regardless of lapse
+  // status. A Lite venue's tables exist for the QR digital menu only;
+  // staff adding items to one is live ordering the plan never included.
+  if (!ent.ordering) {
+    return { error: "Live ordering isn't included in this venue's plan." };
+  }
   // Lapsed-subscription grace period (spec B4) — same rule as the customer
   // ordering path: existing service keeps running, only new ordering stops,
   // and only once the grace period has actually passed.
-  const ent = await getEntitlements(session.restaurant.organizationId);
   if (ent.orderingBlocked) {
     return { error: "This venue can't take new orders right now — contact the owner." };
   }

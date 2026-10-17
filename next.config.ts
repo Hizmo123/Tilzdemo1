@@ -28,11 +28,14 @@ const nextConfig: NextConfig = {
   devIndicators: {
     position: "bottom-right",
   },
-  // Lets the browser map minified crash stack traces back to real file/line
-  // in devtools, so intermittent client-side errors are debuggable from a
-  // user's report instead of guesswork. Source is already public via the JS
-  // bundle either way; this just makes it readable.
-  productionBrowserSourceMaps: true,
+  // Off (the Next.js default) and explicit, not left to fall through: a
+  // source map isn't just "readable JS", it reconstructs original file
+  // paths, variable/function names and comments — enough to hand anyone
+  // Tillz's fee-calculation logic, the auth/session flow, and every server
+  // action's real name, straight from the client bundle. Debugging a
+  // user's crash report from a minified stack trace is a worse trade than
+  // that exposure.
+  productionBrowserSourceMaps: false,
   // Strips console.log/info/debug from production client bundles (server
   // code is untouched — this only affects what ships to the browser).
   // console.error/warn survive so real client-side failures still surface.

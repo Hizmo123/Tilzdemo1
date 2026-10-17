@@ -11,6 +11,7 @@ import {
   StorageNotConfiguredError,
 } from "@/lib/supabase/service";
 import { log } from "@/lib/log";
+import { normalizeToJpeg } from "@/lib/image-upload";
 
 export type ImageActionState = { error?: string; url?: string };
 
@@ -66,7 +67,6 @@ export async function uploadMenuImage(
   const file = formData.get("file");
   if (!(file instanceof File)) return { error: "No image received." };
   if (file.size > MAX_BYTES) return { error: "Image is too large." };
-  if (!file.type.startsWith("image/")) return { error: "That isn't an image." };
 
   let supabase;
   try {
@@ -81,9 +81,12 @@ export async function uploadMenuImage(
     return { error: "Couldn't prepare image storage. Please try again." };
   }
 
+  const normalized = await normalizeToJpeg(Buffer.from(await file.arrayBuffer()));
+  if (!normalized.ok) return { error: normalized.error };
+  const buffer = normalized.buffer;
+
   const restaurantId = item.category.restaurant.id;
   const path = `${restaurantId}/${itemId}-${randomBytes(6).toString("hex")}.jpg`;
-  const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error: upErr } = await supabase.storage
     .from(MENU_IMAGE_BUCKET)
