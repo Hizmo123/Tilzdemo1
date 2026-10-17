@@ -55,6 +55,13 @@ export function isPlatformAdminId(userId: string): boolean {
 // /admin exists — for anyone not on the allowlist, including a signed-out
 // visitor. Call this first, before any cross-tenant read, in every /admin
 // page/layout and every /admin server action.
+//
+// Also requires the session to actually BE at aal2 (not just that the
+// account has a factor enrolled) — /admin reads across every organisation
+// on the platform, so a stolen password alone must never be enough to reach
+// it. An account with no factor enrolled is sent to enrol one
+// (/dashboard/settings/security?required=admin) rather than to /mfa, which
+// only handles completing a step-up for a factor that already exists.
 export async function requirePlatformAdmin(): Promise<{ userId: string }> {
   const supabase = await createClient();
   const {
@@ -63,6 +70,11 @@ export async function requirePlatformAdmin(): Promise<{ userId: string }> {
 
   if (!user || !allowlist().has(user.id)) {
     redirect("/dashboard");
+  }
+
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal?.currentLevel !== "aal2") {
+    redirect(aal?.nextLevel === "aal2" ? "/mfa" : "/dashboard/settings/security?required=admin");
   }
 
   return { userId: user.id };
