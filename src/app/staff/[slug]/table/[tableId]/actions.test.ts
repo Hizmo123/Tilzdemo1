@@ -46,7 +46,7 @@ describe("staffAddItems idempotency-key forwarding", () => {
       restaurant: { id: "rest-1", organizationId: "org-1", currency: "AUD" },
     });
     vi.mocked(prisma.table.findFirst).mockResolvedValue({ id: "table-1" });
-    getEntitlements.mockResolvedValue({ orderingBlocked: false });
+    getEntitlements.mockResolvedValue({ ordering: true, orderingBlocked: false });
     addItemsForTable.mockResolvedValue({ ok: true });
   });
 
@@ -70,5 +70,33 @@ describe("staffAddItems idempotency-key forwarding", () => {
     expect(second).toEqual({ ok: true });
     expect(addItemsForTable).toHaveBeenNthCalledWith(1, expect.anything(), expect.anything(), "STAFF", undefined, "key-1");
     expect(addItemsForTable).toHaveBeenNthCalledWith(2, expect.anything(), expect.anything(), "STAFF", undefined, "key-1");
+  });
+});
+
+// Security regression: Lite is menu-only (no live ordering at all) — staff
+// must not be able to bypass that by adding items straight through the
+// table-service endpoint. Previously only orderingBlocked (a lapsed PAID
+// subscription) was checked here, so a Lite org — never blocked, never
+// subscribed to anything to lapse — sailed straight through.
+describe("staffAddItems refuses a Lite (no-ordering) plan", () => {
+  beforeEach(() => {
+    requireStaffForSlug.mockReset();
+    addItemsForTable.mockReset();
+    getEntitlements.mockReset();
+    vi.mocked(prisma.table.findFirst).mockReset();
+
+    requireStaffForSlug.mockResolvedValue({
+      staff: { id: "staff-1", role: "STAFF" },
+      restaurant: { id: "rest-1", organizationId: "org-1", currency: "AUD" },
+    });
+    vi.mocked(prisma.table.findFirst).mockResolvedValue({ id: "table-1" });
+    getEntitlements.mockResolvedValue({ ordering: false, orderingBlocked: false });
+  });
+
+  it("refuses to add items when the plan has no ordering, even though orderingBlocked is false", async () => {
+    const res = await staffAddItems("venue", "table-1", [{ menuItemId: "m1", quantity: 1 }]);
+
+    expect(res).toEqual({ error: "Live ordering isn't included in this venue's plan." });
+    expect(addItemsForTable).not.toHaveBeenCalled();
   });
 });

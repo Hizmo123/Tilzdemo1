@@ -28,6 +28,15 @@ export async function startCounterSale(slug: string, locationId: string) {
   if (!roleCan(session.staff.role, "orders:manage"))
     return { error: "Your role can't take orders." };
 
+  // Lite is menu-only — no live ordering at all, so no counter sale should
+  // ever be startable on it. Checked here too, not just in addCounterItems,
+  // since an empty counter bill with no items is still a live-ordering
+  // record a Lite org's plan shouldn't be able to create at all.
+  const ent = await getEntitlements(session.restaurant.organizationId);
+  if (!ent.ordering) {
+    return { error: "Live ordering isn't included in this venue's plan." };
+  }
+
   const location = await prisma.location.findFirst({
     where: { id: locationId, restaurantId: session.restaurant.id },
   });
@@ -55,9 +64,16 @@ export async function addCounterItems(
   if (!roleCan(session.staff.role, "orders:manage"))
     return { error: "Your role can't take orders." };
 
+  const ent = await getEntitlements(session.restaurant.organizationId);
+  // Lite is menu-only — no live ordering at all, regardless of lapse
+  // status. Checked separately from (and before) orderingBlocked below,
+  // which is about a PAYING tier's lapsed subscription, not a tier that
+  // never had ordering to begin with.
+  if (!ent.ordering) {
+    return { error: "Live ordering isn't included in this venue's plan." };
+  }
   // Lapsed-subscription grace period (spec B4) — same rule as the table
   // order path: existing service keeps running, only new ordering stops.
-  const ent = await getEntitlements(session.restaurant.organizationId);
   if (ent.orderingBlocked) {
     return { error: "This venue can't take new orders right now — contact the owner." };
   }
