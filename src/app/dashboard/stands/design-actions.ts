@@ -11,6 +11,7 @@ import {
   StorageNotConfiguredError,
 } from "@/lib/supabase/service";
 import { log } from "@/lib/log";
+import { sniffDesignMime, isSafeSvg } from "@/lib/image-upload";
 
 export type DesignUploadState =
   | { error: string }
@@ -51,8 +52,21 @@ export async function uploadStandOrderDesign(
 
   const maxBytes = product.maxDesignSizeMb * 1024 * 1024;
   if (file.size > maxBytes) return { error: `File is too large — max ${product.maxDesignSizeMb} MB.` };
-  if (!product.acceptedDesignMimeTypes.includes(file.type)) {
+
+  // file.type is client-supplied and trivially spoofable — the real check
+  // is what the bytes actually are. Reject unless the sniffed type matches
+  // BOTH what the browser claimed AND what this product actually accepts;
+  // a mismatch on either side means either a renamed/mislabelled file or a
+  // format this product's admin never opted into.
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const realType = sniffDesignMime(buffer);
+  if (realType === null || realType !== file.type || !product.acceptedDesignMimeTypes.includes(realType)) {
     return { error: "That file type isn't accepted for this product." };
+  }
+  if (realType === "image/svg+xml" && !isSafeSvg(buffer)) {
+    return {
+      error: "That SVG contains content we don't allow (scripts or embedded media) — please export a plain SVG.",
+    };
   }
 
   let supabase;
@@ -68,14 +82,13 @@ export async function uploadStandOrderDesign(
     return { error: "Couldn't prepare design storage. Please try again." };
   }
 
-  const ext = extensionFor(file.type, file.name);
+  const ext = extensionFor(realType, file.name);
   const organizationId = authz.membership.organizationId;
   const path = `${organizationId}/${randomBytes(8).toString("hex")}${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error: upErr } = await supabase.storage
     .from(STAND_DESIGN_BUCKET)
-    .upload(path, buffer, { contentType: file.type, upsert: true });
+    .upload(path, buffer, { contentType: realType, upsert: true });
   if (upErr) {
     log.error("stand_design.upload_failed", { productId, message: upErr.message });
     return { error: describeStorageError(upErr.message) };
