@@ -27,3 +27,23 @@ export async function getVenuePaymentContext(restaurantId: string): Promise<Venu
     squareEnv: env.squareEnv(),
   };
 }
+
+// True once this deployment is genuinely live (production build, Square
+// pointed at its real production API) — at that point, a venue with no
+// Square connection falling back to "mock" would let a customer "pay" a
+// real bill with no money actually moving. Reads process.env.SQUARE_ENV
+// directly rather than env.squareEnv(), which throws when unset (fine for
+// every other caller, which only runs once Square is actually configured;
+// wrong here, where "unset" has to mean "not production" instead of a
+// crash). ALLOW_MOCK_PAYMENTS=true is the explicit, deliberate override —
+// for a staged rollout or a support/demo venue — never a default.
+export function mockPaymentsBlocked(): boolean {
+  return (
+    process.env.NODE_ENV === "production" &&
+    process.env.SQUARE_ENV === "production" &&
+    process.env.ALLOW_MOCK_PAYMENTS !== "true"
+  );
+}
+
+export const MOCK_PAYMENTS_BLOCKED_MESSAGE =
+  "Online payment isn't available at this venue yet. Please pay at the counter.";

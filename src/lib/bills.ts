@@ -7,7 +7,7 @@ import { notifyRestaurant } from "@/lib/realtime";
 import { formatCents } from "@/lib/money";
 import { log } from "@/lib/log";
 import { entitlementsForTier } from "@/lib/entitlements";
-import { getVenuePaymentContext } from "@/lib/square/context";
+import { getVenuePaymentContext, mockPaymentsBlocked, MOCK_PAYMENTS_BLOCKED_MESSAGE } from "@/lib/square/context";
 import {
   chargeBillViaSquare,
   refundViaSquare,
@@ -1257,6 +1257,16 @@ export async function payBillAmount(
     const idempotencyKey = `pay_${bill.id}_${randomBytes(8).toString("hex")}`;
     const paymentContext = await getVenuePaymentContext(resolved.visit.restaurantId);
 
+    // A venue with no (working) Square connection falls back to "mock" —
+    // fine for dev/demo, but on a genuinely live deployment (mockPaymentsBlocked)
+    // that would let a customer "pay" a real bill with nothing actually
+    // charged. The balance was already reserved above, so this has to
+    // release it before returning, same as every other failure path below.
+    if (paymentContext.mode === "mock" && mockPaymentsBlocked()) {
+      await releaseBillReserve(bill.id, newPaid, expectedPaid, bill.status, bill.paidAt);
+      return { error: MOCK_PAYMENTS_BLOCKED_MESSAGE };
+    }
+
     let paymentRow: {
       status: "PENDING" | "SUCCEEDED" | "FAILED";
       provider: string;
@@ -1621,6 +1631,16 @@ export async function payBillItems(
         newPaidQuantity: item.paidQuantity + sel.count,
       };
     });
+
+    // Same guard as payBillAmount: on a genuinely live deployment, a venue
+    // with no working Square connection falling back to "mock" must never
+    // be allowed to "succeed" a real customer payment. Both the item
+    // paidQuantity bumps and the bill balance CAS above are already
+    // committed, so releasing has to undo both before returning.
+    if (paymentContext.mode === "mock" && mockPaymentsBlocked()) {
+      await releaseItemsReserve(bill.id, reservations, newPaid, expectedPaid, bill.status, bill.paidAt);
+      return { error: MOCK_PAYMENTS_BLOCKED_MESSAGE };
+    }
 
     let paymentRow: {
       status: "PENDING" | "SUCCEEDED" | "FAILED";
