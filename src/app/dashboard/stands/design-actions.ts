@@ -3,6 +3,7 @@
 import { randomBytes } from "crypto";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { limitActionByIp } from "@/lib/rate-limit";
 import {
   createServiceClient,
   ensurePublicBucket,
@@ -42,6 +43,8 @@ export async function uploadStandOrderDesign(
   if (!authz.can("tables:manage"))
     return { error: "You don't have permission to order stands." };
   if (!authz.membership) return { error: "No organization found." };
+  const limited = await limitActionByIp("upload", 30, 10 * 60_000, authz.user.id);
+  if (limited) return { error: limited };
 
   const product = await prisma.standProduct.findUnique({ where: { id: productId } });
   if (!product || !product.active) return { error: "That product is no longer available." };
