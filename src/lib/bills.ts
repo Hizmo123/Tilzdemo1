@@ -1186,7 +1186,7 @@ export async function payBillAmount(
   if (mode === "custom" && (requestedCents === null || requestedCents <= 0)) {
     return { error: "Enter a valid amount." };
   }
-  const tip = Number.isInteger(tipCents) && tipCents > 0 ? tipCents : 0;
+  const tip = Number.isInteger(tipCents) && tipCents > 0 ? Math.min(tipCents, MAX_TIP_CENTS) : 0;
 
   const provider = getPaymentProvider();
 
@@ -1474,6 +1474,10 @@ export async function payBillFull(token: string, sourceId?: string): Promise<Pay
 
 // ---- Pay for specific items (per-person split) -----------------------------
 
+// Upper bound on a single tip, so a crafted request can't push an absurd
+// amount through the processor.
+const MAX_TIP_CENTS = 100_000;
+
 export type ItemSelection = { billItemId: string; count: number };
 
 class PayConflict extends Error {}
@@ -1528,7 +1532,7 @@ export async function payBillItems(
     (s) => s.billItemId && Number.isInteger(s.count) && s.count > 0,
   );
   if (clean.length === 0) return { error: "Select at least one item." };
-  const tip = Number.isInteger(tipCents) && tipCents > 0 ? tipCents : 0;
+  const tip = Number.isInteger(tipCents) && tipCents > 0 ? Math.min(tipCents, MAX_TIP_CENTS) : 0;
 
   const provider = getPaymentProvider();
 
