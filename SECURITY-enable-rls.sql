@@ -1,5 +1,5 @@
 -- ============================================================================
--- Tillz — enable Row-Level Security on all application tables
+-- Tap-to-It — enable Row-Level Security on all application tables
 -- ============================================================================
 -- WHAT THIS DOES
 --   Turns on Row-Level Security (RLS) for every table and adds NO public
