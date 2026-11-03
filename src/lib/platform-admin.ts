@@ -74,7 +74,7 @@ export async function requirePlatformAdmin(): Promise<{ userId: string }> {
 
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aal?.currentLevel !== "aal2") {
-    redirect(aal?.nextLevel === "aal2" ? "/mfa" : "/dashboard/settings/security?required=admin");
+    redirect(aal?.nextLevel === "aal2" ? "/mfa?next=/admin" : "/dashboard/settings/security?required=admin");
   }
 
   return { userId: user.id };

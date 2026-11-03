@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-export function MfaForm() {
+export function MfaForm({ next = "/dashboard" }: { next?: string }) {
   const supabase = createClient();
   const router = useRouter();
   const [code, setCode] = useState("");
@@ -37,7 +37,7 @@ export function MfaForm() {
       setError("That code didn't match. Try the current one from your app.");
       return;
     }
-    router.push("/dashboard");
+    router.push(next);
     router.refresh();
   }
 
