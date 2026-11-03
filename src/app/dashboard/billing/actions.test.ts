@@ -85,7 +85,7 @@ describe("subscribe() tier allow-list", () => {
   });
 
   it("every public tier (LITE/GROWTH/PRO) is allowed once paid plans are open, no Square check performed", async () => {
-    vi.stubEnv("BILLING_ENABLED", "true");
+    vi.stubEnv("PAID_PLANS_OPEN", "true");
     getAuthz.mockResolvedValue(authz({ plan: "LITE" }));
 
     const res = await subscribe("GROWTH" as any);
@@ -128,14 +128,13 @@ describe("subscribe() paid-plan gate", () => {
     expect(prisma.organization.update).not.toHaveBeenCalled();
   });
 
-  it("flag off: a platform admin can still self-assign GROWTH", async () => {
+  it("flag off: a platform admin gets no bypass", async () => {
     vi.stubEnv("PLATFORM_ADMIN_USER_IDS", "admin-1");
     getAuthz.mockResolvedValue(authz({ plan: "LITE" }, "admin-1"));
 
     const res = await subscribe("GROWTH" as any);
-
-    expect(res).toEqual({ ok: true });
-    expect(prisma.organization.update).toHaveBeenCalled();
+    expect(res.error).toMatch(/early access/i);
+    expect(prisma.organization.update).not.toHaveBeenCalled();
   });
 
   it("flag off: CONNECT is never gated (no subscription to self-assign)", async () => {
@@ -148,7 +147,7 @@ describe("subscribe() paid-plan gate", () => {
   });
 
   it("flag on: routes through the billing provider, which falls back to the mock write since Stripe isn't configured", async () => {
-    vi.stubEnv("BILLING_ENABLED", "true");
+    vi.stubEnv("PAID_PLANS_OPEN", "true");
     getAuthz.mockResolvedValue(authz({ plan: "LITE" }));
 
     const res = await subscribe("GROWTH" as any);
@@ -184,7 +183,7 @@ describe("cancelSubscription() paid-plan gate", () => {
   });
 
   it("flag on: cancelling succeeds", async () => {
-    vi.stubEnv("BILLING_ENABLED", "true");
+    vi.stubEnv("PAID_PLANS_OPEN", "true");
     getAuthz.mockResolvedValue(authz());
 
     const res = await cancelSubscription();
@@ -194,7 +193,7 @@ describe("cancelSubscription() paid-plan gate", () => {
   });
 
   it("flag on: an org with a REAL Stripe subscription is rejected — cancel through the portal instead", async () => {
-    vi.stubEnv("BILLING_ENABLED", "true");
+    vi.stubEnv("PAID_PLANS_OPEN", "true");
     getAuthz.mockResolvedValue(authz("user-1", { stripeSubscriptionId: "sub_1" }));
 
     const res = await cancelSubscription();

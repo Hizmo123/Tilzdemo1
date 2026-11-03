@@ -18,14 +18,10 @@ export const SELF_ASSIGNABLE_GATED_TIERS = new Set<PlanTier>(["LITE", "GROWTH", 
 // has no subscription to self-assign, just a per-order fee once Square is
 // connected.
 //
-// userId is optional so a page with no cheap user context (the public
-// marketing pricing section) can still call this — it just can't get the
-// admin bypass, only BILLING_ENABLED can open the gate there. Every actual
-// write path (subscribe, cancelSubscription, completeOnboarding) already has
-// an acting user id in hand and should always pass it.
-export function paidPlansOpen(userId?: string | null): boolean {
-  if (env.billingEnabled()) return true;
-  return !!userId && isPlatformAdminId(userId);
+// Driven solely by PAID_PLANS_OPEN=true; closed when unset. No per-user
+// bypass. userId is accepted (and ignored) so existing callers keep working.
+export function paidPlansOpen(_userId?: string | null): boolean {
+  return env.paidPlansOpen();
 }
 
 // Shown to the user when a gated action is rejected, and (trimmed of the

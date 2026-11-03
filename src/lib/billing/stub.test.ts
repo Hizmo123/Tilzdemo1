@@ -35,8 +35,8 @@ describe("StubBillingProvider", () => {
     expect(result.configured).toBe(false);
   });
 
-  it("still reports not configured even with BILLING_ENABLED on — that flag only opens self-assignment, not Stripe itself", async () => {
-    vi.stubEnv("BILLING_ENABLED", "true");
+  it("still reports not configured even with PAID_PLANS_OPEN on — that flag only opens self-assignment, not Stripe itself", async () => {
+    vi.stubEnv("PAID_PLANS_OPEN", "true");
     const result = await provider.createCheckoutSession({
       organizationId: "org-1",
       tier: "LITE" as any,

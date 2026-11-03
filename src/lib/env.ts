@@ -1,3 +1,5 @@
+import { appBaseUrl } from "@/lib/urls";
+
 // Fail fast with a clear message if required env vars are missing, rather than
 // surfacing a cryptic error deep in a request.
 function required(name: string): string {
@@ -19,7 +21,7 @@ function optional(name: string): string | undefined {
 
 // "true"/"1" = on; anything else (including unset) = off. Used for flags that
 // must default to off in every existing environment until explicitly turned
-// on (BILLING_ENABLED), unlike required()'s vars, which must already be set
+// on (PAID_PLANS_OPEN), unlike required()'s vars, which must already be set
 // everywhere this app runs.
 function flag(name: string): boolean {
   const value = process.env[name];
@@ -33,7 +35,8 @@ export const env = {
   squareEnv: () => required("SQUARE_ENV"),
   squareApplicationId: () => required("SQUARE_APPLICATION_ID"),
   squareApplicationSecret: () => required("SQUARE_APPLICATION_SECRET"),
-  squareRedirectUrl: () => required("SQUARE_REDIRECT_URL"),
+  // Defaults to <app base URL>/api/square/callback; SQUARE_REDIRECT_URL overrides.
+  squareRedirectUrl: () => optional("SQUARE_REDIRECT_URL") ?? `${appBaseUrl()}/api/square/callback`,
   // Base64-encoded 32-byte key for AES-256-GCM token encryption (see
   // src/lib/square/crypto.ts). Never logged, never sent to the client.
   squareTokenEncKey: () => required("SQUARE_TOKEN_ENC_KEY"),
@@ -46,7 +49,7 @@ export const env = {
   // Default OFF: LITE/GROWTH/PRO self-assignment stays blocked (platform
   // admins excepted) until this is flipped on, which should only happen once
   // Stripe is actually wired up below.
-  billingEnabled: () => flag("BILLING_ENABLED"),
+  paidPlansOpen: () => flag("PAID_PLANS_OPEN"),
   // All unset today — nothing in src/lib/billing/ calls Stripe yet. Reading
   // stripeSecretKey() is how the stub provider decides it isn't configured.
   stripeSecretKey: () => optional("STRIPE_SECRET_KEY"),

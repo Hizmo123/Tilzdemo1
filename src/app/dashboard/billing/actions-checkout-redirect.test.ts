@@ -24,7 +24,7 @@ describe("subscribe() — real Checkout Session branch", () => {
     getAuthz.mockReset();
     startSubscriptionOrMock.mockReset();
     vi.mocked(prisma.organization.update).mockReset();
-    vi.stubEnv("BILLING_ENABLED", "true");
+    vi.stubEnv("PAID_PLANS_OPEN", "true");
     getAuthz.mockResolvedValue({
       can: () => true,
       membership: {
