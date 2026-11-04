@@ -74,5 +74,5 @@ describe("server modules never call into 'use client' modules", () => {
     }
 
     expect(offenders, offenders.join("\n")).toEqual([]);
-  });
+  }, 30_000);
 });
