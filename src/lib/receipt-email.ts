@@ -40,6 +40,7 @@ export function buildReceiptEmail(data: ReceiptData): {
   <div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f5f1;padding:24px;">
     <div style="max-width:420px;margin:0 auto;background:#ffffff;border-radius:16px;border:1px solid #e6e3dc;padding:28px;">
       <div style="text-align:center;border-bottom:1px dashed #d8d4ca;padding-bottom:16px;">
+        <img src="https://taptoit.com.au/brand/logo-horizontal.png" alt="taptoit" width="140" style="display:block;margin:0 auto 14px;border-radius:8px;" />
         <p style="font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:#6b7169;margin:0;">Tax Invoice</p>
         <h1 style="font-size:20px;margin:4px 0 0;color:#15181b;">${escapeHtml(data.restaurantName)}</h1>
         ${data.abn ? `<p style="font-size:12px;color:#6b7169;margin:2px 0 0;">ABN ${formatAbn(data.abn)}</p>` : ""}
