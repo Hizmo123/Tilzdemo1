@@ -44,7 +44,7 @@ stripe trigger invoice.payment_failed
 
 ## Trying a real checkout
 
-With `BILLING_ENABLED=true` (or signed in as a `PLATFORM_ADMIN_USER_IDS`
+With `PAID_PLANS_OPEN=true`, (or signed in as a `PLATFORM_ADMIN_USER_IDS`
 account while it's off), go to `/dashboard/billing` and pick a plan — this
 redirects to a real Stripe test-mode Checkout Session. Use
 [Stripe's test card `4242 4242 4242 4242`](https://docs.stripe.com/testing),

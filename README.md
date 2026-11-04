@@ -1,4 +1,4 @@
-# Tillz
+# Tap-to-It
 
 QR ordering, bill-splitting and payments for Australian restaurants. A customer
 scans a table QR, orders and pays from their phone — no app download. Staff and

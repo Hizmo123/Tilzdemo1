@@ -1,11 +1,17 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "../(auth)/actions";
+import { safeNextPath } from "@/lib/safe-next";
 import { MfaForm } from "./mfa-form";
 
 export const dynamic = "force-dynamic";
 
-export default async function MfaPage() {
+export default async function MfaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>;
+}) {
+  const next = safeNextPath((await searchParams).next);
   const supabase = await createClient();
   const {
     data: { user },
@@ -16,7 +22,7 @@ export default async function MfaPage() {
   const { data: aal } =
     await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (!(aal?.currentLevel === "aal1" && aal?.nextLevel === "aal2")) {
-    redirect("/dashboard");
+    redirect(next);
   }
 
   return (
@@ -31,7 +37,7 @@ export default async function MfaPage() {
           </p>
         </div>
         <div className="rounded-[var(--radius-card)] border border-line bg-surface p-6">
-          <MfaForm />
+          <MfaForm next={next} />
         </div>
         {/* Without this, a user without their authenticator (lost phone,
             signed into the wrong account) was completely stuck here — the
