@@ -135,7 +135,7 @@ export function BrandIntro({ token }: { token: string }) {
                     lib/theme.ts's themeVars), and a "Powered by" mark has to
                     stay Tap-to-It's own colour regardless of venue theme,
                     same as the old hardcoded-colour mark this replaced. */}
-                <BrandMark size={32} style={{ color: "#0f5132" }} />
+                <BrandMark size={32} />
                 <p className="flex items-baseline gap-1.5">
                   <span className="text-[10px] uppercase tracking-[0.25em] opacity-70">Powered by</span>
                   <span className="font-display text-base font-medium tracking-tight">{BRAND.name}</span>

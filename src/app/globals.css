@@ -34,6 +34,11 @@
   --color-line: #e6e3dc;
   --color-line-strong: #cfcbc2;
 
+  /* taptoit logo palette — used by the mark/wordmark, not the venue accent */
+  --color-brand-green: #2be58a;
+  --color-brand-green-deep: #0fa95b;
+  --color-brand-dark: #060a08;
+
   --color-pine: #0f5c42;
   --color-pine-deep: #0b4732;
   --color-pine-strong: #083324;

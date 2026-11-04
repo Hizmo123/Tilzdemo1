@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 // All of Tap-to-It's icon marks, as inline SVG React components, in one
@@ -27,25 +27,21 @@ function a11yProps(title?: string) {
   return title ? { role: "img" as const, "aria-label": title } : { "aria-hidden": true as const };
 }
 
-// The logo: a bold "T" built from two rectangles, with two signal arcs
-// sweeping off its crossbar — "T + signal", the tap-to-order read. The
-// static mark (no animation) — see TapRippleMark/ScanFrameMark for the
-// arrival-animation states and DoneMark for the paid/submitted state.
+// The logo: the gradient "T" mark with a swoosh on its left edge (same
+// geometry as public/brand/mark.svg). Unlike the animation-state marks below
+// it has no tile and ignores `currentColor` — the gradient is the brand.
 export function BrandMark({ size = 64, className = "", title, style }: MarkProps) {
+  const id = useId();
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" className={className} style={style} {...a11yProps(title)}>
-      <rect width="64" height="64" rx="16" fill="currentColor" />
-      <rect x="14" y="15" width="28" height="8" rx="3" fill="#fff" />
-      <rect x="24" y="15" width="8" height="34" rx="3" fill="#fff" />
-      <path d="M39 34c3.5 3.5 3.5 9.5 0 13" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" />
-      <path
-        d="M45 29c6.5 6.5 6.5 16.5 0 23"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        opacity="0.6"
-      />
+      <defs>
+        <linearGradient id={id} x1="8" y1="8" x2="52" y2="62" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#2BE58A" />
+          <stop offset="1" stopColor="#0FA95B" />
+        </linearGradient>
+      </defs>
+      <path d="M3 25C7 15 19 11 31 11H60C58 21 50 25 40 25Z" fill={`url(#${id})`} />
+      <path d="M26 28H41V42C41 50 35 56 25 60C27 52 26 42 26 28Z" fill={`url(#${id})`} />
     </svg>
   );
 }
@@ -111,15 +107,17 @@ export function DoneMark({ size = 64, className = "", title, style }: MarkProps)
   );
 }
 
-// The wordmark lockup: lowercase "tap-to-it", "it" in the brand green —
-// NEVER a substitute for BRAND.name in copy/emails/legal (that stays the
-// proper-case "Tap-to-It"); this is the logo lockup only. Uses the app's
-// existing display font (font-display), no new font dependency.
+// The wordmark: lowercase "taptoit" in Outfit with a green dot — logo lockup
+// only, never a substitute for BRAND.name in copy/emails/legal. Real text, not
+// a raster; text colour is inherited, the dot is the brand green.
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
-    <span className={`font-display font-semibold tracking-tight lowercase ${className}`}>
-      tap-to-
-      <span className="text-pine">it</span>
+    <span
+      className={`font-semibold tracking-tight lowercase ${className}`}
+      style={{ fontFamily: "var(--font-outfit), var(--font-inter), sans-serif" }}
+    >
+      taptoit
+      <span style={{ color: "var(--color-brand-green, #2BE58A)" }}>.</span>
     </span>
   );
 }

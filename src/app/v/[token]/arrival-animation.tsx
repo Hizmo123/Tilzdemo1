@@ -61,7 +61,7 @@ export function ArrivalAnimation({ token, entrySource }: { token: string; entryS
               --color-pine is remapped to the VENUE's own accent (lib/
               theme.ts's themeVars), and this moment is about Tap-to-It
               recognising a tap/scan, not the venue's own branding. */}
-          <div style={{ color: "#0f5132" }} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
+          <div style={{ color: "#0fa95b" }} className="drop-shadow-[0_4px_12px_rgba(0,0,0,0.18)]">
             {entrySource === "nfc" ? (
               <TapRippleAnimation size={56} />
             ) : (

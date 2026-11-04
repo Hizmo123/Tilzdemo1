@@ -4,6 +4,7 @@ import {
   Bricolage_Grotesque,
   Fraunces,
   Space_Grotesk,
+  Outfit,
 } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/toast";
@@ -25,6 +26,13 @@ const bricolage = Bricolage_Grotesque({
 const fraunces = Fraunces({
   subsets: ["latin"],
   variable: "--font-fraunces",
+  display: "swap",
+});
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  weight: ["600"],
+  variable: "--font-outfit",
   display: "swap",
 });
 
@@ -55,7 +63,7 @@ export default function RootLayout({
   return (
     <html
       lang="en-AU"
-      className={`${inter.variable} ${bricolage.variable} ${fraunces.variable} ${spaceGrotesk.variable}`}
+      className={`${inter.variable} ${bricolage.variable} ${fraunces.variable} ${spaceGrotesk.variable} ${outfit.variable}`}
     >
       <body>
         <ToastProvider>{children}</ToastProvider>

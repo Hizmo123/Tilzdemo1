@@ -11,10 +11,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Order, split and pay from the table.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f5f3ee",
-    // Matches the new BrandMark tile (src/app/icon.svg / icon.svg's own
-    // #0f5132) — was the old dark-tile mark's ink colour.
-    theme_color: "#0f5132",
+    background_color: "#060a08",
+    theme_color: "#060a08",
     icons: [
       {
         src: "/icon.svg",
@@ -22,6 +20,8 @@ export default function manifest(): MetadataRoute.Manifest {
         type: "image/svg+xml",
         purpose: "any",
       },
+      { src: "/brand/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/brand/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
       {
         src: "/apple-icon.png",
         sizes: "180x180",
