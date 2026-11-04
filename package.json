@@ -13,7 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3",
+    "@prisma/client": "^7.10.1",
     "@supabase/ssr": "^0.12.5",
     "@supabase/supabase-js": "^2.112.4",
     "canvas-confetti": "^1.9.4",
