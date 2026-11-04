@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
-    "@supabase/ssr": "^0.12.5",
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.112.4",
     "canvas-confetti": "^1.9.4",
     "motion": "^13.4.0",
