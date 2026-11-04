@@ -4,13 +4,32 @@ import type { NextConfig } from "next";
 // Content-Security-Policy is deliberately omitted here — it needs live testing
 // against Supabase/Next inline scripts before enabling, so it belongs with the
 // production-hardening pass rather than a blind default.)
+// CSP ships Report-Only first: Next injects inline scripts and the app talks to
+// Supabase/Square/Stripe, so enforce only after watching the browser console on
+// a live deploy for violations. Flip the header key to
+// "Content-Security-Policy" once clean.
+const csp = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://js.stripe.com https://web.squarecdn.com https://sandbox.web.squarecdn.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://web.squarecdn.com https://sandbox.web.squarecdn.com",
+  "font-src 'self' data: https://fonts.gstatic.com https://square-fonts-production-f.squarecdn.com https://d1g145x70srn7h.cloudfront.net",
+  "img-src 'self' data: blob: https://*.supabase.co https://*.squarecdn.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://*.squareup.com https://*.squareupsandbox.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com",
+  "frame-src https://js.stripe.com https://checkout.stripe.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 const securityHeaders = [
+  { key: "Content-Security-Policy-Report-Only", value: csp },
   {
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
   },
   { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     key: "Permissions-Policy",

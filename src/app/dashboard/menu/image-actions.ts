@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomBytes } from "crypto";
 import { getAuthz } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { limitActionByIp } from "@/lib/rate-limit";
 import {
   createServiceClient,
   describeStorageError,
@@ -60,6 +61,8 @@ export async function uploadMenuImage(
   const authz = await getAuthz();
   if (!authz.can("menu:manage"))
     return { error: "You don't have permission to edit the menu." };
+  const limited = await limitActionByIp("upload", 30, 10 * 60_000, authz.user.id);
+  if (limited) return { error: limited };
 
   const item = await ownedItem(itemId, authz.membership!.organizationId);
   if (!item) return { error: "Item not found." };

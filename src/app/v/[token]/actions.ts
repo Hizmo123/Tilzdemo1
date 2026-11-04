@@ -9,6 +9,8 @@ import {
   type AddItem,
   type ItemSelection,
 } from "@/lib/bills";
+import { z } from "zod";
+import { limitActionByIp } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { emailBillReceipt } from "@/lib/receipt-delivery";
 
@@ -18,12 +20,37 @@ import { emailBillReceipt } from "@/lib/receipt-delivery";
 // server-side from the DB — the client only names item ids and quantities, and
 // proposes a payment amount that the server clamps to the outstanding balance.
 
+const tokenSchema = z.string().min(8).max(128);
+const idSchema = z.string().min(1).max(64);
+const centsSchema = z.number().int().min(0).max(10_000_000);
+const itemsSchema = z
+  .array(
+    z.object({
+      menuItemId: idSchema,
+      quantity: z.number().int().min(1).max(99),
+      optionIds: z.array(idSchema).max(50).optional(),
+      note: z.string().max(300).optional(),
+    }),
+  )
+  .min(1)
+  .max(100);
+const selectionsSchema = z
+  .array(z.object({ billItemId: idSchema, count: z.number().int().min(1).max(99) }))
+  .min(1)
+  .max(100);
+const INVALID = { error: "Invalid request." };
+
 export async function addItems(
   token: string,
   items: AddItem[],
   note?: string,
   clientRequestId?: string,
 ) {
+  if (!tokenSchema.safeParse(token).success || !itemsSchema.safeParse(items).success) return INVALID;
+  if (note !== undefined && (typeof note !== "string" || note.length > 500)) return INVALID;
+  if (clientRequestId !== undefined && (typeof clientRequestId !== "string" || clientRequestId.length > 100)) return INVALID;
+  const limited = await limitActionByIp("order", 30, 5 * 60_000);
+  if (limited) return { error: limited };
   return addItemsToBill(token, items, note, clientRequestId);
 }
 
@@ -40,6 +67,16 @@ export async function payBill(
   // Square-connected venue; the mock path ignores it.
   sourceId?: string,
 ) {
+  if (
+    !tokenSchema.safeParse(token).success ||
+    !(amountCents === null || centsSchema.safeParse(amountCents).success) ||
+    !centsSchema.safeParse(tipCents).success ||
+    !["full", "equal", "custom"].includes(mode) ||
+    (sourceId !== undefined && (typeof sourceId !== "string" || sourceId.length > 500))
+  )
+    return INVALID;
+  const limited = await limitActionByIp("pay", 20, 5 * 60_000);
+  if (limited) return { error: limited };
   return payBillAmount(token, amountCents, tipCents, mode, sourceId);
 }
 
@@ -50,11 +87,21 @@ export async function payItems(
   tipCents = 0,
   sourceId?: string,
 ) {
+  if (
+    !tokenSchema.safeParse(token).success ||
+    !selectionsSchema.safeParse(selections).success ||
+    !centsSchema.safeParse(tipCents).success ||
+    (sourceId !== undefined && (typeof sourceId !== "string" || sourceId.length > 500))
+  )
+    return INVALID;
+  const limited = await limitActionByIp("pay", 20, 5 * 60_000);
+  if (limited) return { error: limited };
   return payBillItems(token, selections, tipCents, sourceId);
 }
 
 // Cancel an order placed by mistake, while the kitchen hasn't started it.
 export async function cancelOrder(token: string, orderId: string) {
+  if (!tokenSchema.safeParse(token).success || !idSchema.safeParse(orderId).success) return INVALID;
   return cancelCustomerOrder(token, orderId);
 }
 
@@ -62,6 +109,10 @@ export async function cancelOrder(token: string, orderId: string) {
 // shows) to an address the guest provides. Token-scoped, same capability
 // model as ordering — no login, just possession of the QR link.
 export async function emailMyReceipt(token: string, email: string) {
+  if (!tokenSchema.safeParse(token).success || !z.string().email().max(254).safeParse(email).success)
+    return { error: "Enter a valid email address." };
+  const limited = await limitActionByIp("receipt-email", 5, 10 * 60_000);
+  if (limited) return { error: limited };
   const resolved = await resolveVisit(token);
   if (!resolved.ok) return { error: "This table is no longer available." };
 
