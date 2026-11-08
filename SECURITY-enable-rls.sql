@@ -1,5 +1,5 @@
 -- ============================================================================
--- Tap-to-It — enable Row-Level Security on all application tables
+-- Taptoit — enable Row-Level Security on all application tables
 -- ============================================================================
 -- WHAT THIS DOES
 --   Turns on Row-Level Security (RLS) for every table and adds NO public
@@ -8,7 +8,7 @@
 --   the "Table publicly accessible" warning.
 --
 -- WHY IT'S SAFE FOR THIS APP
---   Tillz never touches these tables through Supabase's public API. It queries
+--   Taptoit never touches these tables through Supabase's public API. It queries
 --   them through Prisma over a direct Postgres connection as the table owner,
 --   and the table owner bypasses RLS by default (we do NOT use FORCE). So the
 --   app keeps working exactly as before — only the public back door is closed.
@@ -18,24 +18,40 @@
 --   Safe to run more than once.
 -- ============================================================================
 
-alter table "Organization"      enable row level security;
-alter table "Restaurant"        enable row level security;
-alter table "Location"          enable row level security;
-alter table "Table"             enable row level security;
-alter table "QrToken"           enable row level security;
-alter table "MenuCategory"      enable row level security;
-alter table "MenuItem"          enable row level security;
-alter table "ModifierGroup"     enable row level security;
-alter table "ModifierOption"    enable row level security;
-alter table "Bill"              enable row level security;
-alter table "BillItem"          enable row level security;
-alter table "Order"             enable row level security;
-alter table "Payment"           enable row level security;
-alter table "StaffInvite"       enable row level security;
-alter table "AuditLog"          enable row level security;
-alter table "StaffAccount"      enable row level security;
-alter table "CustomerRequest"   enable row level security;
-alter table "Membership"        enable row level security;
+alter table "AuditLog" enable row level security;
+alter table "Bill" enable row level security;
+alter table "BillItem" enable row level security;
+alter table "CashDrawerSession" enable row level security;
+alter table "CashMovement" enable row level security;
+alter table "CustomerRequest" enable row level security;
+alter table "Location" enable row level security;
+alter table "Membership" enable row level security;
+alter table "MenuCategory" enable row level security;
+alter table "MenuCategorySquareMap" enable row level security;
+alter table "MenuItem" enable row level security;
+alter table "MenuItemSquareMap" enable row level security;
+alter table "ModifierGroup" enable row level security;
+alter table "ModifierGroupSquareMap" enable row level security;
+alter table "ModifierOption" enable row level security;
+alter table "ModifierOptionSquareMap" enable row level security;
+alter table "OnboardingDraft" enable row level security;
+alter table "Order" enable row level security;
+alter table "Organization" enable row level security;
+alter table "Payment" enable row level security;
+alter table "PendingSquareConnection" enable row level security;
+alter table "ProcessedSquareWebhook" enable row level security;
+alter table "QrToken" enable row level security;
+alter table "Refund" enable row level security;
+alter table "Restaurant" enable row level security;
+alter table "SquareConnection" enable row level security;
+alter table "StaffAccount" enable row level security;
+alter table "StaffInvite" enable row level security;
+alter table "StandOrder" enable row level security;
+alter table "StandOrderItem" enable row level security;
+alter table "StandProduct" enable row level security;
+alter table "Table" enable row level security;
+alter table "TillzStand" enable row level security;
+alter table "_prisma_migrations" enable row level security;
 
 -- Optional belt-and-braces: revoke the public API roles' access outright, so
 -- the tables are locked to the server (Prisma) connection only.

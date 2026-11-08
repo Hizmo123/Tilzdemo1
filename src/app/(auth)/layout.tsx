@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { BrandMark, Wordmark } from "@/components/brand/marks";
-import { AuthPanelArt } from "./panel-art";
 
 // Split layout: a brand panel on the left (desktop), the form on the right.
 export default function AuthLayout({
@@ -17,7 +16,7 @@ export default function AuthLayout({
           <Wordmark className="text-2xl text-surface" />
         </Link>
 
-        <div className="relative grid gap-12 xl:grid-cols-[1fr_auto] xl:items-end">
+        <div className="relative flex flex-1 items-center">
           <div>
             <h2 className="font-display text-display font-semibold">
               Order, split and pay
@@ -36,9 +35,6 @@ export default function AuthLayout({
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="w-[300px] xl:w-[320px] justify-self-start xl:justify-self-end">
-            <AuthPanelArt />
           </div>
         </div>
 
